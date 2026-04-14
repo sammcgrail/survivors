@@ -303,6 +303,10 @@ const SP = {
   skull:      [5, 1],
   shield:     [6, 1],
   magnet:     [7, 1],
+  boss:       [0, 2],
+  brute:      [1, 2],
+  elite:      [2, 2],
+  spawner:    [3, 2],
 };
 
 // imageSmoothingEnabled is set once at canvas init (search for `ctx = canvas.getContext`).
@@ -661,7 +665,7 @@ const ENEMY_TYPES = [
   { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8,  sprite: 'fast' },
   { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30, sprite: 'tank' },
   { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm' },
-  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'tank' },
+  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'brute' },
   { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12, sprite: 'skull' },
 ];
 
