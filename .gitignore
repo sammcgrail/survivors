@@ -1,3 +1,9 @@
 node_modules/
 *.csv
 results/
+.playwright-mcp/
+*.log
+.DS_Store
+__pycache__/
+*.pyc
+.venv/
