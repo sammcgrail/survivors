@@ -108,10 +108,10 @@ async function checkMp(browser) {
 
   // Bundle is referenced and loaded (404 here would be silent without this check).
   const bundleStatus = await page.evaluate(async () => {
-    const r = await fetch('/bundle-v1b.js');
+    const r = await fetch('/bundle-mp.js');
     return { ok: r.ok, len: (await r.text()).length };
   });
-  check(bundleStatus.ok && bundleStatus.len > 1000, `bundle-v1b.js served and non-trivial (${bundleStatus.len} bytes)`);
+  check(bundleStatus.ok && bundleStatus.len > 1000, `bundle-mp.js served and non-trivial (${bundleStatus.len} bytes)`);
 
   // Don't attempt to join — that needs a Node server. Just confirm the page
   // didn't error on bundle execution.

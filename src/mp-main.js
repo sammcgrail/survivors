@@ -1,7 +1,7 @@
 // ============================================================
-// SURVIVORS v1b — multiplayer WebSocket client
-// Thin display layer: server runs all game logic
-// Bundled by scripts/build.cjs → bundle-v1b.js
+// SURVIVORS — multiplayer WebSocket client.
+// Thin display layer: server runs all game logic.
+// Bundled by scripts/build.cjs → bundle-mp.js (loaded by mp.html).
 // ============================================================
 
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
@@ -23,7 +23,6 @@ const ENEMY_SPRITES = {
   brute: 'tank', ghost: 'skull',
 };
 
-// imageSmoothingEnabled is set once at canvas init.
 function drawSprite(name, x, y, scale, alpha) {
   if (!spritesReady || !SP[name]) return false;
   const sp = SP[name];
@@ -205,8 +204,6 @@ const TICK_DT = 1 / 20;  // server sends at 20Hz
 
 // Client-side particles (decorative only)
 let particles = [];
-let floatingTexts = [];
-let deathFeed = [];
 let screenShake = 0;
 
 // Track previous state for change detection (sounds, death, etc.)
@@ -267,10 +264,6 @@ function connectWS() {
     connStatus.textContent = 'DISCONNECTED — reconnecting...';
     console.log('[ws] disconnected, reconnecting in 2s');
     setTimeout(connectWS, 2000);
-  };
-
-  ws.onerror = () => {
-    // onclose will fire after this
   };
 
   ws.onmessage = (evt) => {
@@ -443,12 +436,6 @@ function updateParticles(dt) {
     pt.life -= dt;
     if (pt.life <= 0) particles.splice(i, 1);
   }
-  for (let i = floatingTexts.length - 1; i >= 0; i--) {
-    const ft = floatingTexts[i];
-    ft.y += ft.vy * dt;
-    ft.life -= dt;
-    if (ft.life <= 0) floatingTexts.splice(i, 1);
-  }
   if (screenShake > 0) screenShake -= dt;
 }
 
@@ -477,30 +464,21 @@ function lerpState(prev, curr, t) {
     };
   });
 
-  // Interpolate enemies (match by index since server doesn't send IDs)
-  // We can't reliably match enemies across ticks, so only lerp if count matches
+  // Match by index (server doesn't send enemy IDs); skip lerp if counts
+  // differ, and bail per-row if names don't match (a swap that re-used
+  // the same slot index between ticks).
   if (prev.enemies.length === curr.enemies.length) {
     result.enemies = curr.enemies.map((ce, i) => {
       const pe = prev.enemies[i];
-      if (!pe || pe.name !== ce.name) return ce;
-      return {
-        ...ce,
-        x: lerp(pe.x, ce.x, t),
-        y: lerp(pe.y, ce.y, t),
-      };
+      if (pe.name !== ce.name) return ce;
+      return { ...ce, x: lerp(pe.x, ce.x, t), y: lerp(pe.y, ce.y, t) };
     });
   }
 
-  // Interpolate gems
   if (prev.gems.length === curr.gems.length) {
     result.gems = curr.gems.map((cg, i) => {
       const pg = prev.gems[i];
-      if (!pg) return cg;
-      return {
-        ...cg,
-        x: lerp(pg.x, cg.x, t),
-        y: lerp(pg.y, cg.y, t),
-      };
+      return { ...cg, x: lerp(pg.x, cg.x, t), y: lerp(pg.y, cg.y, t) };
     });
   }
 
@@ -512,7 +490,6 @@ function lerpState(prev, curr, t) {
 // RENDER
 // ============================================================
 
-// WEAPON_ICONS imported from shared/weapons.js
 let renderStarted = false;
 let lastFrameTime = 0;
 
@@ -904,16 +881,6 @@ function render(dt) {
     ctx.globalAlpha = 1;
   }
 
-  // --- floating texts ---
-  for (const ft of floatingTexts) {
-    ctx.globalAlpha = ft.life / ft.maxLife;
-    ctx.fillStyle = ft.color;
-    ctx.font = 'bold 12px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(ft.text, ft.x, ft.y);
-    ctx.globalAlpha = 1;
-  }
-
   ctx.restore();
 
   // --- spectator label ---
@@ -929,25 +896,6 @@ function render(dt) {
       ctx.fillText(`SPECTATING: ${specName} (click to switch)`, W / 2, H - 30);
       ctx.restore();
     }
-  }
-
-  // --- death feed (bottom-left) ---
-  const feedMax = 5;
-  const feedDuration = 6;
-  const recentFeed = deathFeed.slice(-feedMax);
-  const now = performance.now() / 1000;
-  for (let i = 0; i < recentFeed.length; i++) {
-    const entry = recentFeed[i];
-    const age = now - entry.time;
-    if (age > feedDuration) continue;
-    const alpha = age > feedDuration - 1 ? (feedDuration - age) : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha * 0.7;
-    ctx.fillStyle = '#ccc';
-    ctx.font = '10px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(entry.text, 12, H - 20 - (recentFeed.length - 1 - i) * 16);
-    ctx.restore();
   }
 
   // --- HUD ---
