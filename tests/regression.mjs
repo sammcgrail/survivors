@@ -26,7 +26,10 @@ function startServer(port) {
   return new Promise(resolve => {
     const s = createServer((req, res) => {
       let p = req.url.split('?')[0];
-      if (p === '/') p = '/index.html';
+      // Mirror what production should do once Caddy is updated: bare `/`
+      // serves the SP page (deployment will issue a 308 to /sp; locally we
+      // just inline-serve sp.html so the regression test stays self-contained).
+      if (p === '/') p = '/sp.html';
       const f = join(ROOT, p);
       if (!existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'Content-Type': MIME[extname(f)] || 'application/octet-stream' });
@@ -50,12 +53,12 @@ async function captureConsoleErrors(page) {
   return errors;
 }
 
-async function checkV1a(browser) {
-  console.log('\n--- v1a (single player) ---');
+async function checkSp(browser) {
+  console.log('\n--- sp (single player) ---');
   const page = await browser.newPage();
   const errors = await captureConsoleErrors(page);
 
-  await page.goto(`${URL}/v1a.html`, { waitUntil: 'load' });
+  await page.goto(`${URL}/sp.html`, { waitUntil: 'load' });
   await page.waitForTimeout(500);
 
   const title = await page.title();
@@ -80,18 +83,18 @@ async function checkV1a(browser) {
   check(hud.time && /\d/.test(hud.time), `HUD #hud-time is ticking (got: "${hud.time}")`);
   check(hud.wave && /wave/i.test(hud.wave), `HUD #hud-wave shows wave label (got: "${hud.wave}")`);
 
-  check(errors.length === 0, `no console errors during v1a load + play (got ${errors.length})`);
+  check(errors.length === 0, `no console errors during sp load + play (got ${errors.length})`);
   if (errors.length) errors.forEach(e => console.error(`        ${e}`));
 
   await page.close();
 }
 
-async function checkV1b(browser) {
-  console.log('\n--- v1b (multiplayer client) ---');
+async function checkMp(browser) {
+  console.log('\n--- mp (multiplayer client) ---');
   const page = await browser.newPage();
   const errors = await captureConsoleErrors(page);
 
-  await page.goto(`${URL}/v1b.html`, { waitUntil: 'load' });
+  await page.goto(`${URL}/mp.html`, { waitUntil: 'load' });
   await page.waitForTimeout(300);
 
   const title = await page.title();
@@ -112,18 +115,18 @@ async function checkV1b(browser) {
 
   // Don't attempt to join — that needs a Node server. Just confirm the page
   // didn't error on bundle execution.
-  check(errors.length === 0, `no console errors during v1b load (got ${errors.length})`);
+  check(errors.length === 0, `no console errors during mp load (got ${errors.length})`);
   if (errors.length) errors.forEach(e => console.error(`        ${e}`));
 
   await page.close();
 }
 
-async function checkIndex(browser) {
-  console.log('\n--- index (root /) ---');
+async function checkRoot(browser) {
+  console.log('\n--- root (/) ---');
   const page = await browser.newPage();
   await page.goto(`${URL}/`, { waitUntil: 'load' });
   const title = await page.title();
-  check(/survivors/i.test(title), `index title looks like survivors (got: "${title}") — guards against the root being swapped to a different game`);
+  check(/survivors/i.test(title), `root title looks like survivors (got: "${title}") — guards against the root being swapped to a different game`);
   await page.close();
 }
 
@@ -132,9 +135,9 @@ async function main() {
   console.log(`regression: serving ${ROOT} on ${URL}`);
   const browser = await chromium.launch({ headless: true });
   try {
-    await checkIndex(browser);
-    await checkV1a(browser);
-    await checkV1b(browser);
+    await checkRoot(browser);
+    await checkSp(browser);
+    await checkMp(browser);
   } finally {
     await browser.close();
     server.close();
