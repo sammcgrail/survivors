@@ -244,11 +244,12 @@ const WAVE_POOLS = [
 
 // Special wave events — override normal spawns
 const SPECIAL_WAVES = {
-  5:  { name: 'SWARM RUSH',  override: 'swarm',  countMulti: 3 },
-  8:  { name: 'TANK PARADE', override: 'tank',   countMulti: 1.5 },
-  10: { name: 'GHOST STORM', override: 'ghost',  countMulti: 2 },
-  13: { name: 'BRUTE FORCE', override: 'brute',  countMulti: 1 },
-  15: { name: 'THE HORDE',   override: null,      countMulti: 4 },
+  6:  { name: 'SWARM RUSH',   override: 'swarm',  countMulti: 3 },
+  7:  { name: 'PHANTOM',      override: 'ghost',  countMulti: 0.5 }, // teach: few ghosts
+  9:  { name: 'TANK PARADE',  override: 'tank',   countMulti: 1.5 },
+  11: { name: 'GHOST STORM',  override: 'ghost',  countMulti: 1.5 },
+  13: { name: 'BRUTE FORCE',  override: 'brute',  countMulti: 1 },
+  15: { name: 'THE HORDE',    override: null,      countMulti: 4 },
 };
 
 function enemyType(wave) {
@@ -291,6 +292,7 @@ function scaleEnemy(base, wave) {
     damage: Math.floor(base.damage * dmgScale),
     xp: Math.floor(base.xp * xpScale),
     hitFlash: 0,
+    orbitSign: Math.random() < 0.5 ? 1 : -1,
   };
 }
 
@@ -528,13 +530,15 @@ function update(dt) {
     const dist = Math.sqrt(edx * edx + edy * edy);
     if (dist > 1) {
       if (e.name === 'ghost') {
-        // ghosts spiral inward — perpendicular component + inward pull
+        // ghosts spiral inward — per-ghost orbit direction prevents kiting
         const nx = edx / dist;
         const ny = edy / dist;
-        const perpX = -ny; // perpendicular
-        const perpY = nx;
-        const inward = dist > 100 ? 0.6 : 1.0; // close in when near
-        const orbit = dist > 60 ? 0.8 : 0.3;
+        const sign = e.orbitSign || 1;
+        const perpX = -ny * sign;
+        const perpY = nx * sign;
+        // closing at range, committed up close, drive-by prevented at melee
+        const inward = dist > 100 ? 0.8 : dist > 30 ? 1.0 : 1.0;
+        const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
         e.x += (nx * inward + perpX * orbit) * e.speed * dt;
         e.y += (ny * inward + perpY * orbit) * e.speed * dt;
       } else {
