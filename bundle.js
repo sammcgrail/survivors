@@ -346,6 +346,268 @@
     }
   });
 
+  // src/shared/sim/damage.js
+  function heartDropChance(name) {
+    if (name === "boss") return 1;
+    if (name === "elite" || name === "brute") return 0.2;
+    return 0.08;
+  }
+  function spawnHeart(g, x, y, heal) {
+    g.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: g.rng.range(0, Math.PI * 2) });
+  }
+  function damageEnemy(g, e, idx, dmg) {
+    if (e.dying) return;
+    e.hp -= dmg;
+    e.hitFlash = 1;
+    emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
+    if (e.hp <= 0 && !e.dying) {
+      spawnGem(g, e.x, e.y, e.xp);
+      if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
+        spawnHeart(g, e.x, e.y, 15);
+      }
+      emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name });
+      e.dying = 0.2;
+      g.kills++;
+    }
+  }
+  var init_damage = __esm({
+    "src/shared/sim/damage.js"() {
+      init_gems();
+      init_events();
+    }
+  });
+
+  // src/shared/sim/projectiles.js
+  function updateProjectiles(g, dt) {
+    const p = g.player;
+    for (let i = g.projectiles.length - 1; i >= 0; i--) {
+      const proj = g.projectiles[i];
+      proj.x += proj.vx * dt;
+      proj.y += proj.vy * dt;
+      proj.dist += proj.speed * dt;
+      if (proj.dist > proj.range) {
+        g.projectiles.splice(i, 1);
+        continue;
+      }
+      for (let j = g.enemies.length - 1; j >= 0; j--) {
+        const e = g.enemies[j];
+        const edx = proj.x - e.x;
+        const edy = proj.y - e.y;
+        if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
+          damageEnemy(g, e, j, proj.damage * p.damageMulti);
+          proj.pierce--;
+          if (proj.pierce <= 0) {
+            g.projectiles.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+  }
+  var init_projectiles = __esm({
+    "src/shared/sim/projectiles.js"() {
+      init_damage();
+    }
+  });
+
+  // src/shared/sim/enemies.js
+  function spawnEnemy(g) {
+    const angle = g.rng.random() * Math.PI * 2;
+    const dist = 500 + g.rng.random() * 200;
+    const ex = g.player.x + Math.cos(angle) * dist;
+    const ey = g.player.y + Math.sin(angle) * dist;
+    const e = enemyType(g.wave);
+    e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
+    e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
+    e.hitFlash = 0;
+    g.enemies.push(e);
+  }
+  function updateBossAi(g, e, dt, edx, edy, dist) {
+    if (e.chargeTimer === void 0) e.chargeTimer = 3 + g.rng.random() * 2;
+    if (e.charging === void 0) e.charging = 0;
+    if (e.charging > 0) {
+      e.x += e.chargeDx * e.speed * 3 * dt;
+      e.y += e.chargeDy * e.speed * 3 * dt;
+      e.charging -= dt;
+      return;
+    }
+    e.x += edx / dist * e.speed * 0.5 * dt;
+    e.y += edy / dist * e.speed * 0.5 * dt;
+    e.chargeTimer -= dt;
+    if (e.stepTimer === void 0) e.stepTimer = 0.8;
+    e.stepTimer -= dt;
+    if (e.stepTimer <= 0 && dist < 500) {
+      emit(g, EVT.BOSS_STEP, { x: e.x, y: e.y });
+      e.stepTimer = 0.7 + g.rng.random() * 0.3;
+    }
+    if (e.chargeTimer <= 0 && dist < 400) {
+      e.chargeDx = edx / dist;
+      e.chargeDy = edy / dist;
+      e.charging = 0.8;
+      e.chargeTimer = 4 + g.rng.random() * 3;
+      emit(g, EVT.BOSS_TELEGRAPH, { x: e.x, y: e.y });
+    }
+  }
+  function updateGhostMovement(e, dt, edx, edy, dist) {
+    const nx = edx / dist;
+    const ny = edy / dist;
+    const sign = e.orbitSign || 1;
+    const perpX = -ny * sign;
+    const perpY = nx * sign;
+    const inward = dist > 100 ? 0.8 : dist > 30 ? 1 : 1;
+    const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
+    e.x += (nx * inward + perpX * orbit) * e.speed * dt;
+    e.y += (ny * inward + perpY * orbit) * e.speed * dt;
+  }
+  function updateSpawnerAi(g, e, dt) {
+    if (e.spawnTimer === void 0) return;
+    e.spawnTimer -= dt;
+    if (e.spawnTimer > 0) return;
+    e.spawnTimer = 3 + g.rng.random() * 2;
+    const count = 3 + Math.floor(g.rng.random() * 3);
+    for (let s = 0; s < count; s++) {
+      const sa = g.rng.random() * Math.PI * 2;
+      const sr = 20 + g.rng.random() * 20;
+      const base = ENEMY_TYPES.find((t) => t.name === "swarm");
+      const minion = scaleEnemy(base, g.wave);
+      minion.x = e.x + Math.cos(sa) * sr;
+      minion.y = e.y + Math.sin(sa) * sr;
+      minion.hitFlash = 0;
+      g.enemies.push(minion);
+    }
+    emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y });
+  }
+  function updateEnemyTick(g, dt) {
+    const p = g.player;
+    for (let i = g.enemies.length - 1; i >= 0; i--) {
+      const e = g.enemies[i];
+      if (e.dying !== void 0) {
+        e.dying -= dt;
+        if (e.dying <= 0) g.enemies.splice(i, 1);
+        continue;
+      }
+      const edx = p.x - e.x;
+      const edy = p.y - e.y;
+      const dist = Math.sqrt(edx * edx + edy * edy);
+      if (dist > 1) {
+        if (e.name === "ghost") updateGhostMovement(e, dt, edx, edy, dist);
+        else if (e.name === "boss") updateBossAi(g, e, dt, edx, edy, dist);
+        else {
+          e.x += edx / dist * e.speed * dt;
+          e.y += edy / dist * e.speed * dt;
+        }
+      }
+      if (e.name === "spawner") updateSpawnerAi(g, e, dt);
+      if (e.hitFlash > 0) e.hitFlash -= dt * 5;
+      if (dist < p.radius + e.radius && p.iframes <= 0) {
+        p.hp -= e.damage;
+        p.iframes = 0.5;
+        emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg: e.damage, by: e.name });
+        if (p.hp <= 0) {
+          p.hp = 0;
+          p.alive = false;
+          emit(g, EVT.PLAYER_DEATH, { by: e.name });
+        }
+      }
+    }
+  }
+  function updateRepulsion(g) {
+    const cells = /* @__PURE__ */ new Map();
+    for (let i = 0; i < g.enemies.length; i++) {
+      const e = g.enemies[i];
+      const cx = Math.floor(e.x / HASH_CELL);
+      const cy = Math.floor(e.y / HASH_CELL);
+      const k = cx * 1e5 + cy;
+      let bucket = cells.get(k);
+      if (!bucket) {
+        bucket = [];
+        cells.set(k, bucket);
+      }
+      bucket.push(i);
+    }
+    for (let i = 0; i < g.enemies.length; i++) {
+      const e = g.enemies[i];
+      const cx = Math.floor(e.x / HASH_CELL);
+      const cy = Math.floor(e.y / HASH_CELL);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const bucket = cells.get((cx + dx) * 1e5 + (cy + dy));
+          if (!bucket) continue;
+          for (let bi = 0; bi < bucket.length; bi++) {
+            const j = bucket[bi];
+            if (j <= i) continue;
+            const e2 = g.enemies[j];
+            const rx = e.x - e2.x;
+            const ry = e.y - e2.y;
+            const rd = Math.sqrt(rx * rx + ry * ry);
+            const minD = e.radius + e2.radius;
+            if (rd < minD && rd > 0.1) {
+              const push = (minD - rd) * 0.5;
+              const nx = rx / rd;
+              const ny = ry / rd;
+              e.x += nx * push;
+              e.y += ny * push;
+              e2.x -= nx * push;
+              e2.y -= ny * push;
+            }
+          }
+        }
+      }
+    }
+  }
+  function updateEnemies(g, dt) {
+    updateEnemyTick(g, dt);
+    updateRepulsion(g);
+  }
+  var HASH_CELL;
+  var init_enemies = __esm({
+    "src/shared/sim/enemies.js"() {
+      init_enemyTypes();
+      init_constants();
+      init_events();
+      HASH_CELL = 50;
+    }
+  });
+
+  // src/shared/sim/waves.js
+  function updateWaves(g, dt) {
+    if (g.waveTimer >= g.waveDuration) {
+      g.wave++;
+      g.waveTimer = 0;
+      g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
+      g.spawnRate = Math.max(0.25, 2 * Math.pow(0.88, g.wave - 1));
+      g.waveMsg = `WAVE ${g.wave}`;
+      g.waveMsgTimer = 2;
+      emit(g, EVT.WAVE_START, { wave: g.wave });
+      const special = SPECIAL_WAVES[g.wave];
+      if (special) {
+        g.specialWaveMsg = special.name;
+        g.specialWaveMsgTimer = 2.5;
+        emit(g, EVT.SPECIAL_WAVE_START, { wave: g.wave, name: special.name });
+      }
+    }
+    if (g.waveMsgTimer > 0) g.waveMsgTimer -= dt;
+    if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
+    g.spawnTimer -= dt;
+    if (g.spawnTimer <= 0) {
+      const special = SPECIAL_WAVES[g.wave];
+      let baseCount = 1 + Math.floor(g.wave / 2);
+      if (special) baseCount = Math.ceil(baseCount * special.countMulti);
+      const count = Math.min(baseCount, 12);
+      const maxEnemies = 80 + g.wave * 10;
+      const toSpawn = Math.min(count, maxEnemies - g.enemies.length);
+      for (let i = 0; i < toSpawn; i++) spawnEnemy(g);
+      g.spawnTimer = g.spawnRate;
+    }
+  }
+  var init_waves = __esm({
+    "src/shared/sim/waves.js"() {
+      init_enemyTypes();
+      init_events();
+      init_enemies();
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
@@ -356,6 +618,10 @@
       init_rng();
       init_events();
       init_gems();
+      init_damage();
+      init_projectiles();
+      init_enemies();
+      init_waves();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -617,6 +883,28 @@
               osc.stop(t + 0.12);
               break;
             }
+            case "heal": {
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(523, t);
+              osc.frequency.linearRampToValueAtTime(784, t + 0.1);
+              gain.gain.setValueAtTime(0.1, t);
+              gain.gain.linearRampToValueAtTime(0.06, t + 0.08);
+              gain.gain.linearRampToValueAtTime(0, t + 0.15);
+              osc.start(t);
+              osc.stop(t + 0.15);
+              const ho2 = ac.createOscillator();
+              const hg2 = ac.createGain();
+              ho2.connect(hg2);
+              hg2.connect(ac.destination);
+              ho2.type = "sine";
+              ho2.frequency.setValueAtTime(659, t + 0.05);
+              ho2.frequency.linearRampToValueAtTime(1047, t + 0.15);
+              hg2.gain.setValueAtTime(0.06, t + 0.05);
+              hg2.gain.linearRampToValueAtTime(0, t + 0.2);
+              ho2.start(t + 0.05);
+              ho2.stop(t + 0.2);
+              break;
+            }
             case "zap": {
               osc.type = "sawtooth";
               osc.frequency.setValueAtTime(2e3, t);
@@ -859,6 +1147,7 @@
           enemies: [],
           projectiles: [],
           gems: [],
+          heartDrops: [],
           particles: [],
           floatingTexts: [],
           time: 0,
@@ -886,17 +1175,6 @@
           rng: createRng(Date.now() & 2147483647)
         };
       }
-      function spawnEnemy(g) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 500 + Math.random() * 200;
-        const ex = g.player.x + Math.cos(angle) * dist;
-        const ey = g.player.y + Math.sin(angle) * dist;
-        const e = enemyType(g.wave);
-        e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
-        e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
-        e.hitFlash = 0;
-        g.enemies.push(e);
-      }
       function spawnParticles(x, y, color, count) {
         for (let i = 0; i < count; i++) {
           const angle = Math.random() * Math.PI * 2;
@@ -919,32 +1197,7 @@
         const p = g.player;
         g.time += dt;
         g.waveTimer += dt;
-        if (g.waveTimer >= g.waveDuration) {
-          g.wave++;
-          g.waveTimer = 0;
-          g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
-          g.spawnRate = Math.max(0.25, 2 * Math.pow(0.88, g.wave - 1));
-          g.waveMsg = `WAVE ${g.wave}`;
-          g.waveMsgTimer = 2;
-          const special = SPECIAL_WAVES[g.wave];
-          if (special) {
-            g.specialWaveMsg = special.name;
-            g.specialWaveMsgTimer = 2.5;
-          }
-        }
-        if (g.waveMsgTimer > 0) g.waveMsgTimer -= dt;
-        if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
-        g.spawnTimer -= dt;
-        if (g.spawnTimer <= 0) {
-          const special = SPECIAL_WAVES[g.wave];
-          let baseCount = 1 + Math.floor(g.wave / 2);
-          if (special) baseCount = Math.ceil(baseCount * special.countMulti);
-          const count = Math.min(baseCount, 12);
-          const maxEnemies = 80 + g.wave * 10;
-          const toSpawn = Math.min(count, maxEnemies - g.enemies.length);
-          for (let i = 0; i < toSpawn; i++) spawnEnemy(g);
-          g.spawnTimer = g.spawnRate;
-        }
+        updateWaves(g, dt);
         let dx, dy;
         if (analogMove.x !== 0 || analogMove.y !== 0) {
           dx = analogMove.x;
@@ -1045,29 +1298,7 @@
             if (targets.length > 0) sfx("zap");
           }
         }
-        for (let i = g.projectiles.length - 1; i >= 0; i--) {
-          const proj = g.projectiles[i];
-          proj.x += proj.vx * dt;
-          proj.y += proj.vy * dt;
-          proj.dist += proj.speed * dt;
-          if (proj.dist > proj.range) {
-            g.projectiles.splice(i, 1);
-            continue;
-          }
-          for (let j = g.enemies.length - 1; j >= 0; j--) {
-            const e = g.enemies[j];
-            const edx = proj.x - e.x;
-            const edy = proj.y - e.y;
-            if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
-              damageEnemy(g, e, j, proj.damage * p.damageMulti);
-              proj.pierce--;
-              if (proj.pierce <= 0) {
-                g.projectiles.splice(i, 1);
-                break;
-              }
-            }
-          }
-        }
+        updateProjectiles(g, dt);
         for (const w of p.weapons) {
           if (w.type === "breath") {
             for (let j = g.enemies.length - 1; j >= 0; j--) {
@@ -1097,139 +1328,43 @@
             }
           }
         }
-        const HASH_CELL = 50;
-        for (let i = g.enemies.length - 1; i >= 0; i--) {
-          const e = g.enemies[i];
-          if (e.dying !== void 0) {
-            e.dying -= dt;
-            if (e.dying <= 0) {
-              g.enemies.splice(i, 1);
-            }
+        updateEnemies(g, dt);
+        updateGems(g, dt);
+        for (let i = g.heartDrops.length - 1; i >= 0; i--) {
+          const h = g.heartDrops[i];
+          h.life -= dt;
+          h.bobPhase += dt * 3;
+          if (h.life <= 0) {
+            g.heartDrops.splice(i, 1);
             continue;
           }
-          const edx = p.x - e.x;
-          const edy = p.y - e.y;
-          const dist = Math.sqrt(edx * edx + edy * edy);
-          if (dist > 1) {
-            if (e.name === "ghost") {
-              const nx = edx / dist;
-              const ny = edy / dist;
-              const sign = e.orbitSign || 1;
-              const perpX = -ny * sign;
-              const perpY = nx * sign;
-              const inward = dist > 100 ? 0.8 : dist > 30 ? 1 : 1;
-              const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
-              e.x += (nx * inward + perpX * orbit) * e.speed * dt;
-              e.y += (ny * inward + perpY * orbit) * e.speed * dt;
-            } else if (e.name === "boss") {
-              if (e.chargeTimer === void 0) e.chargeTimer = 3 + Math.random() * 2;
-              if (e.charging === void 0) e.charging = 0;
-              if (e.charging > 0) {
-                e.x += e.chargeDx * e.speed * 3 * dt;
-                e.y += e.chargeDy * e.speed * 3 * dt;
-                e.charging -= dt;
-              } else {
-                e.x += edx / dist * e.speed * 0.5 * dt;
-                e.y += edy / dist * e.speed * 0.5 * dt;
-                e.chargeTimer -= dt;
-                if (e.stepTimer === void 0) e.stepTimer = 0.8;
-                e.stepTimer -= dt;
-                if (e.stepTimer <= 0 && dist < 500) {
-                  sfx("boss_step");
-                  e.stepTimer = 0.7 + Math.random() * 0.3;
-                }
-                if (e.chargeTimer <= 0 && dist < 400) {
-                  e.chargeDx = edx / dist;
-                  e.chargeDy = edy / dist;
-                  e.charging = 0.8;
-                  e.chargeTimer = 4 + Math.random() * 3;
-                  spawnParticles(e.x, e.y, "#d63031", 12);
-                  sfx("boss_telegraph");
-                }
-              }
-            } else {
-              e.x += edx / dist * e.speed * dt;
-              e.y += edy / dist * e.speed * dt;
-            }
+          const hdx = p.x - h.x;
+          const hdy = p.y - h.y;
+          const dist = Math.sqrt(hdx * hdx + hdy * hdy);
+          if (dist < p.magnetRange * 0.6) {
+            const pull = XP_MAGNET_SPEED * 0.7 * dt;
+            h.x += hdx / dist * Math.min(pull, dist);
+            h.y += hdy / dist * Math.min(pull, dist);
           }
-          if (e.name === "spawner" && e.spawnTimer !== void 0) {
-            e.spawnTimer -= dt;
-            if (e.spawnTimer <= 0) {
-              e.spawnTimer = 3 + Math.random() * 2;
-              const count = 3 + Math.floor(Math.random() * 3);
-              for (let s = 0; s < count; s++) {
-                const sa = Math.random() * Math.PI * 2;
-                const sr = 20 + Math.random() * 20;
-                const base = ENEMY_TYPES.find((t) => t.name === "swarm");
-                const minion = scaleEnemy(base, g.wave);
-                minion.x = e.x + Math.cos(sa) * sr;
-                minion.y = e.y + Math.sin(sa) * sr;
-                minion.hitFlash = 0;
-                g.enemies.push(minion);
-              }
-              spawnParticles(e.x, e.y, "#fdcb6e", 8);
-              sfx("hive_burst");
+          if (dist < p.radius + h.radius) {
+            const healed = Math.min(h.heal, p.maxHp - p.hp);
+            p.hp = Math.min(p.maxHp, p.hp + h.heal);
+            sfx("heal");
+            if (healed > 0) {
+              g.floatingTexts.push({
+                x: h.x,
+                y: h.y,
+                text: "+" + Math.floor(healed) + " HP",
+                color: "#2ecc71",
+                life: 0.8,
+                maxLife: 0.8,
+                vy: -50
+              });
             }
-          }
-          if (e.hitFlash > 0) e.hitFlash -= dt * 5;
-          if (dist < p.radius + e.radius && p.iframes <= 0) {
-            p.hp -= e.damage;
-            p.iframes = 0.5;
-            g.screenShake = 0.15;
-            spawnParticles(p.x, p.y, "#e74c3c", 5);
-            sfx("playerhit");
-            if (p.hp <= 0) {
-              p.hp = 0;
-              p.alive = false;
-              sfx("death");
-              g.deathFeed.push({ text: `${g.playerName} killed by ${e.name}`, time: g.time });
-              showDeathScreen(g);
-            }
+            spawnParticles(h.x, h.y, "#e74c3c", 4);
+            g.heartDrops.splice(i, 1);
           }
         }
-        const cells = /* @__PURE__ */ new Map();
-        for (let i = 0; i < g.enemies.length; i++) {
-          const e = g.enemies[i];
-          const cx = Math.floor(e.x / HASH_CELL);
-          const cy = Math.floor(e.y / HASH_CELL);
-          const k = cx * 1e5 + cy;
-          let bucket = cells.get(k);
-          if (!bucket) {
-            bucket = [];
-            cells.set(k, bucket);
-          }
-          bucket.push(i);
-        }
-        for (let i = 0; i < g.enemies.length; i++) {
-          const e = g.enemies[i];
-          const cx = Math.floor(e.x / HASH_CELL);
-          const cy = Math.floor(e.y / HASH_CELL);
-          for (let dx2 = -1; dx2 <= 1; dx2++) {
-            for (let dy2 = -1; dy2 <= 1; dy2++) {
-              const bucket = cells.get((cx + dx2) * 1e5 + (cy + dy2));
-              if (!bucket) continue;
-              for (let bi = 0; bi < bucket.length; bi++) {
-                const j = bucket[bi];
-                if (j <= i) continue;
-                const e2 = g.enemies[j];
-                const rx = e.x - e2.x;
-                const ry = e.y - e2.y;
-                const rd = Math.sqrt(rx * rx + ry * ry);
-                const minD = e.radius + e2.radius;
-                if (rd < minD && rd > 0.1) {
-                  const push = (minD - rd) * 0.5;
-                  const nx = rx / rd;
-                  const ny = ry / rd;
-                  e.x += nx * push;
-                  e.y += ny * push;
-                  e2.x -= nx * push;
-                  e2.y -= ny * push;
-                }
-              }
-            }
-          }
-        }
-        updateGems(g, dt);
         for (let i = g.particles.length - 1; i >= 0; i--) {
           const pt = g.particles[i];
           pt.x += pt.vx * dt;
@@ -1317,6 +1452,45 @@
           case EVT.LEVEL_UP:
             g.levelFlash = 0.15;
             showLevelUp(g);
+            break;
+          case EVT.ENEMY_HIT:
+            if (evt.dmg >= 5) {
+              sfx("hit");
+              g.floatingTexts.push({
+                x: evt.x + (Math.random() - 0.5) * 10,
+                y: evt.y - evt.radius - 4,
+                text: Math.floor(evt.dmg).toString(),
+                color: "#f1c40f",
+                life: 0.5,
+                maxLife: 0.5,
+                vy: -40
+              });
+            }
+            break;
+          case EVT.ENEMY_KILLED:
+            sfx("kill");
+            spawnParticles(evt.x, evt.y, evt.color, 6);
+            break;
+          case EVT.PLAYER_HIT:
+            g.screenShake = 0.15;
+            spawnParticles(evt.x, evt.y, "#e74c3c", 5);
+            sfx("playerhit");
+            break;
+          case EVT.PLAYER_DEATH:
+            sfx("death");
+            g.deathFeed.push({ text: `${g.playerName} killed by ${evt.by}`, time: g.time });
+            showDeathScreen(g);
+            break;
+          case EVT.BOSS_STEP:
+            sfx("boss_step");
+            break;
+          case EVT.BOSS_TELEGRAPH:
+            spawnParticles(evt.x, evt.y, "#d63031", 12);
+            sfx("boss_telegraph");
+            break;
+          case EVT.HIVE_BURST:
+            spawnParticles(evt.x, evt.y, "#fdcb6e", 8);
+            sfx("hive_burst");
             break;
         }
       }
@@ -1471,30 +1645,6 @@
           }
         }
       }
-      function damageEnemy(g, e, idx, dmg) {
-        if (e.dying) return;
-        e.hp -= dmg;
-        e.hitFlash = 1;
-        if (dmg >= 5) {
-          sfx("hit");
-          g.floatingTexts.push({
-            x: e.x + (Math.random() - 0.5) * 10,
-            y: e.y - e.radius - 4,
-            text: Math.floor(dmg).toString(),
-            color: "#f1c40f",
-            life: 0.5,
-            maxLife: 0.5,
-            vy: -40
-          });
-        }
-        if (e.hp <= 0 && !e.dying) {
-          sfx("kill");
-          spawnGem(g, e.x, e.y, e.xp);
-          spawnParticles(e.x, e.y, e.color, 6);
-          e.dying = 0.2;
-          g.kills++;
-        }
-      }
       function showLevelUp(g) {
         sfx("levelup");
         paused = true;
@@ -1644,6 +1794,24 @@
             ctx.fill();
             ctx.globalAlpha = 1;
           }
+        }
+        for (const h of g.heartDrops) {
+          const bob = Math.sin(h.bobPhase) * 3;
+          const fadeAlpha = h.life < 3 ? h.life / 3 : 1;
+          ctx.globalAlpha = fadeAlpha;
+          if (!drawSprite("heart", h.x, h.y + bob, 0.8, fadeAlpha)) {
+            ctx.fillStyle = "#e74c3c";
+            ctx.beginPath();
+            ctx.arc(h.x - 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+            ctx.arc(h.x + 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(h.x - 9, h.y + bob);
+            ctx.lineTo(h.x, h.y + bob + 8);
+            ctx.lineTo(h.x + 9, h.y + bob);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
         }
         const p = g.player;
         for (const w of p.weapons) {
