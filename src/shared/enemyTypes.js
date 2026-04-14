@@ -1,6 +1,11 @@
-// Pure data + scaling math for enemies. Used by both v1a (single-player
-// client) and — eventually — v1b's server.py port to JS, if/when that
-// happens. Keep this file free of DOM, canvas, and game-state references.
+// Pure data + scaling math for enemies. Shared by SP (src/main.js) and
+// MP (server.mjs). Keep free of DOM/canvas/game-state references.
+//
+// `enemyType` and `scaleEnemy` take an `rng` (object with `.random()` —
+// see shared/sim/rng.js) so spawn rolls + per-enemy jitter are
+// reproducible from the same seed. Required, not optional — the whole
+// point of plumbing rng through the sim is to avoid a hidden Math.random
+// reintroducing nondeterminism.
 
 export const ENEMY_TYPES = [
   { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10, sprite: 'blob' },
@@ -38,27 +43,27 @@ export const SPECIAL_WAVES = {
   20: { name: 'THE DEMON',    override: 'boss',    countMulti: 0.05 }, // single boss
 };
 
-export function enemyType(wave) {
+export function enemyType(wave, rng) {
   const special = SPECIAL_WAVES[wave];
   if (special && special.override) {
     const base = ENEMY_TYPES.find(t => t.name === special.override);
-    return scaleEnemy(base, wave);
+    return scaleEnemy(base, wave, rng);
   }
   const pool = WAVE_POOLS.find(p => wave <= p.maxWave) || WAVE_POOLS[WAVE_POOLS.length - 1];
   const entries = Object.entries(pool.weights);
   const totalWeight = entries.reduce((s, [, w]) => s + w, 0);
-  let roll = Math.random() * totalWeight;
+  let roll = rng.random() * totalWeight;
   for (const [name, weight] of entries) {
     roll -= weight;
     if (roll <= 0) {
       const base = ENEMY_TYPES.find(t => t.name === name);
-      return scaleEnemy(base, wave);
+      return scaleEnemy(base, wave, rng);
     }
   }
-  return scaleEnemy(ENEMY_TYPES[0], wave);
+  return scaleEnemy(ENEMY_TYPES[0], wave, rng);
 }
 
-export function scaleEnemy(base, wave) {
+export function scaleEnemy(base, wave, rng) {
   // HP scales — gentle ramp with gradual late-game bonus starting wave 6
   const hpScale = 1 + (wave - 1) * 0.12 + Math.max(0, wave - 6) * 0.04;
   // Speed scales gently — don't make it impossible to dodge
@@ -75,7 +80,7 @@ export function scaleEnemy(base, wave) {
     damage: Math.floor(base.damage * dmgScale),
     xp: Math.floor(base.xp * xpScale),
     hitFlash: 0,
-    orbitSign: Math.random() < 0.5 ? 1 : -1,
-    spawnTimer: base.name === 'spawner' ? 2 + Math.random() * 2 : 0, // spawners birth swarms
+    orbitSign: rng.random() < 0.5 ? 1 : -1,
+    spawnTimer: base.name === 'spawner' ? 2 + rng.random() * 2 : 0, // spawners birth swarms
   };
 }
