@@ -475,6 +475,7 @@ const XP_MAGNET_SPEED = 400;
 // --- game state ---
 let game = null;
 let keys = { up: false, down: false, left: false, right: false };
+let analogMove = { x: 0, y: 0 }; // smooth analog input from touch
 let paused = false;
 let selectedWeapon = 'spit'; // default starting weapon
 
@@ -768,10 +769,16 @@ function update(dt) {
     g.spawnTimer = g.spawnRate;
   }
 
-  // player movement
-  let dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-  let dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
-  if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
+  // player movement — analog touch input takes priority over digital keys
+  let dx, dy;
+  if (analogMove.x !== 0 || analogMove.y !== 0) {
+    dx = analogMove.x;
+    dy = analogMove.y;
+  } else {
+    dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
+    dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
+    if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
+  }
   if (dx || dy) p.facing = { x: dx, y: dy };
   p.x += dx * p.speed * dt;
   p.y += dy * p.speed * dt;
@@ -1761,14 +1768,18 @@ joyZone.addEventListener('touchmove', e => {
     const dx = t.clientX - joyOrigin.x;
     const dy = t.clientY - joyOrigin.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const nx = dist > 0 ? dx / dist : 0;
-    const ny = dist > 0 ? dy / dist : 0;
     if (dist > JOY_DEAD) {
-      keys.left = nx < -0.4;
-      keys.right = nx > 0.4;
-      keys.up = ny < -0.4;
-      keys.down = ny > 0.4;
+      // analog: normalized direction vector, magnitude clamped to 1
+      const mag = Math.min(dist / 60, 1); // 60px = full speed
+      analogMove.x = (dx / dist) * mag;
+      analogMove.y = (dy / dist) * mag;
+      // keep boolean keys in sync for weapon aim logic
+      keys.left = analogMove.x < -0.3;
+      keys.right = analogMove.x > 0.3;
+      keys.up = analogMove.y < -0.3;
+      keys.down = analogMove.y > 0.3;
     } else {
+      analogMove.x = analogMove.y = 0;
       keys.left = keys.right = keys.up = keys.down = false;
     }
   }
@@ -1780,6 +1791,7 @@ function joyEnd(e) {
     if (t.identifier !== joyTouchId) continue;
     joyTouchId = null;
     joyOrigin = null;
+    analogMove.x = analogMove.y = 0;
     keys.left = keys.right = keys.up = keys.down = false;
   }
 }
