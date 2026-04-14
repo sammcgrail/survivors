@@ -1105,6 +1105,7 @@ function update(dt) {
         p.xp -= p.xpToLevel;
         p.level++;
         p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
+        g.levelFlash = 0.15; // 150ms white flash
         showLevelUp(g);
       }
     }
@@ -1182,6 +1183,7 @@ function update(dt) {
 
   // screen shake decay
   if (g.screenShake > 0) g.screenShake -= dt;
+  if (g.levelFlash > 0) g.levelFlash -= dt;
 
   // --- update XP bar ---
   document.getElementById('xp-fill').style.width = (p.xp / p.xpToLevel * 100) + '%';
@@ -1890,6 +1892,16 @@ function render() {
   document.getElementById('hud-kills').textContent = `${g.kills} kills`;
   document.getElementById('hud-wave').textContent = `Wave ${g.wave}`;
   document.getElementById('hud-weapons').textContent = p.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
+
+  // --- level-up flash ---
+  if (g.levelFlash > 0) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform for full-screen overlay
+    ctx.globalAlpha = g.levelFlash / 0.15 * 0.3; // fade from 0.3 to 0
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
+  }
 
 }
 
