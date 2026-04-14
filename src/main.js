@@ -7,6 +7,9 @@ import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_RADIUS, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from './shared/enemyTypes.js';
+import { createRng } from './shared/sim/rng.js';
+import { EVT, emit } from './shared/sim/events.js';
+import { spawnGem, updateGems } from './shared/sim/gems.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -490,6 +493,11 @@ function initGame() {
     deathFeed: [], // { text, time } — fading event log
     camera: { x: p.x, y: p.y },
     screenShake: 0,
+    // Event queue drained by client each frame. Sim modules push typed
+    // events here; client handles sfx/particles/HUD flashes from the
+    // queue. See src/shared/sim/events.js for the EVT enum.
+    events: [],
+    rng: createRng(Date.now() & 0x7fffffff),
   };
 }
 
@@ -507,9 +515,7 @@ function spawnEnemy(g) {
 }
 
 // --- spawn gem ---
-function spawnGem(x, y, xp) {
-  game.gems.push({ x, y, xp, radius: XP_RADIUS, alpha: 1 });
-}
+// spawnGem now imported from shared/sim/gems.js — call as spawnGem(g, x, y, xp)
 
 // --- spawn heart pickup ---
 function spawnHeart(x, y, heal) {
@@ -911,42 +917,8 @@ function update(dt) {
     }
   }
 
-  // --- pick up gems ---
-  for (let i = g.gems.length - 1; i >= 0; i--) {
-    const gem = g.gems[i];
-    const gdx = p.x - gem.x;
-    const gdy = p.y - gem.y;
-    const dist = Math.sqrt(gdx * gdx + gdy * gdy);
-
-    // magnet pull
-    if (dist < p.magnetRange) {
-      const pull = XP_MAGNET_SPEED * dt;
-      gem.x += (gdx / dist) * Math.min(pull, dist);
-      gem.y += (gdy / dist) * Math.min(pull, dist);
-    }
-
-    // pick up
-    if (dist < p.radius + gem.radius) {
-      p.xp += gem.xp;
-      sfx('xp');
-      // floating xp text
-      g.floatingTexts.push({
-        x: gem.x, y: gem.y, text: '+' + gem.xp,
-        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
-      });
-      spawnParticles(gem.x, gem.y, '#3498db', 3);
-      g.gems.splice(i, 1);
-
-      // level up check
-      while (p.xp >= p.xpToLevel) {
-        p.xp -= p.xpToLevel;
-        p.level++;
-        p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
-        g.levelFlash = 0.15; // 150ms white flash
-        showLevelUp(g);
-      }
-    }
-  }
+  // --- pick up gems --- (sim logic in shared/sim/gems.js, side effects via events)
+  updateGems(g, dt);
 
   // --- pick up hearts ---
   for (let i = g.heartDrops.length - 1; i >= 0; i--) {
@@ -1058,6 +1030,36 @@ function update(dt) {
   if (xpPct !== hudCache.xpPct) {
     hudEl.xpFill.style.width = (xpPct / 10) + '%';
     hudCache.xpPct = xpPct;
+  }
+
+  // Drain sim event queue. Sim modules push events here (sfx, particle
+  // spawns, screen shake triggers); client decides what to do. Empty
+  // until PR #12 starts emitting from extracted sim code.
+  if (g.events.length > 0) {
+    for (const evt of g.events) handleSimEvent(evt);
+    g.events.length = 0;
+  }
+}
+
+// Handle a single event from the sim. Sim is forbidden from touching
+// DOM/canvas/audio directly — it emits events into g.events, client
+// side-effects happen here. New sim subsystems plug in by adding cases.
+function handleSimEvent(evt) {
+  const g = game;
+  if (!g) return;
+  switch (evt.type) {
+    case EVT.GEM_PICKUP:
+      sfx('xp');
+      g.floatingTexts.push({
+        x: evt.x, y: evt.y, text: '+' + evt.xp,
+        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
+      });
+      spawnParticles(evt.x, evt.y, '#3498db', 3);
+      break;
+    case EVT.LEVEL_UP:
+      g.levelFlash = 0.15; // 150ms flash
+      showLevelUp(g);
+      break;
   }
 }
 
@@ -1223,7 +1225,7 @@ function damageEnemy(g, e, idx, dmg) {
   }
   if (e.hp <= 0 && !e.dying) {
     sfx('kill');
-    spawnGem(e.x, e.y, e.xp);
+    spawnGem(g, e.x, e.y, e.xp);
     // heart drop — wave 6+, 8% chance, higher for tougher enemies
     if (g.wave >= 6 && Math.random() < (e.name === 'boss' ? 1.0 : e.name === 'elite' || e.name === 'brute' ? 0.2 : 0.08)) {
       spawnHeart(e.x, e.y, 15);
