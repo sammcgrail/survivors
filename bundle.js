@@ -410,6 +410,165 @@
     }
   });
 
+  // src/shared/sim/enemies.js
+  function spawnEnemy(g) {
+    const angle = g.rng.random() * Math.PI * 2;
+    const dist = 500 + g.rng.random() * 200;
+    const ex = g.player.x + Math.cos(angle) * dist;
+    const ey = g.player.y + Math.sin(angle) * dist;
+    const e = enemyType(g.wave);
+    e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
+    e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
+    e.hitFlash = 0;
+    g.enemies.push(e);
+  }
+  function updateBossAi(g, e, dt, edx, edy, dist) {
+    if (e.chargeTimer === void 0) e.chargeTimer = 3 + g.rng.random() * 2;
+    if (e.charging === void 0) e.charging = 0;
+    if (e.charging > 0) {
+      e.x += e.chargeDx * e.speed * 3 * dt;
+      e.y += e.chargeDy * e.speed * 3 * dt;
+      e.charging -= dt;
+      return;
+    }
+    e.x += edx / dist * e.speed * 0.5 * dt;
+    e.y += edy / dist * e.speed * 0.5 * dt;
+    e.chargeTimer -= dt;
+    if (e.stepTimer === void 0) e.stepTimer = 0.8;
+    e.stepTimer -= dt;
+    if (e.stepTimer <= 0 && dist < 500) {
+      emit(g, EVT.BOSS_STEP, { x: e.x, y: e.y });
+      e.stepTimer = 0.7 + g.rng.random() * 0.3;
+    }
+    if (e.chargeTimer <= 0 && dist < 400) {
+      e.chargeDx = edx / dist;
+      e.chargeDy = edy / dist;
+      e.charging = 0.8;
+      e.chargeTimer = 4 + g.rng.random() * 3;
+      emit(g, EVT.BOSS_TELEGRAPH, { x: e.x, y: e.y });
+    }
+  }
+  function updateGhostMovement(e, dt, edx, edy, dist) {
+    const nx = edx / dist;
+    const ny = edy / dist;
+    const sign = e.orbitSign || 1;
+    const perpX = -ny * sign;
+    const perpY = nx * sign;
+    const inward = dist > 100 ? 0.8 : dist > 30 ? 1 : 1;
+    const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
+    e.x += (nx * inward + perpX * orbit) * e.speed * dt;
+    e.y += (ny * inward + perpY * orbit) * e.speed * dt;
+  }
+  function updateSpawnerAi(g, e, dt) {
+    if (e.spawnTimer === void 0) return;
+    e.spawnTimer -= dt;
+    if (e.spawnTimer > 0) return;
+    e.spawnTimer = 3 + g.rng.random() * 2;
+    const count = 3 + Math.floor(g.rng.random() * 3);
+    for (let s = 0; s < count; s++) {
+      const sa = g.rng.random() * Math.PI * 2;
+      const sr = 20 + g.rng.random() * 20;
+      const base = ENEMY_TYPES.find((t) => t.name === "swarm");
+      const minion = scaleEnemy(base, g.wave);
+      minion.x = e.x + Math.cos(sa) * sr;
+      minion.y = e.y + Math.sin(sa) * sr;
+      minion.hitFlash = 0;
+      g.enemies.push(minion);
+    }
+    emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y });
+  }
+  function updateEnemyTick(g, dt) {
+    const p = g.player;
+    for (let i = g.enemies.length - 1; i >= 0; i--) {
+      const e = g.enemies[i];
+      if (e.dying !== void 0) {
+        e.dying -= dt;
+        if (e.dying <= 0) g.enemies.splice(i, 1);
+        continue;
+      }
+      const edx = p.x - e.x;
+      const edy = p.y - e.y;
+      const dist = Math.sqrt(edx * edx + edy * edy);
+      if (dist > 1) {
+        if (e.name === "ghost") updateGhostMovement(e, dt, edx, edy, dist);
+        else if (e.name === "boss") updateBossAi(g, e, dt, edx, edy, dist);
+        else {
+          e.x += edx / dist * e.speed * dt;
+          e.y += edy / dist * e.speed * dt;
+        }
+      }
+      if (e.name === "spawner") updateSpawnerAi(g, e, dt);
+      if (e.hitFlash > 0) e.hitFlash -= dt * 5;
+      if (dist < p.radius + e.radius && p.iframes <= 0) {
+        p.hp -= e.damage;
+        p.iframes = 0.5;
+        emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg: e.damage, by: e.name });
+        if (p.hp <= 0) {
+          p.hp = 0;
+          p.alive = false;
+          emit(g, EVT.PLAYER_DEATH, { by: e.name });
+        }
+      }
+    }
+  }
+  function updateRepulsion(g) {
+    const cells = /* @__PURE__ */ new Map();
+    for (let i = 0; i < g.enemies.length; i++) {
+      const e = g.enemies[i];
+      const cx = Math.floor(e.x / HASH_CELL);
+      const cy = Math.floor(e.y / HASH_CELL);
+      const k = cx * 1e5 + cy;
+      let bucket = cells.get(k);
+      if (!bucket) {
+        bucket = [];
+        cells.set(k, bucket);
+      }
+      bucket.push(i);
+    }
+    for (let i = 0; i < g.enemies.length; i++) {
+      const e = g.enemies[i];
+      const cx = Math.floor(e.x / HASH_CELL);
+      const cy = Math.floor(e.y / HASH_CELL);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          const bucket = cells.get((cx + dx) * 1e5 + (cy + dy));
+          if (!bucket) continue;
+          for (let bi = 0; bi < bucket.length; bi++) {
+            const j = bucket[bi];
+            if (j <= i) continue;
+            const e2 = g.enemies[j];
+            const rx = e.x - e2.x;
+            const ry = e.y - e2.y;
+            const rd = Math.sqrt(rx * rx + ry * ry);
+            const minD = e.radius + e2.radius;
+            if (rd < minD && rd > 0.1) {
+              const push = (minD - rd) * 0.5;
+              const nx = rx / rd;
+              const ny = ry / rd;
+              e.x += nx * push;
+              e.y += ny * push;
+              e2.x -= nx * push;
+              e2.y -= ny * push;
+            }
+          }
+        }
+      }
+    }
+  }
+  function updateEnemies(g, dt) {
+    updateEnemyTick(g, dt);
+    updateRepulsion(g);
+  }
+  var HASH_CELL;
+  var init_enemies = __esm({
+    "src/shared/sim/enemies.js"() {
+      init_enemyTypes();
+      init_constants();
+      init_events();
+      HASH_CELL = 50;
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
@@ -422,6 +581,7 @@
       init_gems();
       init_damage();
       init_projectiles();
+      init_enemies();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -975,17 +1135,6 @@
           rng: createRng(Date.now() & 2147483647)
         };
       }
-      function spawnEnemy(g) {
-        const angle = Math.random() * Math.PI * 2;
-        const dist = 500 + Math.random() * 200;
-        const ex = g.player.x + Math.cos(angle) * dist;
-        const ey = g.player.y + Math.sin(angle) * dist;
-        const e = enemyType(g.wave);
-        e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
-        e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
-        e.hitFlash = 0;
-        g.enemies.push(e);
-      }
       function spawnParticles(x, y, color, count) {
         for (let i = 0; i < count; i++) {
           const angle = Math.random() * Math.PI * 2;
@@ -1164,138 +1313,7 @@
             }
           }
         }
-        const HASH_CELL = 50;
-        for (let i = g.enemies.length - 1; i >= 0; i--) {
-          const e = g.enemies[i];
-          if (e.dying !== void 0) {
-            e.dying -= dt;
-            if (e.dying <= 0) {
-              g.enemies.splice(i, 1);
-            }
-            continue;
-          }
-          const edx = p.x - e.x;
-          const edy = p.y - e.y;
-          const dist = Math.sqrt(edx * edx + edy * edy);
-          if (dist > 1) {
-            if (e.name === "ghost") {
-              const nx = edx / dist;
-              const ny = edy / dist;
-              const sign = e.orbitSign || 1;
-              const perpX = -ny * sign;
-              const perpY = nx * sign;
-              const inward = dist > 100 ? 0.8 : dist > 30 ? 1 : 1;
-              const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
-              e.x += (nx * inward + perpX * orbit) * e.speed * dt;
-              e.y += (ny * inward + perpY * orbit) * e.speed * dt;
-            } else if (e.name === "boss") {
-              if (e.chargeTimer === void 0) e.chargeTimer = 3 + Math.random() * 2;
-              if (e.charging === void 0) e.charging = 0;
-              if (e.charging > 0) {
-                e.x += e.chargeDx * e.speed * 3 * dt;
-                e.y += e.chargeDy * e.speed * 3 * dt;
-                e.charging -= dt;
-              } else {
-                e.x += edx / dist * e.speed * 0.5 * dt;
-                e.y += edy / dist * e.speed * 0.5 * dt;
-                e.chargeTimer -= dt;
-                if (e.stepTimer === void 0) e.stepTimer = 0.8;
-                e.stepTimer -= dt;
-                if (e.stepTimer <= 0 && dist < 500) {
-                  sfx("boss_step");
-                  e.stepTimer = 0.7 + Math.random() * 0.3;
-                }
-                if (e.chargeTimer <= 0 && dist < 400) {
-                  e.chargeDx = edx / dist;
-                  e.chargeDy = edy / dist;
-                  e.charging = 0.8;
-                  e.chargeTimer = 4 + Math.random() * 3;
-                  spawnParticles(e.x, e.y, "#d63031", 12);
-                  sfx("boss_telegraph");
-                }
-              }
-            } else {
-              e.x += edx / dist * e.speed * dt;
-              e.y += edy / dist * e.speed * dt;
-            }
-          }
-          if (e.name === "spawner" && e.spawnTimer !== void 0) {
-            e.spawnTimer -= dt;
-            if (e.spawnTimer <= 0) {
-              e.spawnTimer = 3 + Math.random() * 2;
-              const count = 3 + Math.floor(Math.random() * 3);
-              for (let s = 0; s < count; s++) {
-                const sa = Math.random() * Math.PI * 2;
-                const sr = 20 + Math.random() * 20;
-                const base = ENEMY_TYPES.find((t) => t.name === "swarm");
-                const minion = scaleEnemy(base, g.wave);
-                minion.x = e.x + Math.cos(sa) * sr;
-                minion.y = e.y + Math.sin(sa) * sr;
-                minion.hitFlash = 0;
-                g.enemies.push(minion);
-              }
-              spawnParticles(e.x, e.y, "#fdcb6e", 8);
-              sfx("hive_burst");
-            }
-          }
-          if (e.hitFlash > 0) e.hitFlash -= dt * 5;
-          if (dist < p.radius + e.radius && p.iframes <= 0) {
-            p.hp -= e.damage;
-            p.iframes = 0.5;
-            g.screenShake = 0.15;
-            spawnParticles(p.x, p.y, "#e74c3c", 5);
-            sfx("playerhit");
-            if (p.hp <= 0) {
-              p.hp = 0;
-              p.alive = false;
-              sfx("death");
-              g.deathFeed.push({ text: `${g.playerName} killed by ${e.name}`, time: g.time });
-              showDeathScreen(g);
-            }
-          }
-        }
-        const cells = /* @__PURE__ */ new Map();
-        for (let i = 0; i < g.enemies.length; i++) {
-          const e = g.enemies[i];
-          const cx = Math.floor(e.x / HASH_CELL);
-          const cy = Math.floor(e.y / HASH_CELL);
-          const k = cx * 1e5 + cy;
-          let bucket = cells.get(k);
-          if (!bucket) {
-            bucket = [];
-            cells.set(k, bucket);
-          }
-          bucket.push(i);
-        }
-        for (let i = 0; i < g.enemies.length; i++) {
-          const e = g.enemies[i];
-          const cx = Math.floor(e.x / HASH_CELL);
-          const cy = Math.floor(e.y / HASH_CELL);
-          for (let dx2 = -1; dx2 <= 1; dx2++) {
-            for (let dy2 = -1; dy2 <= 1; dy2++) {
-              const bucket = cells.get((cx + dx2) * 1e5 + (cy + dy2));
-              if (!bucket) continue;
-              for (let bi = 0; bi < bucket.length; bi++) {
-                const j = bucket[bi];
-                if (j <= i) continue;
-                const e2 = g.enemies[j];
-                const rx = e.x - e2.x;
-                const ry = e.y - e2.y;
-                const rd = Math.sqrt(rx * rx + ry * ry);
-                const minD = e.radius + e2.radius;
-                if (rd < minD && rd > 0.1) {
-                  const push = (minD - rd) * 0.5;
-                  const nx = rx / rd;
-                  const ny = ry / rd;
-                  e.x += nx * push;
-                  e.y += ny * push;
-                  e2.x -= nx * push;
-                  e2.y -= ny * push;
-                }
-              }
-            }
-          }
-        }
+        updateEnemies(g, dt);
         updateGems(g, dt);
         for (let i = g.heartDrops.length - 1; i >= 0; i--) {
           const h = g.heartDrops[i];
@@ -1437,6 +1455,27 @@
           case EVT.ENEMY_KILLED:
             sfx("kill");
             spawnParticles(evt.x, evt.y, evt.color, 6);
+            break;
+          case EVT.PLAYER_HIT:
+            g.screenShake = 0.15;
+            spawnParticles(evt.x, evt.y, "#e74c3c", 5);
+            sfx("playerhit");
+            break;
+          case EVT.PLAYER_DEATH:
+            sfx("death");
+            g.deathFeed.push({ text: `${g.playerName} killed by ${evt.by}`, time: g.time });
+            showDeathScreen(g);
+            break;
+          case EVT.BOSS_STEP:
+            sfx("boss_step");
+            break;
+          case EVT.BOSS_TELEGRAPH:
+            spawnParticles(evt.x, evt.y, "#d63031", 12);
+            sfx("boss_telegraph");
+            break;
+          case EVT.HIVE_BURST:
+            spawnParticles(evt.x, evt.y, "#fdcb6e", 8);
+            sfx("hive_burst");
             break;
         }
       }

@@ -12,6 +12,7 @@ import { EVT, emit } from './shared/sim/events.js';
 import { spawnGem, updateGems } from './shared/sim/gems.js';
 import { damageEnemy, spawnHeart } from './shared/sim/damage.js';
 import { updateProjectiles } from './shared/sim/projectiles.js';
+import { spawnEnemy, updateEnemies } from './shared/sim/enemies.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -504,17 +505,7 @@ function initGame() {
 }
 
 // --- spawn enemy ---
-function spawnEnemy(g) {
-  const angle = Math.random() * Math.PI * 2;
-  const dist = 500 + Math.random() * 200;
-  const ex = g.player.x + Math.cos(angle) * dist;
-  const ey = g.player.y + Math.sin(angle) * dist;
-  const e = enemyType(g.wave);
-  e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
-  e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
-  e.hitFlash = 0;
-  g.enemies.push(e);
-}
+// spawnEnemy now imported from shared/sim/enemies.js
 
 // --- spawn gem ---
 // spawnGem now imported from shared/sim/gems.js — call as spawnGem(g, x, y, xp)
@@ -737,158 +728,8 @@ function update(dt) {
     }
   }
 
-  // --- update enemies (movement + per-enemy work) ---
-  // Cell size for spatial hash. Brute is largest at radius 24, so 50u keeps
-  // any colliding pair within own cell + 1 neighbor.
-  const HASH_CELL = 50;
-  for (let i = g.enemies.length - 1; i >= 0; i--) {
-    const e = g.enemies[i];
-    // dying animation — shrink and fade, then remove
-    if (e.dying !== undefined) {
-      e.dying -= dt;
-      if (e.dying <= 0) {
-        g.enemies.splice(i, 1);
-      }
-      continue; // skip movement, collision, damage while dying
-    }
-    // move toward player — ghosts orbit/flank
-    const edx = p.x - e.x;
-    const edy = p.y - e.y;
-    const dist = Math.sqrt(edx * edx + edy * edy);
-    if (dist > 1) {
-      if (e.name === 'ghost') {
-        // ghosts spiral inward — per-ghost orbit direction prevents kiting
-        const nx = edx / dist;
-        const ny = edy / dist;
-        const sign = e.orbitSign || 1;
-        const perpX = -ny * sign;
-        const perpY = nx * sign;
-        // closing at range, committed up close, drive-by prevented at melee
-        const inward = dist > 100 ? 0.8 : dist > 30 ? 1.0 : 1.0;
-        const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
-        e.x += (nx * inward + perpX * orbit) * e.speed * dt;
-        e.y += (ny * inward + perpY * orbit) * e.speed * dt;
-      } else if (e.name === 'boss') {
-        // boss: stalk slowly, then charge periodically
-        if (e.chargeTimer === undefined) e.chargeTimer = 3 + Math.random() * 2;
-        if (e.charging === undefined) e.charging = 0;
-        if (e.charging > 0) {
-          // charging — 3x speed burst toward locked direction
-          e.x += e.chargeDx * e.speed * 3 * dt;
-          e.y += e.chargeDy * e.speed * 3 * dt;
-          e.charging -= dt;
-        } else {
-          // stalking — slow approach
-          e.x += (edx / dist) * e.speed * 0.5 * dt;
-          e.y += (edy / dist) * e.speed * 0.5 * dt;
-          e.chargeTimer -= dt;
-          // periodic footstep thud
-          if (e.stepTimer === undefined) e.stepTimer = 0.8;
-          e.stepTimer -= dt;
-          if (e.stepTimer <= 0 && dist < 500) {
-            sfx('boss_step');
-            e.stepTimer = 0.7 + Math.random() * 0.3;
-          }
-          if (e.chargeTimer <= 0 && dist < 400) {
-            // lock charge direction and go
-            e.chargeDx = edx / dist;
-            e.chargeDy = edy / dist;
-            e.charging = 0.8; // 0.8s charge duration
-            e.chargeTimer = 4 + Math.random() * 3; // 4-7s between charges
-            spawnParticles(e.x, e.y, '#d63031', 12); // telegraph
-            sfx('boss_telegraph');
-          }
-        }
-      } else {
-        e.x += (edx / dist) * e.speed * dt;
-        e.y += (edy / dist) * e.speed * dt;
-      }
-    }
-
-    // spawner AI — periodically birth swarm minions
-    if (e.name === 'spawner' && e.spawnTimer !== undefined) {
-      e.spawnTimer -= dt;
-      if (e.spawnTimer <= 0) {
-        e.spawnTimer = 3 + Math.random() * 2; // 3-5s between spawns
-        const count = 3 + Math.floor(Math.random() * 3); // 3-5 swarmlings
-        for (let s = 0; s < count; s++) {
-          const sa = Math.random() * Math.PI * 2;
-          const sr = 20 + Math.random() * 20;
-          const base = ENEMY_TYPES.find(t => t.name === 'swarm');
-          const minion = scaleEnemy(base, g.wave);
-          minion.x = e.x + Math.cos(sa) * sr;
-          minion.y = e.y + Math.sin(sa) * sr;
-          minion.hitFlash = 0;
-          g.enemies.push(minion);
-        }
-        spawnParticles(e.x, e.y, '#fdcb6e', 8); // hive burst effect
-        sfx('hive_burst');
-      }
-    }
-
-    // hit flash decay
-    if (e.hitFlash > 0) e.hitFlash -= dt * 5;
-
-    // damage player on contact
-    if (dist < p.radius + e.radius && p.iframes <= 0) {
-      p.hp -= e.damage;
-      p.iframes = 0.5;
-      g.screenShake = 0.15;
-      spawnParticles(p.x, p.y, '#e74c3c', 5);
-      sfx('playerhit');
-      if (p.hp <= 0) {
-        p.hp = 0;
-        p.alive = false;
-        sfx('death');
-        g.deathFeed.push({ text: `${g.playerName} killed by ${e.name}`, time: g.time });
-        showDeathScreen(g);
-      }
-    }
-  }
-
-  // --- enemy-enemy repulsion via spatial hash ---
-  // Bucket enemies into cells, then each enemy only checks 9 cells (own +
-  // neighbors) instead of all N. Drops cost from O(N²) to ~O(N) at the
-  // typical low-density per-cell counts.
-  const cells = new Map();
-  for (let i = 0; i < g.enemies.length; i++) {
-    const e = g.enemies[i];
-    const cx = Math.floor(e.x / HASH_CELL);
-    const cy = Math.floor(e.y / HASH_CELL);
-    const k = cx * 100000 + cy; // numeric key avoids string interning
-    let bucket = cells.get(k);
-    if (!bucket) { bucket = []; cells.set(k, bucket); }
-    bucket.push(i);
-  }
-  for (let i = 0; i < g.enemies.length; i++) {
-    const e = g.enemies[i];
-    const cx = Math.floor(e.x / HASH_CELL);
-    const cy = Math.floor(e.y / HASH_CELL);
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        const bucket = cells.get((cx + dx) * 100000 + (cy + dy));
-        if (!bucket) continue;
-        for (let bi = 0; bi < bucket.length; bi++) {
-          const j = bucket[bi];
-          if (j <= i) continue; // each pair handled once
-          const e2 = g.enemies[j];
-          const rx = e.x - e2.x;
-          const ry = e.y - e2.y;
-          const rd = Math.sqrt(rx * rx + ry * ry);
-          const minD = e.radius + e2.radius;
-          if (rd < minD && rd > 0.1) {
-            const push = (minD - rd) * 0.5;
-            const nx = rx / rd;
-            const ny = ry / rd;
-            e.x += nx * push;
-            e.y += ny * push;
-            e2.x -= nx * push;
-            e2.y -= ny * push;
-          }
-        }
-      }
-    }
-  }
+  // --- update enemies + repulsion (sim logic in shared/sim/enemies.js)
+  updateEnemies(g, dt);
 
   // --- pick up gems --- (sim logic in shared/sim/gems.js, side effects via events)
   updateGems(g, dt);
@@ -1049,6 +890,27 @@ function handleSimEvent(evt) {
     case EVT.ENEMY_KILLED:
       sfx('kill');
       spawnParticles(evt.x, evt.y, evt.color, 6);
+      break;
+    case EVT.PLAYER_HIT:
+      g.screenShake = 0.15;
+      spawnParticles(evt.x, evt.y, '#e74c3c', 5);
+      sfx('playerhit');
+      break;
+    case EVT.PLAYER_DEATH:
+      sfx('death');
+      g.deathFeed.push({ text: `${g.playerName} killed by ${evt.by}`, time: g.time });
+      showDeathScreen(g);
+      break;
+    case EVT.BOSS_STEP:
+      sfx('boss_step');
+      break;
+    case EVT.BOSS_TELEGRAPH:
+      spawnParticles(evt.x, evt.y, '#d63031', 12);
+      sfx('boss_telegraph');
+      break;
+    case EVT.HIVE_BURST:
+      spawnParticles(evt.x, evt.y, '#fdcb6e', 8);
+      sfx('hive_burst');
       break;
   }
 }
