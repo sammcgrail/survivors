@@ -453,6 +453,46 @@ function sfx(type) {
   } catch (e) { /* audio not available, that's fine */ }
 }
 
+// --- battle music ---
+let bgMusic = null;
+let bgMusicGain = null;
+let musicFading = false;
+
+function startMusic() {
+  try {
+    const ac = getAudio();
+    if (!bgMusic) {
+      bgMusic = new Audio('survivors_battle.ogg');
+      bgMusic.loop = true;
+      bgMusic.volume = 0;
+      const src = ac.createMediaElementSource(bgMusic);
+      bgMusicGain = ac.createGain();
+      bgMusicGain.gain.value = 0;
+      src.connect(bgMusicGain);
+      bgMusicGain.connect(ac.destination);
+    }
+    bgMusic.currentTime = 0;
+    bgMusic.play().catch(() => {});
+    // fade in over 2s
+    bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+    bgMusicGain.gain.setValueAtTime(0, ac.currentTime);
+    bgMusicGain.gain.linearRampToValueAtTime(0.35, ac.currentTime + 2);
+    musicFading = false;
+  } catch (e) {}
+}
+
+function fadeOutMusic() {
+  if (!bgMusic || !bgMusicGain || musicFading) return;
+  musicFading = true;
+  try {
+    const ac = getAudio();
+    bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+    bgMusicGain.gain.setValueAtTime(bgMusicGain.gain.value, ac.currentTime);
+    bgMusicGain.gain.linearRampToValueAtTime(0, ac.currentTime + 1.5);
+    setTimeout(() => { bgMusic.pause(); musicFading = false; }, 1600);
+  } catch (e) {}
+}
+
 // --- resize ---
 function resize() {
   canvas.width = window.innerWidth;
@@ -1288,6 +1328,7 @@ function showLevelUp(g) {
 }
 
 function showDeathScreen(g) {
+  fadeOutMusic();
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
   const weaponList = g.player.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
@@ -1832,6 +1873,7 @@ function startGame() {
   document.getElementById('level-up').style.display = 'none';
   paused = false;
   game = initGame();
+  startMusic();
   if (!gameStarted) {
     gameStarted = true;
     requestAnimationFrame(gameLoop);
