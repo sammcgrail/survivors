@@ -467,10 +467,17 @@ let musicFading = false;
 function startMusic() {
   try {
     const ac = getAudio();
+    if (ac.state === 'suspended') ac.resume();
     if (!bgMusic) {
-      bgMusic = new Audio('survivors_battle.ogg');
+      // Safari doesn't support ogg — try mp3 fallback
+      bgMusic = new Audio();
       bgMusic.loop = true;
       bgMusic.volume = 0;
+      if (bgMusic.canPlayType('audio/ogg; codecs=vorbis')) {
+        bgMusic.src = 'survivors_battle.ogg';
+      } else {
+        bgMusic.src = 'survivors_battle.mp3';
+      }
       const src = ac.createMediaElementSource(bgMusic);
       bgMusicGain = ac.createGain();
       bgMusicGain.gain.value = 0;
