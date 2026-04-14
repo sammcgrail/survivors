@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>barn arena</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    color: #ccc;
+    font-family: 'IBM Plex Mono', 'Courier New', monospace;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    overflow: hidden;
+  }
+  .hdr {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-size: 0.75rem;
+    color: #666;
+  }
+  .hdr a { color: #555; text-decoration: none; }
+  .hdr a:hover { color: #aaa; }
+  .hdr-title { color: #aaa; }
+  .hdr-title span { color: #e74c3c; }
+  #status { color: #555; }
+  #status.ok { color: #2ecc71; }
+  canvas {
+    border: 1px solid #222;
+    border-radius: 4px;
+    image-rendering: pixelated;
+  }
+  .ftr {
+    margin-top: 10px;
+    display: flex;
+    gap: 16px;
+    font-size: 0.65rem;
+    color: #444;
+  }
+  .name-input {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 10;
+  }
+  .name-input label { color: #888; font-size: 0.8rem; }
+  .name-input input {
+    background: #111;
+    border: 1px solid #333;
+    color: #eee;
+    padding: 8px 16px;
+    font-family: inherit;
+    font-size: 1rem;
+    border-radius: 4px;
+    text-align: center;
+    outline: none;
+    width: 200px;
+  }
+  .name-input input:focus { border-color: #e74c3c; }
+  .name-input button {
+    background: #e74c3c;
+    border: none;
+    color: #fff;
+    padding: 6px 24px;
+    font-family: inherit;
+    font-size: 0.8rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .name-input button:hover { background: #c0392b; }
+  .players-list {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    font-size: 0.6rem;
+    color: #666;
+    text-align: right;
+  }
+  .players-list div { margin-bottom: 2px; }
+  .player-dot {
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    margin-right: 4px;
+  }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <a href="/toys/">← toys</a>
+  <span>·</span>
+  <div class="hdr-title">barn <span>arena</span></div>
+  <span>·</span>
+  <div id="status">connecting…</div>
+</div>
+
+<canvas id="c" width="800" height="600"></canvas>
+
+<div class="ftr">
+  <div>wasd to move</div>
+  <div id="ping">—</div>
+  <div id="player-count">0 players</div>
+</div>
+
+<div class="name-input" id="name-screen">
+  <label>enter name</label>
+  <input id="name-field" maxlength="12" placeholder="barn" autofocus>
+  <button onclick="joinGame()">join</button>
+</div>
+
+<div class="players-list" id="players-list"></div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const statusEl = document.getElementById('status');
+const pingEl = document.getElementById('ping');
+const countEl = document.getElementById('player-count');
+const nameScreen = document.getElementById('name-screen');
+const nameField = document.getElementById('name-field');
+const playersList = document.getElementById('players-list');
+
+let ws = null;
+let myId = null;
+let myName = '';
+let myColor = '#fff';
+let state = { players: [], arena: { w: 800, h: 600 } };
+let keys = { up: false, down: false, left: false, right: false };
+let lastKeys = '';
+let joined = false;
+let lastStateTime = 0;
+let prevPositions = {};  // id -> {x, y}
+let currPositions = {};  // id -> {x, y}
+let stateArrived = 0;    // perf timestamp of last state
+
+// --- name entry ---
+nameField.addEventListener('keydown', e => {
+  if (e.key === 'Enter') joinGame();
+});
+
+function joinGame() {
+  const name = nameField.value.trim() || 'barn';
+  myName = name;
+  nameScreen.style.display = 'none';
+  joined = true;
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'name', name }));
+  }
+  canvas.focus();
+}
+
+// --- websocket ---
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = proto + '//' + location.host + '/toys/app/';
+  ws = new WebSocket(url);
+
+  ws.onopen = () => {
+    statusEl.textContent = 'connected';
+    statusEl.className = 'ok';
+  };
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'welcome') {
+      myId = msg.you;
+      myName = msg.name;
+      myColor = msg.color;
+      if (joined) {
+        ws.send(JSON.stringify({ type: 'name', name: nameField.value.trim() || myName }));
+      }
+    } else if (msg.type === 'state') {
+      // shift current -> prev for interpolation
+      prevPositions = currPositions;
+      currPositions = {};
+      for (const p of msg.players) {
+        currPositions[p.id] = { x: p.x, y: p.y };
+      }
+      state = msg;
+      stateArrived = performance.now();
+      countEl.textContent = msg.players.length + ' player' + (msg.players.length !== 1 ? 's' : '');
+      updatePlayersList();
+    }
+  };
+
+  ws.onclose = () => {
+    statusEl.textContent = 'disconnected';
+    statusEl.className = '';
+    setTimeout(connect, 2000);
+  };
+
+  ws.onerror = () => ws.close();
+}
+
+// --- input ---
+const KEY_MAP = {
+  'w': 'up', 'arrowup': 'up',
+  's': 'down', 'arrowdown': 'down',
+  'a': 'left', 'arrowleft': 'left',
+  'd': 'right', 'arrowright': 'right',
+};
+
+document.addEventListener('keydown', e => {
+  if (!joined) return;
+  const k = KEY_MAP[e.key.toLowerCase()];
+  if (k) { keys[k] = true; e.preventDefault(); sendInput(); }
+});
+
+document.addEventListener('keyup', e => {
+  const k = KEY_MAP[e.key.toLowerCase()];
+  if (k) { keys[k] = false; e.preventDefault(); sendInput(); }
+});
+
+function sendInput() {
+  const s = JSON.stringify(keys);
+  if (s === lastKeys) return;
+  lastKeys = s;
+  if (ws && ws.readyState === 1) {
+    ws.send(JSON.stringify({ type: 'input', keys }));
+  }
+}
+
+// --- render ---
+function render() {
+  const W = canvas.width, H = canvas.height;
+  ctx.fillStyle = '#0a0a0f';
+  ctx.fillRect(0, 0, W, H);
+
+  // grid
+  ctx.strokeStyle = '#151520';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < W; x += 40) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
+  }
+  for (let y = 0; y < H; y += 40) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // arena border
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, W - 2, H - 2);
+
+  // interpolation factor: how far between prev and curr state (0-1, clamped)
+  const TICK_MS = 50; // 1000/20hz
+  const elapsed = performance.now() - stateArrived;
+  const t = Math.min(elapsed / TICK_MS, 1.0);
+
+  // players
+  for (const p of state.players || []) {
+    const isMe = p.id === myId;
+    const prev = prevPositions[p.id];
+    const curr = currPositions[p.id] || { x: p.x, y: p.y };
+    // lerp position
+    let drawX, drawY;
+    if (prev) {
+      drawX = prev.x + (curr.x - prev.x) * t;
+      drawY = prev.y + (curr.y - prev.y) * t;
+    } else {
+      drawX = curr.x;
+      drawY = curr.y;
+    }
+
+    // glow
+    if (isMe) {
+      ctx.shadowColor = p.color;
+      ctx.shadowBlur = 20;
+    }
+
+    // body
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(drawX, drawY, 12, 0, Math.PI * 2);
+    ctx.fill();
+
+    // outline
+    ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = isMe ? 2 : 1;
+    ctx.stroke();
+
+    ctx.shadowBlur = 0;
+
+    // name
+    ctx.fillStyle = isMe ? '#fff' : '#888';
+    ctx.font = '10px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(p.name, drawX, drawY - 18);
+
+    // hp bar
+    if (p.hp < 100) {
+      const bw = 24;
+      ctx.fillStyle = '#300';
+      ctx.fillRect(drawX - bw/2, drawY + 16, bw, 3);
+      ctx.fillStyle = p.hp > 30 ? '#2ecc71' : '#e74c3c';
+      ctx.fillRect(drawX - bw/2, drawY + 16, bw * (p.hp / 100), 3);
+    }
+  }
+
+  requestAnimationFrame(render);
+}
+
+function updatePlayersList() {
+  const ps = state.players || [];
+  playersList.innerHTML = ps.map(p =>
+    `<div><span class="player-dot" style="background:${p.color}"></span>${p.name}${p.id === myId ? ' (you)' : ''}</div>`
+  ).join('');
+}
+
+// --- init ---
+connect();
+render();
+</script>
+</body>
+</html>
