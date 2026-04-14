@@ -278,6 +278,20 @@ const ctx = canvas.getContext('2d');
 // doesn't have to reassign it 2000+ times per frame at high enemy density.
 ctx.imageSmoothingEnabled = false;
 
+// Cached HUD elements + last-written values so we don't thrash the DOM.
+const hudEl = {
+  time:    document.getElementById('hud-time'),
+  level:   document.getElementById('hud-level'),
+  kills:   document.getElementById('hud-kills'),
+  wave:    document.getElementById('hud-wave'),
+  weapons: document.getElementById('hud-weapons'),
+  xpFill:  document.getElementById('xp-fill'),
+};
+const hudCache = { time: '', level: '', kills: '', wave: '', weapons: '', xpPct: -1 };
+function setHud(key, str) {
+  if (str !== hudCache[key]) { hudEl[key].textContent = str; hudCache[key] = str; }
+}
+
 // --- sprite sheet ---
 const SPRITE_SIZE = 16;
 const spriteSheet = new Image();
@@ -1251,8 +1265,13 @@ function update(dt) {
   if (g.screenShake > 0) g.screenShake -= dt;
   if (g.levelFlash > 0) g.levelFlash -= dt;
 
-  // --- update XP bar ---
-  document.getElementById('xp-fill').style.width = (p.xp / p.xpToLevel * 100) + '%';
+  // --- update XP bar (only when bucket changes — avoids triggering layout
+  // every single frame on a value that changes ~5x/sec at most)
+  const xpPct = Math.round(p.xp / p.xpToLevel * 1000);
+  if (xpPct !== hudCache.xpPct) {
+    hudEl.xpFill.style.width = (xpPct / 10) + '%';
+    hudCache.xpPct = xpPct;
+  }
 }
 
 function fireWeapon(g, w) {
@@ -1948,13 +1967,15 @@ function render() {
   }
 
   // --- HUD ---
+  // setHud only writes to DOM when the value changed — saves ~300
+  // unnecessary writes/sec at 60fps. Free frames on mobile.
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
-  document.getElementById('hud-time').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
-  document.getElementById('hud-level').textContent = `Lv ${p.level}`;
-  document.getElementById('hud-kills').textContent = `${g.kills} kills`;
-  document.getElementById('hud-wave').textContent = `Wave ${g.wave}`;
-  document.getElementById('hud-weapons').textContent = p.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
+  setHud('time',    `${mins}:${secs.toString().padStart(2, '0')}`);
+  setHud('level',   `Lv ${p.level}`);
+  setHud('kills',   `${g.kills} kills`);
+  setHud('wave',    `Wave ${g.wave}`);
+  setHud('weapons', p.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' '));
 
   // --- level-up flash ---
   if (g.levelFlash > 0) {
@@ -1992,9 +2013,21 @@ document.addEventListener('keydown', e => {
 });
 
 document.addEventListener('keyup', e => {
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = KEY_MAP[e.key.toLowerCase()];
   if (k) { keys[k] = false; e.preventDefault(); }
 });
+
+// Clear all input on blur / tab hide. Without this, holding a key, alt-tabbing,
+// and releasing it while the page is hidden leaves the key permanently "down"
+// — player drifts forever after returning. Mobile home-button does the same.
+function clearAllInput() {
+  keys.up = keys.down = keys.left = keys.right = false;
+  analogMove.x = 0;
+  analogMove.y = 0;
+}
+window.addEventListener('blur', clearAllInput);
+document.addEventListener('visibilitychange', () => { if (document.hidden) clearAllInput(); });
 
 // --- mobile invisible touch joystick ---
 const joyZone = document.getElementById('joystick-zone');
