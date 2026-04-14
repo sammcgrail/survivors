@@ -522,7 +522,6 @@ function render(dt) {
   if (!currState) {
     ctx.fillStyle = '#0a0a0f';
     ctx.fillRect(0, 0, W, H);
-    requestAnimationFrame(mainLoop);
     return;
   }
 
