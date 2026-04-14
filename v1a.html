@@ -278,6 +278,7 @@ function initGame() {
     gems: [],
     particles: [],
     chargeEffects: [],
+    floatingTexts: [],
     time: 0,
     wave: 1,
     waveTimer: 0,
@@ -429,15 +430,19 @@ function update(dt) {
     }
   }
 
-  // --- charge sweep damage ---
+  // --- charge sweep damage (rectangle along charge vector) ---
   for (const w of p.weapons) {
     if (w.type === 'charge' && w.active) {
-      // damage enemies in charge path
+      const cdx = w.chargeDx;
+      const cdy = w.chargeDy;
       for (let j = g.enemies.length - 1; j >= 0; j--) {
         const e = g.enemies[j];
-        const edx = p.x - e.x;
-        const edy = p.y - e.y;
-        if (Math.abs(edx) < w.width && Math.abs(edy) < w.width) {
+        const ex = e.x - p.x;
+        const ey = e.y - p.y;
+        // project onto charge direction (forward) and perpendicular (lateral)
+        const forward = ex * cdx + ey * cdy;
+        const lateral = Math.abs(ex * (-cdy) + ey * cdx);
+        if (forward > -w.width && forward < w.speed * w.duration && lateral < w.width + e.radius) {
           damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 3);
         }
       }
@@ -508,6 +513,12 @@ function update(dt) {
     // pick up
     if (dist < p.radius + gem.radius) {
       p.xp += gem.xp;
+      // floating xp text
+      g.floatingTexts.push({
+        x: gem.x, y: gem.y, text: '+' + gem.xp,
+        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
+      });
+      spawnParticles(gem.x, gem.y, '#3498db', 3);
       g.gems.splice(i, 1);
 
       // level up check
@@ -527,6 +538,14 @@ function update(dt) {
     pt.y += pt.vy * dt;
     pt.life -= dt;
     if (pt.life <= 0) g.particles.splice(i, 1);
+  }
+
+  // --- update floating texts ---
+  for (let i = g.floatingTexts.length - 1; i >= 0; i--) {
+    const ft = g.floatingTexts[i];
+    ft.y += ft.vy * dt;
+    ft.life -= dt;
+    if (ft.life <= 0) g.floatingTexts.splice(i, 1);
   }
 
   // --- camera ---
@@ -607,6 +626,15 @@ function fireWeapon(g, w) {
 function damageEnemy(g, e, idx, dmg) {
   e.hp -= dmg;
   e.hitFlash = 1;
+  // damage number (only show for hits > 5 to avoid spam from breath ticks)
+  if (dmg >= 5) {
+    g.floatingTexts.push({
+      x: e.x + (Math.random() - 0.5) * 10,
+      y: e.y - e.radius - 4,
+      text: Math.floor(dmg).toString(),
+      color: '#f1c40f', life: 0.5, maxLife: 0.5, vy: -40,
+    });
+  }
   if (e.hp <= 0) {
     spawnGem(e.x, e.y, e.xp);
     spawnParticles(e.x, e.y, e.color, 6);
@@ -635,19 +663,25 @@ function showLevelUp(g) {
   container.innerHTML = '';
   document.getElementById('level-up').style.display = 'flex';
 
-  for (const choice of choices) {
+  // store choices globally for keyboard selection
+  window._levelChoices = [];
+  for (let ci = 0; ci < choices.length; ci++) {
+    const choice = choices[ci];
     const div = document.createElement('div');
     div.className = 'choice';
     div.innerHTML = `
-      <div class="name">${choice.icon} ${choice.name}</div>
+      <div class="name"><span style="color:#555;font-size:0.6rem">[${ci+1}]</span> ${choice.icon} ${choice.name}</div>
       <div class="desc">${choice.desc}</div>
     `;
-    div.onclick = () => {
+    const pick = () => {
       choice.stack++;
       choice.apply(g);
       document.getElementById('level-up').style.display = 'none';
       paused = false;
+      window._levelChoices = [];
     };
+    div.onclick = pick;
+    window._levelChoices.push(pick);
     container.appendChild(div);
   }
 
@@ -747,18 +781,70 @@ function render() {
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.stroke();
+
+      // rotating particles on the ring edge
+      const numDots = 8;
+      const phase = w.pulsePhase * 0.7;
+      for (let i = 0; i < numDots; i++) {
+        const a = phase + (Math.PI * 2 / numDots) * i;
+        const dotR = 3 + Math.sin(w.pulsePhase * 2 + i) * 1.5;
+        ctx.globalAlpha = 0.6 + Math.sin(w.pulsePhase + i * 0.8) * 0.3;
+        ctx.fillStyle = '#e67e22';
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, dotR, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
-  // --- enemies ---
+  // --- enemies (varied shapes by type) ---
   for (const e of g.enemies) {
     // skip if off screen
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
 
-    ctx.fillStyle = e.hitFlash > 0 ? '#fff' : e.color;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-    ctx.fill();
+    const ecolor = e.hitFlash > 0 ? '#fff' : e.color;
+    ctx.fillStyle = ecolor;
+
+    if (e.name === 'tank') {
+      // chunky hexagon
+      ctx.beginPath();
+      for (let i = 0; i < 6; i++) {
+        const a = Math.PI / 3 * i - Math.PI / 6;
+        const px = e.x + Math.cos(a) * e.radius;
+        const py = e.y + Math.sin(a) * e.radius;
+        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    } else if (e.name === 'swarm') {
+      // jittery small triangle
+      const jx = (Math.random() - 0.5) * 2;
+      const jy = (Math.random() - 0.5) * 2;
+      ctx.beginPath();
+      ctx.moveTo(e.x + jx, e.y - e.radius + jy);
+      ctx.lineTo(e.x + e.radius + jx, e.y + e.radius + jy);
+      ctx.lineTo(e.x - e.radius + jx, e.y + e.radius + jy);
+      ctx.closePath();
+      ctx.fill();
+    } else if (e.name === 'fast') {
+      // diamond shape
+      ctx.beginPath();
+      ctx.moveTo(e.x, e.y - e.radius * 1.2);
+      ctx.lineTo(e.x + e.radius * 0.8, e.y);
+      ctx.lineTo(e.x, e.y + e.radius * 1.2);
+      ctx.lineTo(e.x - e.radius * 0.8, e.y);
+      ctx.closePath();
+      ctx.fill();
+    } else {
+      // blob — default circle
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
 
     // hp bar
     if (e.hp < e.maxHp) {
@@ -770,24 +856,49 @@ function render() {
     }
   }
 
-  // --- projectiles ---
+  // --- projectiles (with trails) ---
   for (const proj of g.projectiles) {
+    // trail
+    const trailLen = 4;
+    const speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
+    if (speed > 0) {
+      const nx = -proj.vx / speed;
+      const ny = -proj.vy / speed;
+      for (let t = 1; t <= trailLen; t++) {
+        ctx.globalAlpha = 0.3 - t * 0.06;
+        ctx.fillStyle = proj.color;
+        ctx.beginPath();
+        ctx.arc(proj.x + nx * t * 6, proj.y + ny * t * 6, proj.radius * (1 - t * 0.15), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // main projectile
     ctx.fillStyle = proj.color;
     ctx.shadowColor = proj.color;
-    ctx.shadowBlur = 8;
+    ctx.shadowBlur = 10;
     ctx.beginPath();
     ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
     ctx.fill();
     ctx.shadowBlur = 0;
   }
 
-  // --- charge effect ---
+  // --- charge effect (streak along charge vector) ---
   for (const w of p.weapons) {
     if (w.type === 'charge' && w.active) {
-      ctx.fillStyle = 'rgba(231, 76, 60, 0.4)';
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, w.width, 0, Math.PI * 2);
-      ctx.fill();
+      const trailDist = w.speed * w.duration;
+      const steps = 6;
+      for (let t = steps; t >= 0; t--) {
+        const frac = t / steps;
+        const tx = p.x - w.chargeDx * trailDist * frac;
+        const ty = p.y - w.chargeDy * trailDist * frac;
+        ctx.globalAlpha = 0.3 * (1 - frac);
+        ctx.fillStyle = w.color;
+        ctx.beginPath();
+        ctx.arc(tx, ty, w.width * (1 - frac * 0.5), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
     }
   }
 
@@ -809,6 +920,24 @@ function render() {
     ctx.stroke();
     ctx.shadowBlur = 0;
 
+    // facing indicator (little triangle pointing in move direction)
+    const fd = Math.sqrt(p.facing.x ** 2 + p.facing.y ** 2);
+    if (fd > 0.01) {
+      const fx = p.facing.x / fd;
+      const fy = p.facing.y / fd;
+      const tipX = p.x + fx * (p.radius + 6);
+      const tipY = p.y + fy * (p.radius + 6);
+      const perpX = -fy;
+      const perpY = fx;
+      ctx.fillStyle = '#3498db';
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(p.x + fx * p.radius - perpX * 4, p.y + fy * p.radius - perpY * 4);
+      ctx.lineTo(p.x + fx * p.radius + perpX * 4, p.y + fy * p.radius + perpY * 4);
+      ctx.closePath();
+      ctx.fill();
+    }
+
     // hp bar above player
     if (p.hp < p.maxHp) {
       const bw = 30;
@@ -826,6 +955,16 @@ function render() {
     ctx.beginPath();
     ctx.arc(pt.x, pt.y, pt.radius * (pt.life / pt.maxLife), 0, Math.PI * 2);
     ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // --- floating texts ---
+  for (const ft of g.floatingTexts) {
+    ctx.globalAlpha = ft.life / ft.maxLife;
+    ctx.fillStyle = ft.color;
+    ctx.font = 'bold 12px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(ft.text, ft.x, ft.y);
     ctx.globalAlpha = 1;
   }
 
@@ -857,6 +996,15 @@ const KEY_MAP = {
 };
 
 document.addEventListener('keydown', e => {
+  // level-up keyboard shortcuts
+  if (paused && window._levelChoices && window._levelChoices.length > 0) {
+    const num = parseInt(e.key);
+    if (num >= 1 && num <= window._levelChoices.length) {
+      window._levelChoices[num - 1]();
+      e.preventDefault();
+      return;
+    }
+  }
   const k = KEY_MAP[e.key.toLowerCase()];
   if (k) { keys[k] = true; e.preventDefault(); }
 });
