@@ -117,6 +117,12 @@ canvas { touch-action: none; }
   <div class="sub sp-only">vampire survivors battle royale — single player</div>
   <div class="sub mp-only">vampire survivors multiplayer</div>
   <input type="text" id="name-input" maxlength="12" placeholder="your name" autocomplete="off" spellcheck="false">
+  <script>
+    (function(){var n=document.getElementById('name-input'),k='survivors_name';
+    try{var s=localStorage.getItem(k);if(s)n.value=s;}catch(e){}
+    n.addEventListener('input',function(){try{localStorage.setItem(k,n.value.trim());}catch(e){}});
+    })();
+  </script>
   <div class="sub" style="margin-bottom:8px; color:#999;">choose your weapon</div>
   <div class="weapon-select" id="weapon-select">
     <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
