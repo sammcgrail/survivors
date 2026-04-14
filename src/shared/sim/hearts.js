@@ -10,7 +10,6 @@ export function updateHearts(g, dt) {
     h.life -= dt;
     h.bobPhase += dt * 3;
     if (h.life <= 0) { g.heartDrops.splice(i, 1); continue; }
-    let pickedUp = false;
     for (const p of g.players) {
       if (!p.alive) continue;
       const hdx = p.x - h.x, hdy = p.y - h.y;
@@ -23,13 +22,11 @@ export function updateHearts(g, dt) {
       }
       if (dist < p.radius + h.radius) {
         const healed = Math.min(h.heal, p.maxHp - p.hp);
-        p.hp = Math.min(p.maxHp, p.hp + h.heal);
+        p.hp += healed;
         emit(g, EVT.HEART_PICKUP, { x: h.x, y: h.y, healed, pid: p.id });
         g.heartDrops.splice(i, 1);
-        pickedUp = true;
         break;
       }
     }
-    if (pickedUp) continue;
   }
 }
