@@ -472,7 +472,7 @@ function startMusic() {
       // Safari doesn't support ogg — try mp3 fallback
       bgMusic = new Audio();
       bgMusic.loop = true;
-      bgMusic.volume = 0;
+      bgMusic.volume = 1; // volume controlled via gain node, not element
       if (bgMusic.canPlayType('audio/ogg; codecs=vorbis')) {
         bgMusic.src = 'survivors_battle.ogg';
       } else {
