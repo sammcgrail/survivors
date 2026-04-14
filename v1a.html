@@ -103,6 +103,48 @@ canvas { display: block; image-rendering: pixelated; }
   border-radius: 6px;
   cursor: pointer;
 }
+#death-screen .loadout {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+#death-screen .loadout-item {
+  background: #181825;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  color: #aaa;
+}
+#death-screen .loadout-item .li-icon { margin-right: 4px; }
+#death-screen .loadout-label { color: #666; font-size: 0.7rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 2px; }
+/* weapon select */
+.weapon-select {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.weapon-card {
+  background: #181825;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 16px 20px;
+  width: 170px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.weapon-card:hover { border-color: #e74c3c; transform: translateY(-2px); }
+.weapon-card.selected { border-color: #e74c3c; background: #1a1020; }
+.weapon-card .wc-icon { font-size: 1.8rem; margin-bottom: 6px; }
+.weapon-card .wc-name { color: #e74c3c; font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+.weapon-card .wc-desc { color: #777; font-size: 0.7rem; line-height: 1.4; }
+@media (pointer: coarse) {
+  .weapon-select { flex-direction: column; align-items: center; gap: 10px; }
+  .weapon-card { width: 240px; padding: 12px; }
+}
 #xp-bar {
   position: fixed;
   bottom: 0; left: 0; right: 0;
@@ -196,6 +238,24 @@ canvas {
 <div id="start-screen">
   <h1>SURVIVORS</h1>
   <div class="sub">vampire survivors battle royale — v1a single player</div>
+  <div class="sub" style="margin-bottom:8px; color:#999;">choose your weapon</div>
+  <div class="weapon-select" id="weapon-select">
+    <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
+      <div class="wc-icon">🔮</div>
+      <div class="wc-name">Magic Spit</div>
+      <div class="wc-desc">Projectile — fires at the nearest enemy</div>
+    </div>
+    <div class="weapon-card" data-weapon="breath" onclick="selectWeapon('breath')">
+      <div class="wc-icon">🌀</div>
+      <div class="wc-name">Dragon Breath</div>
+      <div class="wc-desc">Aura — damages all nearby enemies</div>
+    </div>
+    <div class="weapon-card" data-weapon="charge" onclick="selectWeapon('charge')">
+      <div class="wc-icon">🐂</div>
+      <div class="wc-name">Bull Rush</div>
+      <div class="wc-desc">Sweep — charges in your move direction</div>
+    </div>
+  </div>
   <button onclick="startGame()">PLAY</button>
   <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
 </div>
@@ -208,6 +268,8 @@ canvas {
 <div id="death-screen">
   <h1>DEAD</h1>
   <div class="stats" id="death-stats"></div>
+  <div class="loadout-label">loadout</div>
+  <div class="loadout" id="death-loadout"></div>
   <button onclick="startGame()">RETRY</button>
 </div>
 
@@ -283,6 +345,14 @@ const XP_MAGNET_SPEED = 400;
 let game = null;
 let keys = { up: false, down: false, left: false, right: false };
 let paused = false;
+let selectedWeapon = 'spit'; // default starting weapon
+
+function selectWeapon(type) {
+  selectedWeapon = type;
+  document.querySelectorAll('.weapon-card').forEach(c => {
+    c.classList.toggle('selected', c.dataset.weapon === type);
+  });
+}
 let gameStarted = false;
 
 // --- powerups catalog ---
@@ -453,14 +523,14 @@ function initGame() {
     xp: 0,
     xpToLevel: 45,
     level: 1,
-    weapons: [createWeapon('spit')], // start with magic spit
+    weapons: [createWeapon(selectedWeapon)], // start with chosen weapon
     alive: true,
     iframes: 0, // invincibility frames after hit
     facing: { x: 1, y: 0 },
   };
 
-  // mark spit as owned
-  POWERUPS.find(p => p.id === 'weapon_spit').stack = 1;
+  // mark starting weapon as owned
+  POWERUPS.find(p => p.id === 'weapon_' + selectedWeapon).stack = 1;
 
   return {
     player: p,
@@ -1073,6 +1143,17 @@ function showDeathScreen(g) {
     <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
     ${powerupList ? `<div style="font-size:0.65rem;color:#555">Powerups: ${powerupList}</div>` : ''}
   `;
+  // build loadout display from owned powerups
+  const loadoutEl = document.getElementById('death-loadout');
+  const owned = POWERUPS.filter(p => p.stack > 0);
+  if (owned.length > 0) {
+    loadoutEl.innerHTML = owned.map(p => {
+      const stackStr = p.stack > 1 ? ` ×${p.stack}` : '';
+      return `<div class="loadout-item"><span class="li-icon">${p.icon}</span>${p.name}${stackStr}</div>`;
+    }).join('');
+  } else {
+    loadoutEl.innerHTML = '<div class="loadout-item" style="color:#555">no powerups</div>';
+  }
   document.getElementById('death-screen').style.display = 'flex';
 }
 
@@ -1569,6 +1650,23 @@ function startGame() {
     render();
   }
 }
+
+// keyboard weapon select + start/retry
+document.addEventListener('keydown', e => {
+  const startScreen = document.getElementById('start-screen');
+  const deathScreen = document.getElementById('death-screen');
+  const startVisible = startScreen.style.display !== 'none' && startScreen.offsetParent !== null;
+  const deathVisible = deathScreen.style.display === 'flex';
+  if (startVisible) {
+    if (e.key === '1') selectWeapon('spit');
+    else if (e.key === '2') selectWeapon('breath');
+    else if (e.key === '3') selectWeapon('charge');
+    else if (e.key === 'Enter' || e.key === ' ') { startGame(); e.preventDefault(); }
+  }
+  if (deathVisible) {
+    if (e.key === 'Enter' || e.key === ' ') { startGame(); e.preventDefault(); }
+  }
+});
 </script>
 </body>
 </html>
