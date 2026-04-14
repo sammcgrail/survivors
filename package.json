@@ -7,9 +7,10 @@
     "test": "tests"
   },
   "scripts": {
-    "build": "node scripts/build.js",
-    "watch": "node scripts/build.js --watch",
-    "stress": "node tests/stress.mjs"
+    "build": "node scripts/build.cjs",
+    "watch": "node scripts/build.cjs --watch",
+    "stress": "node tests/stress.mjs",
+    "smoke": "node tests/sim_smoke.mjs"
   },
   "repository": {
     "type": "git",
@@ -18,7 +19,7 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
+  "type": "module",
   "bugs": {
     "url": "https://github.com/sammcgrail/survivors/issues"
   },
