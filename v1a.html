@@ -1097,9 +1097,11 @@ function update(dt) {
   }
 
   // --- camera ---
-  const camSmooth = 1 - Math.pow(0.001, dt);
-  g.camera.x += (p.x - g.camera.x) * camSmooth;
-  g.camera.y += (p.y - g.camera.y) * camSmooth;
+  // Frame-rate independent exponential smoothing: ~7 units/sec decay rate
+  // Using fixed-rate lerp avoids variable-dt judder on mobile
+  const camLerp = 1 - Math.exp(-12 * dt);
+  g.camera.x += (p.x - g.camera.x) * camLerp;
+  g.camera.y += (p.y - g.camera.y) * camLerp;
 
   // screen shake decay
   if (g.screenShake > 0) g.screenShake -= dt;
@@ -1360,13 +1362,13 @@ function render() {
   const W = canvas.width;
   const H = canvas.height;
   const g = game;
-  if (!g) { requestAnimationFrame(render); return; }
+  if (!g) return;
 
   ctx.save();
   ctx.fillStyle = '#0a0a0f';
   ctx.fillRect(0, 0, W, H);
 
-  // camera transform
+  // camera transform — snap to integer pixels to prevent sub-pixel shimmer on mobile
   let cx = g.camera.x - W / 2;
   let cy = g.camera.y - H / 2;
 
@@ -1375,6 +1377,9 @@ function render() {
     cx += (Math.random() - 0.5) * 8;
     cy += (Math.random() - 0.5) * 8;
   }
+
+  cx = Math.round(cx);
+  cy = Math.round(cy);
 
   ctx.translate(-cx, -cy);
 
@@ -1751,7 +1756,6 @@ function render() {
   document.getElementById('hud-wave').textContent = `Wave ${g.wave}`;
   document.getElementById('hud-weapons').textContent = p.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
 
-  requestAnimationFrame(render);
 }
 
 // --- input ---
@@ -1857,13 +1861,15 @@ document.addEventListener('touchend', e => {
 // prevent context menu / long press
 document.addEventListener('contextmenu', e => e.preventDefault());
 
-// --- game loop ---
+// --- game loop (unified: update + render in single rAF to prevent camera/render desync) ---
 let lastTime = 0;
 
 function gameLoop(ts) {
+  if (lastTime === 0) lastTime = ts; // prevent huge dt spike on first frame
   const dt = Math.min((ts - lastTime) / 1000, 0.05); // cap at 50ms
   lastTime = ts;
   update(dt);
+  render();
   requestAnimationFrame(gameLoop);
 }
 
@@ -1876,8 +1882,8 @@ function startGame() {
   startMusic();
   if (!gameStarted) {
     gameStarted = true;
+    lastTime = 0; // reset so first frame gets zero dt
     requestAnimationFrame(gameLoop);
-    render();
   }
 }
 
