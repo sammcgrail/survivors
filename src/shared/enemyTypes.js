@@ -59,8 +59,8 @@ export function enemyType(wave) {
 }
 
 export function scaleEnemy(base, wave) {
-  // HP scales quadratically — enemies get tanky fast after wave 8
-  const hpScale = 1 + (wave - 1) * 0.12 + Math.max(0, wave - 8) * 0.08;
+  // HP scales — gentle ramp with gradual late-game bonus starting wave 6
+  const hpScale = 1 + (wave - 1) * 0.12 + Math.max(0, wave - 6) * 0.04;
   // Speed scales gently — don't make it impossible to dodge
   const speedScale = 1 + (wave - 1) * 0.03;
   // Damage scales linearly

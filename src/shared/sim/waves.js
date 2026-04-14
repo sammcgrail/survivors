@@ -13,7 +13,7 @@ export function updateWaves(g, dt) {
     g.waveTimer = 0;
     g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
     // spawn rate curve: fast early ramp, then gradual
-    g.spawnRate = Math.max(0.25, 2.0 * Math.pow(0.88, g.wave - 1));
+    g.spawnRate = Math.max(0.3, 2.0 * Math.pow(0.90, g.wave - 1));
     g.waveMsg = `WAVE ${g.wave}`;
     g.waveMsgTimer = 2.0;
     emit(g, EVT.WAVE_START, { wave: g.wave });
