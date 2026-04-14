@@ -694,6 +694,8 @@ function initGame() {
     specialWaveMsg: null,
     specialWaveMsgTimer: 0,
     kills: 0,
+    playerName: 'you',
+    deathFeed: [], // { text, time } — fading event log
     camera: { x: p.x, y: p.y },
     screenShake: 0,
   };
@@ -747,6 +749,7 @@ function update(dt) {
   if (g.waveTimer >= g.waveDuration) {
     g.wave++;
     g.waveTimer = 0;
+    g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
     // spawn rate curve: fast early ramp, then gradual
     g.spawnRate = Math.max(0.25, 2.0 * Math.pow(0.88, g.wave - 1));
     // check for special wave
@@ -951,6 +954,7 @@ function update(dt) {
         p.hp = 0;
         p.alive = false;
         sfx('death');
+        g.deathFeed.push({ text: `${g.playerName} killed by ${e.name}`, time: g.time });
         showDeathScreen(g);
       }
     }
@@ -1626,14 +1630,20 @@ function render() {
       ctx.globalAlpha = 1;
     }
 
-    // hp bar above player
-    if (p.hp < p.maxHp) {
-      const bw = 30;
-      ctx.fillStyle = '#300';
-      ctx.fillRect(p.x - bw / 2, p.y - p.radius - 12, bw, 4);
-      ctx.fillStyle = p.hp / p.maxHp > 0.3 ? '#2ecc71' : '#e74c3c';
-      ctx.fillRect(p.x - bw / 2, p.y - p.radius - 12, bw * (p.hp / p.maxHp), 4);
-    }
+    // name tag above player
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 9px "Chakra Petch", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.globalAlpha = 0.8;
+    ctx.fillText(g.playerName, p.x, p.y - p.radius - 16);
+    ctx.globalAlpha = 1;
+
+    // hp bar above player (always visible for MP readability)
+    const bw = 30;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(p.x - bw / 2, p.y - p.radius - 10, bw, 4);
+    ctx.fillStyle = p.hp / p.maxHp > 0.3 ? '#2ecc71' : '#e74c3c';
+    ctx.fillRect(p.x - bw / 2, p.y - p.radius - 10, bw * (p.hp / p.maxHp), 4);
   }
 
   // --- particles ---
@@ -1670,6 +1680,24 @@ function render() {
     ctx.shadowBlur = 20;
     ctx.fillText(`⚠ WAVE ${g.wave}: ${g.specialWaveMsg} ⚠`, W / 2, H * 0.3);
     ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // --- death feed (bottom-left, fading) ---
+  const feedMax = 5;
+  const feedDuration = 6; // seconds visible
+  const recentFeed = g.deathFeed.slice(-feedMax);
+  for (let i = 0; i < recentFeed.length; i++) {
+    const entry = recentFeed[i];
+    const age = g.time - entry.time;
+    if (age > feedDuration) continue;
+    const alpha = age > feedDuration - 1 ? (feedDuration - age) : 1;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.7;
+    ctx.fillStyle = '#ccc';
+    ctx.font = '10px "Chakra Petch", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(entry.text, 12, H - 20 - (recentFeed.length - 1 - i) * 16);
     ctx.restore();
   }
 
