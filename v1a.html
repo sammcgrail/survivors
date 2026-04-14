@@ -952,6 +952,14 @@ function update(dt) {
   // --- update enemies ---
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const e = g.enemies[i];
+    // dying animation — shrink and fade, then remove
+    if (e.dying !== undefined) {
+      e.dying -= dt;
+      if (e.dying <= 0) {
+        g.enemies.splice(i, 1);
+      }
+      continue; // skip movement, collision, damage while dying
+    }
     // move toward player — ghosts orbit/flank
     const edx = p.x - e.x;
     const edy = p.y - e.y;
@@ -1272,6 +1280,7 @@ function fireWeapon(g, w) {
 }
 
 function damageEnemy(g, e, idx, dmg) {
+  if (e.dying) return; // already dead, skip
   e.hp -= dmg;
   e.hitFlash = 1;
   // damage number (only show for hits > 5 to avoid spam from breath ticks)
@@ -1284,11 +1293,11 @@ function damageEnemy(g, e, idx, dmg) {
       color: '#f1c40f', life: 0.5, maxLife: 0.5, vy: -40,
     });
   }
-  if (e.hp <= 0) {
+  if (e.hp <= 0 && !e.dying) {
     sfx('kill');
     spawnGem(e.x, e.y, e.xp);
     spawnParticles(e.x, e.y, e.color, 6);
-    g.enemies.splice(idx, 1);
+    e.dying = 0.2; // 200ms death animation
     g.kills++;
   }
 }
@@ -1562,6 +1571,27 @@ function render() {
   for (const e of g.enemies) {
     // skip if off screen
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
+
+    // death animation — shrink + fade
+    if (e.dying !== undefined) {
+      const t = e.dying / 0.2; // 1.0 → 0.0 over 200ms
+      const scale = 0.3 + t * 0.7; // shrink from 100% to 30%
+      const alpha = t; // fade out
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.translate(e.x, e.y);
+      ctx.scale(scale, scale);
+      const spriteScale = e.radius / 8;
+      const spriteName = e.sprite || 'blob';
+      if (!drawSprite(spriteName, 0, 0, spriteScale)) {
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+      continue; // skip normal render + hp bar
+    }
 
     const spriteScale = e.radius / 8; // scale sprite to match enemy radius
     const spriteName = e.sprite || 'blob';
