@@ -14,6 +14,7 @@ import { WebSocketServer } from 'ws';
 import { tickSim } from './src/shared/sim/tick.js';
 import { createRng } from './src/shared/sim/rng.js';
 import { createWeapon } from './src/shared/weapons.js';
+import { getAvailableChoices, getPowerup } from './src/shared/sim/powerups.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP,
   XP_MAGNET_RANGE,
@@ -64,6 +65,11 @@ function makePlayer(pid, name, weaponType, rng) {
     iframes: 2.0, // spawn protection
     facing: { x: 1, y: 0 },
     inputs: { up: false, down: false, left: false, right: false },
+    // Per-player powerup catalog stacks. Starting weapon = stack 1 so
+    // its `_up` upgrades unlock immediately. pendingChoice holds an
+    // outstanding level-up the player hasn't responded to yet.
+    powerupStacks: { ['weapon_' + weaponType]: 1 },
+    pendingChoice: null,
   };
 }
 
@@ -126,8 +132,37 @@ function tick(dt) {
   game.waveTimer += dt;
   applyInputs(game, dt);
   tickSim(game, dt);
-  // Server doesn't consume sim-emitted events — drop them each tick.
+  // Forward LEVEL_UP events to the leveling player as a `levelup`
+  // message with three random valid choices. Other event types are
+  // server-side cosmetics; clients infer them from state diffs.
+  for (const evt of game.events) {
+    if (evt.type !== 'levelUp') continue;
+    sendLevelUp(evt.pid);
+  }
   game.events.length = 0;
+}
+
+function sendLevelUp(pid) {
+  const player = game.players.find(p => p.id === pid);
+  if (!player) return;
+  const available = getAvailableChoices(player.powerupStacks);
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = game.rng.int(i + 1);
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  const choices = available.slice(0, 3);
+  if (choices.length === 0) return; // every powerup maxed; skip
+  player.pendingChoice = choices.map(c => c.id);
+  for (const [ws, p] of players) {
+    if (p.id !== pid) continue;
+    try {
+      ws.send(JSON.stringify({
+        type: 'levelup',
+        choices: choices.map(c => ({ id: c.id, name: c.name, desc: c.desc, icon: c.icon })),
+      }));
+    } catch { /* dead socket — close handler cleans up */ }
+    return;
+  }
 }
 
 function r1(n) { return Math.round(n * 10) / 10; }
@@ -255,6 +290,15 @@ wss.on('connection', (ws) => {
       if (player.alive) return;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
       Object.assign(player, makePlayer(pid, player.name, weapon, game.rng));
+    } else if (msg.type === 'choose') {
+      // Reply to a pending levelup. choiceId must be one of the three the
+      // server offered; otherwise drop silently (catch fat-finger races).
+      if (!player.pendingChoice || !player.pendingChoice.includes(msg.choiceId)) return;
+      const choice = getPowerup(msg.choiceId);
+      if (!choice) return;
+      player.powerupStacks[choice.id] = (player.powerupStacks[choice.id] || 0) + 1;
+      choice.apply(game, player);
+      player.pendingChoice = null;
     }
   });
 

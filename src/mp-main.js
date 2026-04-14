@@ -280,7 +280,52 @@ function connectWS() {
       processStateChanges(msg);
       return;
     }
+
+    if (msg.type === 'levelup') {
+      showLevelUpChoices(msg.choices);
+      return;
+    }
   };
+}
+
+// Show the level-up overlay with the three server-supplied choices.
+// Click or press 1/2/3 to send a `choose` reply. After 10s without a
+// reply we auto-pick the first option (matches server's pendingChoice
+// timeout — server doesn't actually time out today, but it's friendly
+// to not leave the player staring at a stuck overlay if they're afk).
+let levelUpTimeout = null;
+function showLevelUpChoices(choices) {
+  sfx('levelup');
+  const overlay   = document.getElementById('level-up');
+  const container = document.getElementById('level-choices');
+  container.innerHTML = '';
+  overlay.style.display = 'flex';
+
+  const escape = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  window._levelChoices = [];
+  for (let i = 0; i < choices.length; i++) {
+    const c = choices[i];
+    const div = document.createElement('div');
+    div.className = 'choice';
+    div.innerHTML = `
+      <div class="name"><span style="color:#555;font-size:0.6rem">[${i+1}]</span> ${escape(c.icon)} ${escape(c.name)}</div>
+      <div class="desc">${escape(c.desc)}</div>
+    `;
+    const pick = () => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      ws.send(JSON.stringify({ type: 'choose', choiceId: c.id }));
+      overlay.style.display = 'none';
+      window._levelChoices = [];
+      if (levelUpTimeout) { clearTimeout(levelUpTimeout); levelUpTimeout = null; }
+    };
+    div.onclick = pick;
+    window._levelChoices.push(pick);
+    container.appendChild(div);
+  }
+  if (levelUpTimeout) clearTimeout(levelUpTimeout);
+  levelUpTimeout = setTimeout(() => {
+    if (window._levelChoices && window._levelChoices[0]) window._levelChoices[0]();
+  }, 10000);
 }
 
 function processStateChanges(state) {
@@ -930,6 +975,14 @@ const KEY_MAP = {
 
 document.addEventListener('keydown', e => {
   if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
+  // Number keys 1-3 pick a level-up choice when the overlay is open.
+  // The handlers in window._levelChoices send the `choose` message and
+  // hide the overlay themselves.
+  if (window._levelChoices && window._levelChoices.length > 0 && /^[1-3]$/.test(e.key)) {
+    const idx = Number(e.key) - 1;
+    const pick = window._levelChoices[idx];
+    if (pick) { pick(); e.preventDefault(); return; }
+  }
   const k = KEY_MAP[e.key.toLowerCase()];
   if (k) { keys[k] = true; e.preventDefault(); }
 });
