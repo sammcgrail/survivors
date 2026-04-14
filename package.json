@@ -10,7 +10,9 @@
     "build": "node scripts/build.cjs",
     "watch": "node scripts/build.cjs --watch",
     "stress": "node tests/stress.mjs",
-    "smoke": "node tests/sim_smoke.mjs"
+    "smoke": "node tests/sim_smoke.mjs",
+    "mp-server": "node server.mjs",
+    "mp-smoke": "node tests/server_smoke.mjs"
   },
   "repository": {
     "type": "git",
@@ -27,5 +29,8 @@
   "devDependencies": {
     "esbuild": "^0.28.0",
     "playwright": "^1.59.1"
+  },
+  "dependencies": {
+    "ws": "^8.20.0"
   }
 }
