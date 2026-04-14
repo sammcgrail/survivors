@@ -17,10 +17,14 @@ const fs = require('fs');
 const ROOT = path.resolve(__dirname, '..');
 const watch = process.argv.includes('--watch');
 
-const opts = {
-  entryPoints: [path.join(ROOT, 'src/main.js')],
+// Two bundles: v1a single-player and v1b multiplayer client.
+// Both pull from src/shared/ for one-source-of-truth on game data.
+const targets = [
+  { entry: 'src/main.js',     out: 'bundle.js' },
+  { entry: 'src/v1b-main.js', out: 'bundle-v1b.js' },
+];
+const baseOpts = {
   bundle: true,
-  outfile: path.join(ROOT, 'bundle.js'),
   format: 'iife',
   sourcemap: 'linked',
   target: ['es2020'],
@@ -29,12 +33,16 @@ const opts = {
 
 (async () => {
   if (watch) {
-    const ctx = await esbuild.context(opts);
-    await ctx.watch();
+    for (const t of targets) {
+      const ctx = await esbuild.context({ ...baseOpts, entryPoints: [path.join(ROOT, t.entry)], outfile: path.join(ROOT, t.out) });
+      await ctx.watch();
+    }
     console.log('[build] watching src/...');
   } else {
-    await esbuild.build(opts);
-    const stat = fs.statSync(opts.outfile);
-    console.log(`[build] bundle.js ${(stat.size / 1024).toFixed(1)} kB`);
+    for (const t of targets) {
+      await esbuild.build({ ...baseOpts, entryPoints: [path.join(ROOT, t.entry)], outfile: path.join(ROOT, t.out) });
+      const stat = fs.statSync(path.join(ROOT, t.out));
+      console.log(`[build] ${t.out} ${(stat.size / 1024).toFixed(1)} kB`);
+    }
   }
 })().catch(err => { console.error(err); process.exit(1); });
