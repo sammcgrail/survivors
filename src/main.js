@@ -836,16 +836,21 @@ function showDeathScreen(g) {
           <span class="lb-rank">#</span><span class="lb-name">name</span>
           <span class="lb-wave">wave</span><span class="lb-kills">kills</span><span class="lb-time">time</span>
         </div>`;
+      // Escape names — they come from arbitrary players via the leaderboard
+      // backend. Without this, a name like <img onerror=alert(1)> would XSS.
+      const esc = (s) => String(s).replace(/[&<>"']/g, c => (
+        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+      ));
       const rows = entries.map((e, i) => {
         const m = Math.floor(e.time / 60);
         const s = Math.floor(e.time % 60);
         const isYou = e.name === playerName && e.wave === g.wave && e.kills === g.kills;
         return `<div class="lb-row${isYou ? ' lb-you' : ''}">
           <span class="lb-rank">${i + 1}</span>
-          <span class="lb-name">${e.name}</span>
-          <span class="lb-wave">W${e.wave}</span>
-          <span class="lb-kills">${e.kills}k</span>
-          <span class="lb-time">${m}:${s.toString().padStart(2, '0')}</span>
+          <span class="lb-name">${esc(e.name)}</span>
+          <span class="lb-wave">W${e.wave | 0}</span>
+          <span class="lb-kills">${e.kills | 0}k</span>
+          <span class="lb-time">${m | 0}:${(s | 0).toString().padStart(2, '0')}</span>
         </div>`;
       }).join('');
       lbEl.innerHTML = header + rows;

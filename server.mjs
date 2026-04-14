@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Survivors v1b multiplayer server — thin shell over shared/sim/.
+// Survivors multiplayer server — thin shell over shared/sim/.
 //
 // The game loop is `tickSim(g, dt)` from src/shared/sim/tick.js — the
 // exact same code that drives the SP client. SP wraps a single player in
@@ -241,6 +241,9 @@ wss.on('connection', (ws) => {
       const newName = String(msg.name || '').slice(0, 12).trim();
       if (newName) player.name = newName;
     } else if (msg.type === 'respawn') {
+      // Only let dead players respawn — without this a live player could
+      // spam respawn to reset iframes + heal to full + reroll weapon.
+      if (player.alive) return;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
       Object.assign(player, makePlayer(pid, player.name, weapon, game.rng));
     }

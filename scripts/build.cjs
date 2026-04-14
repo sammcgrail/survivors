@@ -18,7 +18,7 @@ const dev = watch || process.argv.includes('--dev');
 
 const targets = [
   { entry: 'src/main.js',     out: 'bundle.js' },
-  { entry: 'src/v1b-main.js', out: 'bundle-v1b.js' },
+  { entry: 'src/mp-main.js', out: 'bundle-mp.js' },
 ];
 const baseOpts = {
   bundle: true,

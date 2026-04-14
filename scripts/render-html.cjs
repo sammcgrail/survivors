@@ -18,7 +18,7 @@ const TEMPLATE = path.join(ROOT, 'template.html');
 
 const PAGES = [
   { out: 'sp.html', mode: 'sp', title: 'survivors',    bundle: 'bundle.js' },
-  { out: 'mp.html', mode: 'mp', title: 'survivors mp', bundle: 'bundle-v1b.js' },
+  { out: 'mp.html', mode: 'mp', title: 'survivors mp', bundle: 'bundle-mp.js' },
 ];
 
 function render(page) {
