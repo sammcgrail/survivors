@@ -223,6 +223,88 @@ function sfx(type) {
         break;
       }
 
+      case 'hive_burst': { // spawner births swarmlings — organic squelchy burst
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(180, t);
+        osc.frequency.linearRampToValueAtTime(90, t + 0.08);
+        osc.frequency.linearRampToValueAtTime(200, t + 0.12);
+        osc.frequency.linearRampToValueAtTime(60, t + 0.2);
+        gain.gain.setValueAtTime(0.12, t);
+        gain.gain.linearRampToValueAtTime(0.08, t + 0.08);
+        gain.gain.linearRampToValueAtTime(0, t + 0.2);
+        osc.start(t); osc.stop(t + 0.2);
+        // high squelch layer
+        const hb2 = ac.createOscillator();
+        const hg2 = ac.createGain();
+        hb2.connect(hg2); hg2.connect(ac.destination);
+        hb2.type = 'square';
+        hb2.frequency.setValueAtTime(500, t + 0.02);
+        hb2.frequency.linearRampToValueAtTime(250, t + 0.1);
+        hb2.frequency.linearRampToValueAtTime(600, t + 0.15);
+        hg2.gain.setValueAtTime(0.04, t + 0.02);
+        hg2.gain.linearRampToValueAtTime(0, t + 0.18);
+        hb2.start(t + 0.02); hb2.stop(t + 0.18);
+        break;
+      }
+
+      case 'boss_telegraph': { // boss about to charge — rising growl warning
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(60, t);
+        osc.frequency.linearRampToValueAtTime(180, t + 0.25);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.linearRampToValueAtTime(0.18, t + 0.2);
+        gain.gain.linearRampToValueAtTime(0, t + 0.3);
+        osc.start(t); osc.stop(t + 0.3);
+        // high screech overtone
+        const bt2 = ac.createOscillator();
+        const bg2 = ac.createGain();
+        bt2.connect(bg2); bg2.connect(ac.destination);
+        bt2.type = 'square';
+        bt2.frequency.setValueAtTime(300, t + 0.1);
+        bt2.frequency.linearRampToValueAtTime(600, t + 0.25);
+        bg2.gain.setValueAtTime(0.03, t + 0.1);
+        bg2.gain.linearRampToValueAtTime(0.08, t + 0.22);
+        bg2.gain.linearRampToValueAtTime(0, t + 0.3);
+        bt2.start(t + 0.1); bt2.stop(t + 0.3);
+        break;
+      }
+
+      case 'boss_step': { // boss footstep — heavy thud
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(50, t);
+        osc.frequency.linearRampToValueAtTime(30, t + 0.1);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.12);
+        osc.start(t); osc.stop(t + 0.12);
+        break;
+      }
+
+      case 'shield_hum': { // barrier shield pulse — resonant hum
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(220, t);
+        osc.frequency.linearRampToValueAtTime(260, t + 0.06);
+        osc.frequency.linearRampToValueAtTime(220, t + 0.12);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.linearRampToValueAtTime(0.08, t + 0.04);
+        gain.gain.linearRampToValueAtTime(0, t + 0.12);
+        osc.start(t); osc.stop(t + 0.12);
+        break;
+      }
+
+      case 'zap': { // lightning field strike — sharp crackling zap
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(2000, t);
+        osc.frequency.linearRampToValueAtTime(600, t + 0.03);
+        osc.frequency.linearRampToValueAtTime(1800, t + 0.05);
+        osc.frequency.linearRampToValueAtTime(400, t + 0.08);
+        gain.gain.setValueAtTime(0.07, t);
+        gain.gain.linearRampToValueAtTime(0.04, t + 0.03);
+        gain.gain.linearRampToValueAtTime(0.06, t + 0.05);
+        gain.gain.linearRampToValueAtTime(0, t + 0.08);
+        osc.start(t); osc.stop(t + 0.08);
+        break;
+      }
+
       default:
         gain.gain.setValueAtTime(0, t);
         osc.start(t); osc.stop(t + 0.01);
@@ -694,12 +776,14 @@ function update(dt) {
     // special: shield knockback + damage aura (always active)
     if (w.type === 'shield') {
       w.phase = (w.phase || 0) + dt * 4;
+      let shieldHit = false;
       for (let j = g.enemies.length - 1; j >= 0; j--) {
         const e = g.enemies[j];
         const edx = e.x - p.x;
         const edy = e.y - p.y;
         const dist = Math.sqrt(edx * edx + edy * edy);
         if (dist < w.radius + e.radius && dist > 1) {
+          shieldHit = true;
           // knockback
           const nx = edx / dist;
           const ny = edy / dist;
@@ -707,6 +791,14 @@ function update(dt) {
           e.y += ny * w.knockback * dt;
           // damage on contact
           damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 2);
+        }
+      }
+      // hum sfx throttled to once per 0.4s when actively pushing
+      if (shieldHit) {
+        w._humTimer = (w._humTimer || 0) - dt;
+        if (w._humTimer <= 0) {
+          sfx('shield_hum');
+          w._humTimer = 0.4;
         }
       }
     }
@@ -734,7 +826,7 @@ function update(dt) {
         }
         g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
       }
-      if (targets.length > 0) sfx('chain');
+      if (targets.length > 0) sfx('zap');
     }
   }
 
@@ -846,6 +938,13 @@ function update(dt) {
           e.x += (edx / dist) * e.speed * 0.5 * dt;
           e.y += (edy / dist) * e.speed * 0.5 * dt;
           e.chargeTimer -= dt;
+          // periodic footstep thud
+          if (e.stepTimer === undefined) e.stepTimer = 0.8;
+          e.stepTimer -= dt;
+          if (e.stepTimer <= 0 && dist < 500) {
+            sfx('boss_step');
+            e.stepTimer = 0.7 + Math.random() * 0.3;
+          }
           if (e.chargeTimer <= 0 && dist < 400) {
             // lock charge direction and go
             e.chargeDx = edx / dist;
@@ -853,7 +952,7 @@ function update(dt) {
             e.charging = 0.8; // 0.8s charge duration
             e.chargeTimer = 4 + Math.random() * 3; // 4-7s between charges
             spawnParticles(e.x, e.y, '#d63031', 12); // telegraph
-            sfx('hit');
+            sfx('boss_telegraph');
           }
         }
       } else {
@@ -879,7 +978,7 @@ function update(dt) {
           g.enemies.push(minion);
         }
         spawnParticles(e.x, e.y, '#fdcb6e', 8); // hive burst effect
-        sfx('hit'); // birth sfx
+        sfx('hive_burst');
       }
     }
 
