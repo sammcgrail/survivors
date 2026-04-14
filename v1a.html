@@ -10,201 +10,60 @@
 <title>survivors v1a</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
-body {
-  background: #0a0a0f;
-  color: #ccc;
-  font-family: 'Chakra Petch', 'Segoe UI', sans-serif;
-  overflow: hidden;
-  height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+body { background: #0a0a0f; color: #ccc; font-family: 'Chakra Petch', 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
 canvas { display: block; image-rendering: pixelated; }
-#ui {
-  position: fixed;
-  top: 0; left: 0; right: 0;
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: #aaa;
-  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-  pointer-events: none;
-  z-index: 10;
-}
+
+/* mode visibility — body[data-mode] gates which blocks render */
+body[data-mode="sp"] .mp-only { display: none !important; }
+body[data-mode="mp"] .sp-only { display: none !important; }
+
+#ui { position: fixed; top: 0; left: 0; right: 0; display: flex; justify-content: space-between; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; color: #aaa; text-shadow: 0 1px 3px rgba(0,0,0,0.8); pointer-events: none; z-index: 10; }
 #ui .left, #ui .right { display: flex; gap: 16px; }
-#level-up {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.85);
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-}
+
+#level-up { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 20; }
 #level-up h2 { color: #f1c40f; margin-bottom: 24px; font-size: 2rem; font-family: 'Orbitron', sans-serif; font-weight: 900; text-shadow: 0 0 20px rgba(241,196,15,0.5); letter-spacing: 4px; }
 #level-up .choices { display: flex; gap: 16px; }
-#level-up .choice {
-  background: #181825;
-  border: 2px solid #333;
-  border-radius: 8px;
-  padding: 20px;
-  width: 180px;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s;
-}
+#level-up .choice { background: #181825; border: 2px solid #333; border-radius: 8px; padding: 20px; width: 180px; cursor: pointer; text-align: center; transition: border-color 0.15s; }
 #level-up .choice:hover { border-color: #f1c40f; }
 #level-up .choice .name { color: #f1c40f; font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
 #level-up .choice .desc { color: #999; font-size: 0.8rem; line-height: 1.5; }
-#start-screen {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.9);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 30;
-}
-#start-screen h1 { color: #e74c3c; font-size: 3rem; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 30px rgba(231,76,60,0.6); margin-bottom: 8px; }
+
+#conn-status { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.7); border: 1px solid #444; color: #f39c12; padding: 6px 14px; font-size: 0.75rem; border-radius: 4px; z-index: 25; display: none; }
+
+#start-screen, #death-screen { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.9); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 30; }
+#death-screen { display: none; }
+#start-screen h1, #death-screen h1 { color: #e74c3c; font-size: 3rem; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 30px rgba(231,76,60,0.6); margin-bottom: 8px; }
 #start-screen .sub { color: #777; font-size: 0.85rem; margin-bottom: 32px; }
-#start-screen button {
-  background: #e74c3c;
-  border: none;
-  color: #fff;
-  padding: 12px 40px;
-  font-family: inherit;
-  font-size: 1rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-#start-screen button:hover { background: #c0392b; }
-#death-screen {
-  position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.9);
-  display: none;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  z-index: 30;
-}
-#death-screen h1 { color: #e74c3c; font-size: 3rem; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 30px rgba(231,76,60,0.6); margin-bottom: 8px; }
+#start-screen input, .name-input { background: #181825; border: 2px solid #333; color: #eee; padding: 6px 14px; font-family: inherit; font-size: 0.9rem; border-radius: 4px; text-align: center; outline: none; width: 220px; margin-bottom: 16px; }
+#start-screen input:focus { border-color: #e74c3c; }
+#start-screen button, #death-screen button { background: #e74c3c; border: none; color: #fff; padding: 12px 40px; font-family: inherit; font-size: 1rem; border-radius: 6px; cursor: pointer; }
+#start-screen button:hover, #death-screen button:hover { background: #c0392b; }
+
 #death-screen .stats { color: #aaa; font-size: 1rem; margin-bottom: 16px; text-align: center; line-height: 2; }
-#death-screen .best-run {
-  background: #1a1a2e;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 10px 20px;
-  margin-bottom: 16px;
-  text-align: center;
-  font-size: 0.75rem;
-  color: #666;
-}
+#death-screen .best-run { background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 10px 20px; margin-bottom: 16px; text-align: center; font-size: 0.75rem; color: #666; }
 #death-screen .best-run .best-label { text-transform: uppercase; letter-spacing: 2px; font-size: 0.6rem; color: #555; margin-bottom: 4px; }
 #death-screen .best-run .best-value { color: #f39c12; font-size: 0.85rem; }
-#death-screen .new-best {
-  color: #f1c40f;
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 3px;
-  text-transform: uppercase;
-  margin-bottom: 8px;
-  animation: bestPulse 0.6s ease-in-out infinite alternate;
-}
-@keyframes bestPulse {
-  from { text-shadow: 0 0 8px rgba(241,196,15,0.4); opacity: 0.8; }
-  to { text-shadow: 0 0 20px rgba(241,196,15,0.8); opacity: 1; }
-}
-#death-screen button {
-  background: #e74c3c;
-  border: none;
-  color: #fff;
-  padding: 10px 32px;
-  font-family: inherit;
-  font-size: 0.9rem;
-  border-radius: 6px;
-  cursor: pointer;
-}
-#death-screen .loadout {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-  justify-content: center;
-}
-#death-screen .loadout-item {
-  background: #181825;
-  border: 1px solid #333;
-  border-radius: 6px;
-  padding: 6px 12px;
-  font-size: 0.75rem;
-  color: #aaa;
-}
+#death-screen .new-best { color: #f1c40f; font-size: 0.8rem; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; margin-bottom: 8px; animation: bestPulse 0.6s ease-in-out infinite alternate; }
+@keyframes bestPulse { from { text-shadow: 0 0 8px rgba(241,196,15,0.4); opacity: 0.8; } to { text-shadow: 0 0 20px rgba(241,196,15,0.8); opacity: 1; } }
+#death-screen .loadout { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; justify-content: center; }
+#death-screen .loadout-item { background: #181825; border: 1px solid #333; border-radius: 6px; padding: 6px 12px; font-size: 0.75rem; color: #aaa; }
 #death-screen .loadout-item .li-icon { margin-right: 4px; }
 #death-screen .loadout-label { color: #666; font-size: 0.7rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 2px; }
-#death-screen .leaderboard {
-  background: #1a1a2e;
-  border: 1px solid #333;
-  border-radius: 8px;
-  padding: 12px 16px;
-  margin-bottom: 16px;
-  width: 320px;
-  max-width: 90vw;
-}
-#death-screen .leaderboard .lb-title {
-  text-transform: uppercase;
-  letter-spacing: 2px;
-  font-size: 0.6rem;
-  color: #555;
-  margin-bottom: 8px;
-  text-align: center;
-}
-#death-screen .leaderboard .lb-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 3px 0;
-  font-size: 0.72rem;
-  color: #888;
-  border-bottom: 1px solid #222;
-}
+#death-screen .leaderboard { background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; width: 320px; max-width: 90vw; }
+#death-screen .leaderboard .lb-title { text-transform: uppercase; letter-spacing: 2px; font-size: 0.6rem; color: #555; margin-bottom: 8px; text-align: center; }
+#death-screen .leaderboard .lb-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 0.72rem; color: #888; border-bottom: 1px solid #222; }
 #death-screen .leaderboard .lb-row:last-child { border-bottom: none; }
-#death-screen .leaderboard .lb-row.lb-you {
-  color: #f1c40f;
-  font-weight: 700;
-}
+#death-screen .leaderboard .lb-row.lb-you { color: #f1c40f; font-weight: 700; }
 #death-screen .leaderboard .lb-rank { width: 24px; color: #555; }
 #death-screen .leaderboard .lb-row.lb-you .lb-rank { color: #f1c40f; }
 #death-screen .leaderboard .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #death-screen .leaderboard .lb-wave { width: 36px; text-align: right; }
 #death-screen .leaderboard .lb-kills { width: 44px; text-align: right; }
 #death-screen .leaderboard .lb-time { width: 40px; text-align: right; color: #555; }
-#death-screen .lb-placement {
-  text-align: center;
-  font-size: 0.75rem;
-  color: #f39c12;
-  margin-bottom: 6px;
-}
-/* weapon select */
-.weapon-select {
-  display: flex;
-  gap: 16px;
-  margin-bottom: 24px;
-}
-.weapon-card {
-  background: #181825;
-  border: 2px solid #333;
-  border-radius: 8px;
-  padding: 16px 20px;
-  width: 170px;
-  cursor: pointer;
-  text-align: center;
-  transition: border-color 0.15s, transform 0.1s;
-}
+#death-screen .lb-placement { text-align: center; font-size: 0.75rem; color: #f39c12; margin-bottom: 6px; }
+
+.weapon-select { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; justify-content: center; max-width: 90vw; }
+.weapon-card { background: #181825; border: 2px solid #333; border-radius: 8px; padding: 16px 20px; width: 170px; cursor: pointer; text-align: center; transition: border-color 0.15s, transform 0.1s; }
 .weapon-card:hover { border-color: #e74c3c; transform: translateY(-2px); }
 .weapon-card.selected { border-color: #e74c3c; background: #1a1020; }
 .weapon-card .wc-icon { font-size: 1.8rem; margin-bottom: 6px; }
@@ -214,53 +73,14 @@ canvas { display: block; image-rendering: pixelated; }
   .weapon-select { flex-direction: column; align-items: center; gap: 10px; }
   .weapon-card { width: 240px; padding: 12px; }
 }
-#xp-bar {
-  position: fixed;
-  bottom: 0; left: 0; right: 0;
-  height: 6px;
-  background: #111;
-  z-index: 10;
-}
-#xp-fill {
-  height: 100%;
-  background: #3498db;
-  width: 0%;
-  transition: width 0.15s;
-}
-/* --- MOBILE FIXES --- */
-html, body {
-  touch-action: manipulation;
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  user-select: none;
-  -webkit-tap-highlight-color: transparent;
-  overscroll-behavior: none;
-}
-canvas {
-  touch-action: none;
-}
-/* Invisible touch joystick — full screen touch zone, no visible elements */
-#joystick-zone {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 15;
-  display: none;
-}
-#touch-hint {
-  position: fixed;
-  bottom: 20%;
-  left: 50%;
-  transform: translateX(-50%);
-  color: rgba(255,255,255,0.4);
-  font-size: 0.8rem;
-  pointer-events: none;
-  z-index: 16;
-  display: none;
-  transition: opacity 1s;
-}
+
+#xp-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 6px; background: #111; z-index: 10; }
+#xp-fill { height: 100%; background: #3498db; width: 0%; transition: width 0.15s; }
+
+html, body { touch-action: manipulation; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: none; }
+canvas { touch-action: none; }
+#joystick-zone { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: 15; display: none; }
+#touch-hint { position: fixed; bottom: 20%; left: 50%; transform: translateX(-50%); color: rgba(255,255,255,0.4); font-size: 0.8rem; pointer-events: none; z-index: 16; display: none; transition: opacity 1s; }
 @media (pointer: coarse) {
   #joystick-zone { display: block; }
   #touch-hint { display: block; }
@@ -269,7 +89,7 @@ canvas {
 }
 </style>
 </head>
-<body>
+<body data-mode="sp">
 
 <div id="joystick-zone"></div>
 <div id="touch-hint">drag anywhere to move</div>
@@ -290,61 +110,117 @@ canvas {
 
 <div id="xp-bar"><div id="xp-fill"></div></div>
 
+<div id="conn-status" class="mp-only">CONNECTING...</div>
+
 <div id="start-screen">
   <h1>SURVIVORS</h1>
-  <div class="sub">vampire survivors battle royale — v1a single player</div>
-  <div style="margin-bottom:12px;">
-    <input id="name-input" type="text" maxlength="12" placeholder="your name" value=""
-      style="background:#181825; border:2px solid #333; color:#eee; padding:6px 14px; font-family:inherit;
-      font-size:0.9rem; border-radius:4px; text-align:center; outline:none; width:180px;"
-      onfocus="this.style.borderColor='#e74c3c'" onblur="this.style.borderColor='#333'">
-  </div>
+  <div class="sub sp-only">vampire survivors battle royale — single player</div>
+  <div class="sub mp-only">vampire survivors multiplayer</div>
+  <input type="text" id="name-input" maxlength="12" placeholder="your name" autocomplete="off" spellcheck="false">
   <div class="sub" style="margin-bottom:8px; color:#999;">choose your weapon</div>
   <div class="weapon-select" id="weapon-select">
     <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
-      <div class="wc-icon">🔮</div>
+      <div class="wc-icon">&#x1F52E;</div>
       <div class="wc-name">Magic Spit</div>
       <div class="wc-desc">Projectile — fires at the nearest enemy</div>
     </div>
     <div class="weapon-card" data-weapon="breath" onclick="selectWeapon('breath')">
-      <div class="wc-icon">🌀</div>
+      <div class="wc-icon">&#x1F300;</div>
       <div class="wc-name">Dragon Breath</div>
       <div class="wc-desc">Aura — damages all nearby enemies</div>
     </div>
     <div class="weapon-card" data-weapon="charge" onclick="selectWeapon('charge')">
-      <div class="wc-icon">🐂</div>
+      <div class="wc-icon">&#x1F402;</div>
       <div class="wc-name">Bull Rush</div>
       <div class="wc-desc">Sweep — charges in your move direction</div>
     </div>
+    <div class="weapon-card" data-weapon="orbit" onclick="selectWeapon('orbit')">
+      <div class="wc-icon">&#x1F5E1;&#xFE0F;</div>
+      <div class="wc-name">Blade Orbit</div>
+      <div class="wc-desc">Orbiting blades damage enemies on contact</div>
+    </div>
+    <div class="weapon-card" data-weapon="chain" onclick="selectWeapon('chain')">
+      <div class="wc-icon">&#x26A1;</div>
+      <div class="wc-name">Chain Lightning</div>
+      <div class="wc-desc">Zaps nearest enemy, chains to 2 more</div>
+    </div>
+    <div class="weapon-card" data-weapon="meteor" onclick="selectWeapon('meteor')">
+      <div class="wc-icon">&#x2604;&#xFE0F;</div>
+      <div class="wc-name">Meteor</div>
+      <div class="wc-desc">Drops AoE blasts on enemy clusters</div>
+    </div>
     <div class="weapon-card" data-weapon="shield" onclick="selectWeapon('shield')">
-      <div class="wc-icon">🛡️</div>
+      <div class="wc-icon">&#x1F6E1;&#xFE0F;</div>
       <div class="wc-name">Barrier</div>
-      <div class="wc-desc">Shield — knocks back and damages nearby enemies</div>
+      <div class="wc-desc">Knockback shield — pushes and damages nearby</div>
     </div>
     <div class="weapon-card" data-weapon="lightning_field" onclick="selectWeapon('lightning_field')">
-      <div class="wc-icon">⚡</div>
+      <div class="wc-icon">&#x26A1;</div>
       <div class="wc-name">Lightning Field</div>
-      <div class="wc-desc">Passive — zaps random nearby enemies periodically</div>
+      <div class="wc-desc">Passive — zaps random nearby enemies</div>
     </div>
   </div>
   <button onclick="startGame()">PLAY</button>
   <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
 </div>
 
-<div id="level-up">
+<div id="level-up" class="sp-only">
   <h2>LEVEL UP</h2>
   <div class="choices" id="level-choices"></div>
 </div>
 
 <div id="death-screen">
   <h1>DEAD</h1>
-  <div id="death-new-best"></div>
+  <div id="death-new-best" class="sp-only"></div>
   <div class="stats" id="death-stats"></div>
-  <div class="loadout-label">loadout</div>
-  <div class="loadout" id="death-loadout"></div>
-  <div class="best-run" id="death-best-run"></div>
-  <div id="death-lb-placement"></div>
-  <div class="leaderboard" id="death-leaderboard"></div>
+  <div class="loadout-label sp-only">loadout</div>
+  <div class="loadout sp-only" id="death-loadout"></div>
+  <div class="best-run sp-only" id="death-best-run"></div>
+  <div id="death-lb-placement" class="sp-only"></div>
+  <div class="leaderboard sp-only" id="death-leaderboard"></div>
+  <div class="sub mp-only" style="margin-bottom:12px; color:#999;">choose weapon for respawn</div>
+  <div class="weapon-select mp-only" id="respawn-weapon-select">
+    <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
+      <div class="wc-icon">&#x1F52E;</div>
+      <div class="wc-name">Magic Spit</div>
+      <div class="wc-desc">Projectile — fires at the nearest enemy</div>
+    </div>
+    <div class="weapon-card" data-weapon="breath" onclick="selectWeapon('breath')">
+      <div class="wc-icon">&#x1F300;</div>
+      <div class="wc-name">Dragon Breath</div>
+      <div class="wc-desc">Aura — damages all nearby enemies</div>
+    </div>
+    <div class="weapon-card" data-weapon="charge" onclick="selectWeapon('charge')">
+      <div class="wc-icon">&#x1F402;</div>
+      <div class="wc-name">Bull Rush</div>
+      <div class="wc-desc">Sweep — charges in your move direction</div>
+    </div>
+    <div class="weapon-card" data-weapon="orbit" onclick="selectWeapon('orbit')">
+      <div class="wc-icon">&#x1F5E1;&#xFE0F;</div>
+      <div class="wc-name">Blade Orbit</div>
+      <div class="wc-desc">Orbiting blades damage enemies on contact</div>
+    </div>
+    <div class="weapon-card" data-weapon="chain" onclick="selectWeapon('chain')">
+      <div class="wc-icon">&#x26A1;</div>
+      <div class="wc-name">Chain Lightning</div>
+      <div class="wc-desc">Zaps nearest enemy, chains to 2 more</div>
+    </div>
+    <div class="weapon-card" data-weapon="meteor" onclick="selectWeapon('meteor')">
+      <div class="wc-icon">&#x2604;&#xFE0F;</div>
+      <div class="wc-name">Meteor</div>
+      <div class="wc-desc">Drops AoE blasts on enemy clusters</div>
+    </div>
+    <div class="weapon-card" data-weapon="shield" onclick="selectWeapon('shield')">
+      <div class="wc-icon">&#x1F6E1;&#xFE0F;</div>
+      <div class="wc-name">Barrier</div>
+      <div class="wc-desc">Knockback shield — pushes and damages nearby</div>
+    </div>
+    <div class="weapon-card" data-weapon="lightning_field" onclick="selectWeapon('lightning_field')">
+      <div class="wc-icon">&#x26A1;</div>
+      <div class="wc-name">Lightning Field</div>
+      <div class="wc-desc">Passive — zaps random nearby enemies</div>
+    </div>
+  </div>
   <button onclick="startGame()">RETRY</button>
 </div>
 

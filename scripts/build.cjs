@@ -10,6 +10,7 @@
 const esbuild = require('esbuild');
 const path = require('path');
 const fs = require('fs');
+const { writePages } = require('./render-html.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
 const watch = process.argv.includes('--watch');
@@ -41,5 +42,6 @@ const baseOpts = {
       const stat = fs.statSync(path.join(ROOT, t.out));
       console.log(`[build] ${t.out} ${(stat.size / 1024).toFixed(1)} kB`);
     }
+    writePages();
   }
 })().catch(err => { console.error(err); process.exit(1); });

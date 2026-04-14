@@ -1,4 +1,52 @@
-<!DOCTYPE html>
+#!/usr/bin/env node
+/**
+ * Build-time HTML renderer. v1a.html (SP) and v1b.html (MP) are emitted
+ * from a single template — the only template variables are the title,
+ * the `data-mode` attribute on <body>, and the bundle script src. Every
+ * other byte is identical.
+ *
+ * The body contains the UNION of all UI elements (start screen, level-up
+ * modal, death screen, conn-status banner). CSS scopes visibility by
+ * `body[data-mode="..."]` so each mode shows only its relevant parts.
+ *
+ * Run standalone: `node scripts/render-html.cjs`
+ * Or as part of: `npm run build` (build.cjs invokes this after bundling).
+ */
+const fs = require('fs');
+const path = require('path');
+
+const ROOT = path.resolve(__dirname, '..');
+
+// Weapon card data — same set in start screen + death-screen respawn picker.
+// dragon_storm is an evolution (spit + breath fused) and isn't a starting
+// choice, so it's excluded.
+const WEAPONS = [
+  { id: 'spit',            icon: '&#x1F52E;',          name: 'Magic Spit',      desc: 'Projectile — fires at the nearest enemy' },
+  { id: 'breath',          icon: '&#x1F300;',          name: 'Dragon Breath',   desc: 'Aura — damages all nearby enemies' },
+  { id: 'charge',          icon: '&#x1F402;',          name: 'Bull Rush',       desc: 'Sweep — charges in your move direction' },
+  { id: 'orbit',           icon: '&#x1F5E1;&#xFE0F;',  name: 'Blade Orbit',     desc: 'Orbiting blades damage enemies on contact' },
+  { id: 'chain',           icon: '&#x26A1;',           name: 'Chain Lightning', desc: 'Zaps nearest enemy, chains to 2 more' },
+  { id: 'meteor',          icon: '&#x2604;&#xFE0F;',   name: 'Meteor',          desc: 'Drops AoE blasts on enemy clusters' },
+  { id: 'shield',          icon: '&#x1F6E1;&#xFE0F;',  name: 'Barrier',         desc: 'Knockback shield — pushes and damages nearby' },
+  { id: 'lightning_field', icon: '&#x26A1;',           name: 'Lightning Field', desc: 'Passive — zaps random nearby enemies' },
+];
+
+function weaponCards(containerId) {
+  return WEAPONS.map((w, i) =>
+    `    <div class="weapon-card${i === 0 ? ' selected' : ''}" data-weapon="${w.id}" onclick="selectWeapon('${w.id}')">\n` +
+    `      <div class="wc-icon">${w.icon}</div>\n` +
+    `      <div class="wc-name">${w.name}</div>\n` +
+    `      <div class="wc-desc">${w.desc}</div>\n` +
+    `    </div>`
+  ).join('\n');
+}
+
+function render(mode) {
+  if (mode !== 'sp' && mode !== 'mp') throw new Error(`bad mode: ${mode}`);
+  const title  = mode === 'sp' ? 'survivors v1a' : 'survivors v1b';
+  const bundle = mode === 'sp' ? 'bundle.js'     : 'bundle-v1b.js';
+
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -7,7 +55,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
-<title>survivors v1a</title>
+<title>${title}</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body { background: #0a0a0f; color: #ccc; font-family: 'Chakra Petch', 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; display: flex; align-items: center; justify-content: center; }
@@ -89,7 +137,7 @@ canvas { touch-action: none; }
 }
 </style>
 </head>
-<body data-mode="sp">
+<body data-mode="${mode}">
 
 <div id="joystick-zone"></div>
 <div id="touch-hint">drag anywhere to move</div>
@@ -119,46 +167,7 @@ canvas { touch-action: none; }
   <input type="text" id="name-input" maxlength="12" placeholder="your name" autocomplete="off" spellcheck="false">
   <div class="sub" style="margin-bottom:8px; color:#999;">choose your weapon</div>
   <div class="weapon-select" id="weapon-select">
-    <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
-      <div class="wc-icon">&#x1F52E;</div>
-      <div class="wc-name">Magic Spit</div>
-      <div class="wc-desc">Projectile — fires at the nearest enemy</div>
-    </div>
-    <div class="weapon-card" data-weapon="breath" onclick="selectWeapon('breath')">
-      <div class="wc-icon">&#x1F300;</div>
-      <div class="wc-name">Dragon Breath</div>
-      <div class="wc-desc">Aura — damages all nearby enemies</div>
-    </div>
-    <div class="weapon-card" data-weapon="charge" onclick="selectWeapon('charge')">
-      <div class="wc-icon">&#x1F402;</div>
-      <div class="wc-name">Bull Rush</div>
-      <div class="wc-desc">Sweep — charges in your move direction</div>
-    </div>
-    <div class="weapon-card" data-weapon="orbit" onclick="selectWeapon('orbit')">
-      <div class="wc-icon">&#x1F5E1;&#xFE0F;</div>
-      <div class="wc-name">Blade Orbit</div>
-      <div class="wc-desc">Orbiting blades damage enemies on contact</div>
-    </div>
-    <div class="weapon-card" data-weapon="chain" onclick="selectWeapon('chain')">
-      <div class="wc-icon">&#x26A1;</div>
-      <div class="wc-name">Chain Lightning</div>
-      <div class="wc-desc">Zaps nearest enemy, chains to 2 more</div>
-    </div>
-    <div class="weapon-card" data-weapon="meteor" onclick="selectWeapon('meteor')">
-      <div class="wc-icon">&#x2604;&#xFE0F;</div>
-      <div class="wc-name">Meteor</div>
-      <div class="wc-desc">Drops AoE blasts on enemy clusters</div>
-    </div>
-    <div class="weapon-card" data-weapon="shield" onclick="selectWeapon('shield')">
-      <div class="wc-icon">&#x1F6E1;&#xFE0F;</div>
-      <div class="wc-name">Barrier</div>
-      <div class="wc-desc">Knockback shield — pushes and damages nearby</div>
-    </div>
-    <div class="weapon-card" data-weapon="lightning_field" onclick="selectWeapon('lightning_field')">
-      <div class="wc-icon">&#x26A1;</div>
-      <div class="wc-name">Lightning Field</div>
-      <div class="wc-desc">Passive — zaps random nearby enemies</div>
-    </div>
+${weaponCards('weapon-select')}
   </div>
   <button onclick="startGame()">PLAY</button>
   <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
@@ -180,50 +189,25 @@ canvas { touch-action: none; }
   <div class="leaderboard sp-only" id="death-leaderboard"></div>
   <div class="sub mp-only" style="margin-bottom:12px; color:#999;">choose weapon for respawn</div>
   <div class="weapon-select mp-only" id="respawn-weapon-select">
-    <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
-      <div class="wc-icon">&#x1F52E;</div>
-      <div class="wc-name">Magic Spit</div>
-      <div class="wc-desc">Projectile — fires at the nearest enemy</div>
-    </div>
-    <div class="weapon-card" data-weapon="breath" onclick="selectWeapon('breath')">
-      <div class="wc-icon">&#x1F300;</div>
-      <div class="wc-name">Dragon Breath</div>
-      <div class="wc-desc">Aura — damages all nearby enemies</div>
-    </div>
-    <div class="weapon-card" data-weapon="charge" onclick="selectWeapon('charge')">
-      <div class="wc-icon">&#x1F402;</div>
-      <div class="wc-name">Bull Rush</div>
-      <div class="wc-desc">Sweep — charges in your move direction</div>
-    </div>
-    <div class="weapon-card" data-weapon="orbit" onclick="selectWeapon('orbit')">
-      <div class="wc-icon">&#x1F5E1;&#xFE0F;</div>
-      <div class="wc-name">Blade Orbit</div>
-      <div class="wc-desc">Orbiting blades damage enemies on contact</div>
-    </div>
-    <div class="weapon-card" data-weapon="chain" onclick="selectWeapon('chain')">
-      <div class="wc-icon">&#x26A1;</div>
-      <div class="wc-name">Chain Lightning</div>
-      <div class="wc-desc">Zaps nearest enemy, chains to 2 more</div>
-    </div>
-    <div class="weapon-card" data-weapon="meteor" onclick="selectWeapon('meteor')">
-      <div class="wc-icon">&#x2604;&#xFE0F;</div>
-      <div class="wc-name">Meteor</div>
-      <div class="wc-desc">Drops AoE blasts on enemy clusters</div>
-    </div>
-    <div class="weapon-card" data-weapon="shield" onclick="selectWeapon('shield')">
-      <div class="wc-icon">&#x1F6E1;&#xFE0F;</div>
-      <div class="wc-name">Barrier</div>
-      <div class="wc-desc">Knockback shield — pushes and damages nearby</div>
-    </div>
-    <div class="weapon-card" data-weapon="lightning_field" onclick="selectWeapon('lightning_field')">
-      <div class="wc-icon">&#x26A1;</div>
-      <div class="wc-name">Lightning Field</div>
-      <div class="wc-desc">Passive — zaps random nearby enemies</div>
-    </div>
+${weaponCards('respawn-weapon-select')}
   </div>
   <button onclick="startGame()">RETRY</button>
 </div>
 
-<script src="bundle.js"></script>
+<script src="${bundle}"></script>
 </body>
 </html>
+`;
+}
+
+function writePages() {
+  fs.writeFileSync(path.join(ROOT, 'v1a.html'),  render('sp'));
+  fs.writeFileSync(path.join(ROOT, 'v1b.html'),  render('mp'));
+  // index.html serves at survivors.sebland.com/ — stays SP.
+  fs.writeFileSync(path.join(ROOT, 'index.html'), render('sp'));
+  console.log('[render-html] wrote v1a.html, v1b.html, index.html');
+}
+
+if (require.main === module) writePages();
+
+module.exports = { render, writePages, WEAPONS };

@@ -1051,7 +1051,11 @@ window.addEventListener('load', () => {
   document.getElementById('name-input').focus();
 });
 
-// Expose handlers used by inline HTML
+// Expose handlers used by inline HTML.
+// `startGame` is the unified PLAY/RETRY entry point — joins on first
+// press, respawns after death. SP exposes its own `startGame`; both pages
+// use the same template so the inline `onclick="startGame()"` is shared.
+window.startGame = () => (renderStarted && prevMyAlive === false ? respawnGame() : joinGame());
 window.joinGame = joinGame;
 window.respawnGame = respawnGame;
 window.selectWeapon = selectWeapon;
