@@ -216,12 +216,6 @@ let prevGemCount = 0;
 // Camera
 let camera = { x: 1500, y: 1500 };
 
-// Client-side prediction for local player — eliminates diagonal jitter.
-// We apply local input each frame at PLAYER_SPEED to get an immediate
-// predicted position, then gently correct toward the server position.
-const PLAYER_SPEED = 150;   // must match shared/constants.js
-let predicted = { x: 1500, y: 1500, active: false };
-
 // Spectator: when dead, follow another player
 let spectateIdx = 0;
 
@@ -285,23 +279,6 @@ function connectWS() {
       stateTime = performance.now();
       interpAlpha = 0;
       arena = msg.arena || arena;
-
-      // Correct client-side prediction toward server position
-      const me = msg.players.find(p => p.id === myId);
-      if (me && me.alive) {
-        if (!predicted.active) {
-          predicted.x = me.x;
-          predicted.y = me.y;
-          predicted.active = true;
-        } else {
-          // Blend toward server position — fast enough to stay accurate,
-          // slow enough to avoid snapping.
-          predicted.x += (me.x - predicted.x) * 0.3;
-          predicted.y += (me.y - predicted.y) * 0.3;
-        }
-      } else {
-        predicted.active = false;
-      }
 
       // Detect changes for sound effects
       processStateChanges(msg);
@@ -503,15 +480,6 @@ function mainLoop(ts) {
     interpAlpha = Math.min(elapsed / TICK_DT, 1);
   }
 
-  // Client-side prediction: apply local input to predicted position each frame
-  if (predicted.active) {
-    let dx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0);
-    let dy = (keys.down ? 1 : 0) - (keys.up ? 1 : 0);
-    if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
-    predicted.x = Math.max(0, Math.min(arena.w, predicted.x + dx * PLAYER_SPEED * dt));
-    predicted.y = Math.max(0, Math.min(arena.h, predicted.y + dy * PLAYER_SPEED * dt));
-  }
-
   // Send input
   sendInput();
 
@@ -537,12 +505,9 @@ function render(dt) {
   const state = lerpState(prevState, currState, interpAlpha);
   const me = state.players.find(p => p.id === myId);
 
-  // Camera target: use client-predicted position for local player (smooth),
-  // fall back to interpolated server position for spectating.
+  // Camera target: follow me if alive, otherwise spectate
   let camTarget;
-  if (me && me.alive && predicted.active) {
-    camTarget = { x: predicted.x, y: predicted.y };
-  } else if (me && me.alive) {
+  if (me && me.alive) {
     camTarget = { x: me.x, y: me.y };
   } else {
     // Spectate: find an alive player
@@ -810,9 +775,6 @@ function render(dt) {
     if (!pl.alive) continue;
 
     const isMe = pl.id === myId;
-    // Use client-predicted position for local player — no 50ms lag
-    if (isMe && predicted.active) { pl.x = predicted.x; pl.y = predicted.y; }
-
     if (pl.x < cx - 60 || pl.x > cx + W + 60 || pl.y < cy - 60 || pl.y > cy + H + 60) continue;
     const playerRadius = 14;
 
