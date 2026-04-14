@@ -128,28 +128,22 @@ html, body {
 canvas {
   touch-action: none;
 }
-/* Virtual joystick */
+/* Invisible touch joystick — full screen touch zone, no visible elements */
 #joystick-zone {
   position: fixed;
-  bottom: 0;
+  top: 0;
   left: 0;
-  width: 50%;
-  height: 50%;
+  width: 100%;
+  height: 100%;
   z-index: 15;
   display: none;
 }
 #joystick-base {
-  position: absolute;
-  width: 120px;
-  height: 120px;
-  border: 2px solid rgba(255,255,255,0.15);
-  border-radius: 50%;
-  background: rgba(255,255,255,0.05);
   display: none;
   pointer-events: none;
 }
 #joystick-thumb {
-  position: absolute;
+  display: none;
   width: 50px;
   height: 50px;
   border-radius: 50%;
@@ -158,8 +152,21 @@ canvas {
   display: none;
   pointer-events: none;
 }
+#touch-hint {
+  position: fixed;
+  bottom: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.4);
+  font-size: 0.8rem;
+  pointer-events: none;
+  z-index: 16;
+  display: none;
+  transition: opacity 1s;
+}
 @media (pointer: coarse) {
   #joystick-zone { display: block; }
+  #touch-hint { display: block; }
   #level-up .choices { flex-direction: column; gap: 10px; }
   #level-up .choice { width: 260px; padding: 14px; }
 }
@@ -167,10 +174,8 @@ canvas {
 </head>
 <body>
 
-<div id="joystick-zone">
-  <div id="joystick-base"></div>
-  <div id="joystick-thumb"></div>
-</div>
+<div id="joystick-zone"></div>
+<div id="touch-hint">drag anywhere to move</div>
 
 <div id="ui">
   <div class="left">
@@ -1199,26 +1204,25 @@ document.addEventListener('keyup', e => {
   if (k) { keys[k] = false; e.preventDefault(); }
 });
 
-// --- mobile virtual joystick ---
+// --- mobile invisible touch joystick ---
 const joyZone = document.getElementById('joystick-zone');
-const joyBase = document.getElementById('joystick-base');
-const joyThumb = document.getElementById('joystick-thumb');
+const touchHint = document.getElementById('touch-hint');
 let joyTouchId = null;
 let joyOrigin = null;
-const JOY_DEAD = 15; // deadzone radius
-const JOY_MAX = 55;  // max displacement
+let hintShown = false;
+const JOY_DEAD = 15;
 
 joyZone.addEventListener('touchstart', e => {
   if (joyTouchId !== null) return;
   const t = e.changedTouches[0];
   joyTouchId = t.identifier;
   joyOrigin = { x: t.clientX, y: t.clientY };
-  joyBase.style.display = 'block';
-  joyBase.style.left = (joyOrigin.x - 60) + 'px';
-  joyBase.style.top = (joyOrigin.y - 60) + 'px';
-  joyThumb.style.display = 'block';
-  joyThumb.style.left = (joyOrigin.x - 25) + 'px';
-  joyThumb.style.top = (joyOrigin.y - 25) + 'px';
+  // fade hint on first touch
+  if (!hintShown && touchHint) {
+    hintShown = true;
+    touchHint.style.opacity = '0';
+    setTimeout(() => { touchHint.style.display = 'none'; }, 1000);
+  }
   e.preventDefault();
 }, { passive: false });
 
@@ -1228,12 +1232,8 @@ joyZone.addEventListener('touchmove', e => {
     const dx = t.clientX - joyOrigin.x;
     const dy = t.clientY - joyOrigin.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
-    const clamp = Math.min(dist, JOY_MAX);
     const nx = dist > 0 ? dx / dist : 0;
     const ny = dist > 0 ? dy / dist : 0;
-    joyThumb.style.left = (joyOrigin.x + nx * clamp - 25) + 'px';
-    joyThumb.style.top = (joyOrigin.y + ny * clamp - 25) + 'px';
-    // map to keys
     if (dist > JOY_DEAD) {
       keys.left = nx < -0.4;
       keys.right = nx > 0.4;
@@ -1251,8 +1251,6 @@ function joyEnd(e) {
     if (t.identifier !== joyTouchId) continue;
     joyTouchId = null;
     joyOrigin = null;
-    joyBase.style.display = 'none';
-    joyThumb.style.display = 'none';
     keys.left = keys.right = keys.up = keys.down = false;
   }
 }
