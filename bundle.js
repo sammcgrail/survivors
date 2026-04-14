@@ -455,6 +455,90 @@
               osc.stop(t + 0.2);
               break;
             }
+            case "hive_burst": {
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(180, t);
+              osc.frequency.linearRampToValueAtTime(90, t + 0.08);
+              osc.frequency.linearRampToValueAtTime(200, t + 0.12);
+              osc.frequency.linearRampToValueAtTime(60, t + 0.2);
+              gain.gain.setValueAtTime(0.12, t);
+              gain.gain.linearRampToValueAtTime(0.08, t + 0.08);
+              gain.gain.linearRampToValueAtTime(0, t + 0.2);
+              osc.start(t);
+              osc.stop(t + 0.2);
+              const hb2 = ac.createOscillator();
+              const hg2 = ac.createGain();
+              hb2.connect(hg2);
+              hg2.connect(ac.destination);
+              hb2.type = "square";
+              hb2.frequency.setValueAtTime(500, t + 0.02);
+              hb2.frequency.linearRampToValueAtTime(250, t + 0.1);
+              hb2.frequency.linearRampToValueAtTime(600, t + 0.15);
+              hg2.gain.setValueAtTime(0.04, t + 0.02);
+              hg2.gain.linearRampToValueAtTime(0, t + 0.18);
+              hb2.start(t + 0.02);
+              hb2.stop(t + 0.18);
+              break;
+            }
+            case "boss_telegraph": {
+              osc.type = "sawtooth";
+              osc.frequency.setValueAtTime(60, t);
+              osc.frequency.linearRampToValueAtTime(180, t + 0.25);
+              gain.gain.setValueAtTime(0.05, t);
+              gain.gain.linearRampToValueAtTime(0.18, t + 0.2);
+              gain.gain.linearRampToValueAtTime(0, t + 0.3);
+              osc.start(t);
+              osc.stop(t + 0.3);
+              const bt2 = ac.createOscillator();
+              const bg2 = ac.createGain();
+              bt2.connect(bg2);
+              bg2.connect(ac.destination);
+              bt2.type = "square";
+              bt2.frequency.setValueAtTime(300, t + 0.1);
+              bt2.frequency.linearRampToValueAtTime(600, t + 0.25);
+              bg2.gain.setValueAtTime(0.03, t + 0.1);
+              bg2.gain.linearRampToValueAtTime(0.08, t + 0.22);
+              bg2.gain.linearRampToValueAtTime(0, t + 0.3);
+              bt2.start(t + 0.1);
+              bt2.stop(t + 0.3);
+              break;
+            }
+            case "boss_step": {
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(50, t);
+              osc.frequency.linearRampToValueAtTime(30, t + 0.1);
+              gain.gain.setValueAtTime(0.1, t);
+              gain.gain.linearRampToValueAtTime(0, t + 0.12);
+              osc.start(t);
+              osc.stop(t + 0.12);
+              break;
+            }
+            case "shield_hum": {
+              osc.type = "triangle";
+              osc.frequency.setValueAtTime(220, t);
+              osc.frequency.linearRampToValueAtTime(260, t + 0.06);
+              osc.frequency.linearRampToValueAtTime(220, t + 0.12);
+              gain.gain.setValueAtTime(0.05, t);
+              gain.gain.linearRampToValueAtTime(0.08, t + 0.04);
+              gain.gain.linearRampToValueAtTime(0, t + 0.12);
+              osc.start(t);
+              osc.stop(t + 0.12);
+              break;
+            }
+            case "zap": {
+              osc.type = "sawtooth";
+              osc.frequency.setValueAtTime(2e3, t);
+              osc.frequency.linearRampToValueAtTime(600, t + 0.03);
+              osc.frequency.linearRampToValueAtTime(1800, t + 0.05);
+              osc.frequency.linearRampToValueAtTime(400, t + 0.08);
+              gain.gain.setValueAtTime(0.07, t);
+              gain.gain.linearRampToValueAtTime(0.04, t + 0.03);
+              gain.gain.linearRampToValueAtTime(0.06, t + 0.05);
+              gain.gain.linearRampToValueAtTime(0, t + 0.08);
+              osc.start(t);
+              osc.stop(t + 0.08);
+              break;
+            }
             default:
               gain.gain.setValueAtTime(0, t);
               osc.start(t);
@@ -820,17 +904,26 @@
           }
           if (w.type === "shield") {
             w.phase = (w.phase || 0) + dt * 4;
+            let shieldHit = false;
             for (let j = g.enemies.length - 1; j >= 0; j--) {
               const e = g.enemies[j];
               const edx = e.x - p.x;
               const edy = e.y - p.y;
               const dist = Math.sqrt(edx * edx + edy * edy);
               if (dist < w.radius + e.radius && dist > 1) {
+                shieldHit = true;
                 const nx = edx / dist;
                 const ny = edy / dist;
                 e.x += nx * w.knockback * dt;
                 e.y += ny * w.knockback * dt;
                 damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 2);
+              }
+            }
+            if (shieldHit) {
+              w._humTimer = (w._humTimer || 0) - dt;
+              if (w._humTimer <= 0) {
+                sfx("shield_hum");
+                w._humTimer = 0.4;
               }
             }
           }
@@ -855,7 +948,7 @@
               }
               g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
             }
-            if (targets.length > 0) sfx("chain");
+            if (targets.length > 0) sfx("zap");
           }
         }
         for (let i = g.projectiles.length - 1; i >= 0; i--) {
@@ -945,13 +1038,19 @@
                 e.x += edx / dist * e.speed * 0.5 * dt;
                 e.y += edy / dist * e.speed * 0.5 * dt;
                 e.chargeTimer -= dt;
+                if (e.stepTimer === void 0) e.stepTimer = 0.8;
+                e.stepTimer -= dt;
+                if (e.stepTimer <= 0 && dist < 500) {
+                  sfx("boss_step");
+                  e.stepTimer = 0.7 + Math.random() * 0.3;
+                }
                 if (e.chargeTimer <= 0 && dist < 400) {
                   e.chargeDx = edx / dist;
                   e.chargeDy = edy / dist;
                   e.charging = 0.8;
                   e.chargeTimer = 4 + Math.random() * 3;
                   spawnParticles(e.x, e.y, "#d63031", 12);
-                  sfx("hit");
+                  sfx("boss_telegraph");
                 }
               }
             } else {
@@ -975,7 +1074,7 @@
                 g.enemies.push(minion);
               }
               spawnParticles(e.x, e.y, "#fdcb6e", 8);
-              sfx("hit");
+              sfx("hive_burst");
             }
           }
           if (e.hitFlash > 0) e.hitFlash -= dt * 5;
