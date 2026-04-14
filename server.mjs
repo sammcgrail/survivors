@@ -15,6 +15,15 @@ import { tickSim } from './src/shared/sim/tick.js';
 import { createRng } from './src/shared/sim/rng.js';
 import { createWeapon } from './src/shared/weapons.js';
 import { POWERUPS, getAvailableChoices } from './src/shared/sim/powerups.js';
+import { MAPS } from './src/shared/maps.js';
+import { pushOutOfObstacles } from './src/shared/sim/collision.js';
+
+// Map rotation. Tomorrow this'll be a vote / lobby choice; for now the
+// server picks a random one each session reset.
+const MAP_ROTATION = ['arena', 'forest', 'ruins', 'graveyard'];
+function pickMapId(rng) {
+  return MAP_ROTATION[rng.int(MAP_ROTATION.length)];
+}
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP,
   XP_MAGNET_RANGE,
@@ -40,13 +49,13 @@ const players = new Map(); // ws -> player object
 let game = null;
 let nextId = 0;
 
-function makePlayer(pid, name, weaponType, rng) {
+function makePlayer(pid, name, weaponType, rng, spawn) {
   return {
     id: pid,
     name: (name || `player${pid}`).slice(0, 12),
     color: COLORS[pid % COLORS.length],
-    x: WORLD_W / 2 + (rng.random() - 0.5) * 400,
-    y: WORLD_H / 2 + (rng.random() - 0.5) * 400,
+    x: spawn.x + (rng.random() - 0.5) * Math.min(400, spawn.radius),
+    y: spawn.y + (rng.random() - 0.5) * Math.min(400, spawn.radius),
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
     radius: PLAYER_RADIUS,
@@ -74,6 +83,10 @@ function makePlayer(pid, name, weaponType, rng) {
 }
 
 function initGame() {
+  const rng = createRng(Date.now() & 0x7fffffff);
+  const mapId = pickMapId(rng);
+  const map = MAPS[mapId];
+  console.log(`[*] map: ${mapId} (${map.name})`);
   return {
     players: [], // populated each tick from `players` Map
     enemies: [],
@@ -96,7 +109,10 @@ function initGame() {
     kills: 0,
     playerName: 'mp', // unused in MP but referenced by waves.js deathFeed
     events: [],
-    rng: createRng(Date.now() & 0x7fffffff),
+    rng,
+    mapId,
+    arena: { w: map.width, h: map.height },
+    obstacles: map.obstacles,
   };
 }
 
@@ -111,8 +127,9 @@ function applyInputs(g, dt) {
     let dy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0);
     if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
     if (dx || dy) p.facing = { x: dx, y: dy };
-    p.x = Math.max(p.radius, Math.min(WORLD_W - p.radius, p.x + dx * p.speed * dt));
-    p.y = Math.max(p.radius, Math.min(WORLD_H - p.radius, p.y + dy * p.speed * dt));
+    p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x + dx * p.speed * dt));
+    p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y + dy * p.speed * dt));
+    if (g.obstacles.length > 0) pushOutOfObstacles(p, g.obstacles);
     if (p.hpRegen > 0) p.hp = Math.min(p.maxHp, p.hp + p.hpRegen * dt);
     if (p.iframes > 0) p.iframes -= dt;
   }
@@ -211,7 +228,8 @@ function gameSnapshot() {
     waveMsgTimer:   r2(game.waveMsgTimer),
     specialWaveMsg: game.specialWaveMsgTimer > 0 ? game.specialWaveMsg : null,
     specialWaveMsgTimer: r2(game.specialWaveMsgTimer),
-    arena: { w: WORLD_W, h: WORLD_H },
+    arena: game.arena,
+    mapId: game.mapId,
   };
 }
 
@@ -259,7 +277,7 @@ wss.on('connection', (ws) => {
       }
       const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
-      player = makePlayer(pid, name, weapon, game.rng);
+      player = makePlayer(pid, name, weapon, game.rng, MAPS[game.mapId].spawns[0]);
       players.set(ws, player);
       console.log(`[+] ${name} joined with ${weapon} (${players.size} players)`);
       ws.send(JSON.stringify({
@@ -267,7 +285,8 @@ wss.on('connection', (ws) => {
         you: pid,
         name: player.name,
         color: player.color,
-        arena: { w: WORLD_W, h: WORLD_H },
+        arena: game.arena,
+        map: { id: game.mapId, obstacles: game.obstacles },
       }));
       return;
     }
@@ -287,7 +306,7 @@ wss.on('connection', (ws) => {
       // spam respawn to reset iframes + heal to full + reroll weapon.
       if (player.alive) return;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
-      Object.assign(player, makePlayer(pid, player.name, weapon, game.rng));
+      Object.assign(player, makePlayer(pid, player.name, weapon, game.rng, MAPS[game.mapId].spawns[0]));
     } else if (msg.type === 'choose') {
       // Reply to a pending levelup. choiceId must be one of the three the
       // server offered; otherwise drop silently (catch fat-finger races).

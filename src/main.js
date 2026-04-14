@@ -12,6 +12,9 @@ import { spawnEnemy } from './shared/sim/enemies.js';
 import { POWERUPS, getAvailableChoices } from './shared/sim/powerups.js';
 import { tickSim } from './shared/sim/tick.js';
 import { escapeHTML } from './shared/htmlEscape.js';
+import { MAPS } from './shared/maps.js';
+import { pushOutOfObstacles } from './shared/sim/collision.js';
+import { loadTilePattern } from './shared/tileBackground.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -392,6 +395,7 @@ let keys = { up: false, down: false, left: false, right: false };
 let analogMove = { x: 0, y: 0 }; // smooth analog input from touch
 let paused = false;
 let selectedWeapon = 'spit'; // default starting weapon
+let selectedMapId = 'arena';   // default map (open field, no obstacles)
 
 function selectWeapon(type) {
   selectedWeapon = type;
@@ -403,6 +407,7 @@ let gameStarted = false;
 
 // --- init game ---
 function initGame() {
+  const map = MAPS[selectedMapId] || MAPS.arena;
   const p = {
     x: WORLD_W / 2,
     y: WORLD_H / 2,
@@ -461,6 +466,11 @@ function initGame() {
     // Eager-init here so sim modules don't need defensive `|| []` checks.
     chainEffects: [],
     meteorEffects: [],
+    // Map state — `arena` overrides the global WORLD dims; `obstacles`
+    // is consumed by sim/collision.js and rendered by the canvas pass.
+    arena: { w: map.width, h: map.height },
+    obstacles: map.obstacles,
+    mapId: selectedMapId,
   };
 }
 
@@ -503,8 +513,9 @@ function update(dt) {
   if (dx || dy) p.facing = { x: dx, y: dy };
   p.x += dx * p.speed * dt;
   p.y += dy * p.speed * dt;
-  p.x = Math.max(p.radius, Math.min(WORLD_W - p.radius, p.x));
-  p.y = Math.max(p.radius, Math.min(WORLD_H - p.radius, p.y));
+  p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x));
+  p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y));
+  if (g.obstacles.length > 0) pushOutOfObstacles(p, g.obstacles);
 
   // hp regen
   if (p.hpRegen > 0) {
@@ -859,23 +870,47 @@ function render() {
 
   ctx.translate(-cx, -cy);
 
-  // --- background grid ---
-  const gridSize = 60;
-  const startX = Math.floor(cx / gridSize) * gridSize;
-  const startY = Math.floor(cy / gridSize) * gridSize;
-  ctx.strokeStyle = '#12121a';
-  ctx.lineWidth = 1;
-  for (let x = startX; x < cx + W + gridSize; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x, cy + H); ctx.stroke();
-  }
-  for (let y = startY; y < cy + H + gridSize; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + W, y); ctx.stroke();
+  // --- background: tiled pattern (when map has a tileset loaded) or
+  //     fallback dark grid lines ---
+  if (g.tilePattern) {
+    ctx.fillStyle = g.tilePattern;
+    ctx.fillRect(0, 0, g.arena.w, g.arena.h);
+  } else {
+    const gridSize = 60;
+    const startX = Math.floor(cx / gridSize) * gridSize;
+    const startY = Math.floor(cy / gridSize) * gridSize;
+    ctx.strokeStyle = '#12121a';
+    ctx.lineWidth = 1;
+    for (let x = startX; x < cx + W + gridSize; x += gridSize) {
+      ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x, cy + H); ctx.stroke();
+    }
+    for (let y = startY; y < cy + H + gridSize; y += gridSize) {
+      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + W, y); ctx.stroke();
+    }
   }
 
   // --- world border ---
   ctx.strokeStyle = '#333';
   ctx.lineWidth = 3;
-  ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
+  ctx.strokeRect(0, 0, g.arena.w, g.arena.h);
+
+  // --- map obstacles ---
+  for (const obs of g.obstacles) {
+    if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
+    if (obs.type === 'wall' || obs.type === 'tomb') {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.strokeStyle = '#333';
+    } else if (obs.type === 'pillar') {
+      ctx.fillStyle = '#2a1a1e';
+      ctx.strokeStyle = '#533';
+    } else if (obs.type === 'tree') {
+      ctx.fillStyle = 'rgba(46, 100, 60, 0.5)';
+      ctx.strokeStyle = 'rgba(46, 204, 113, 0.5)';
+    }
+    ctx.lineWidth = 2;
+    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+    ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+  }
 
   // --- gems (sprites) ---
   for (const gem of g.gems) {
@@ -1513,6 +1548,9 @@ function startGame() {
   if (nameEl && nameEl.value.trim()) game.playerName = nameEl.value.trim();
   startMusic();
   track({ type: 'game_start' });
+  // Load this map's ground tileset (async — render falls back to grid
+  // until it resolves).
+  loadTilePattern(ctx, MAPS[game.mapId]?.tileset).then(p => { if (game) game.tilePattern = p; }).catch(() => {});
   if (!gameStarted) {
     gameStarted = true;
     lastTime = 0; // reset so first frame gets zero dt

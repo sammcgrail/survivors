@@ -7,6 +7,8 @@
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { escapeHTML } from './shared/htmlEscape.js';
+import { loadTilePattern } from './shared/tileBackground.js';
+import { MAPS } from './shared/maps.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -192,6 +194,9 @@ let myName = '';
 let selectedWeapon = 'spit';
 let connected = false;
 let arena = { w: 3000, h: 3000 };
+let mapId = null;
+let obstacles = [];
+let tilePattern = null;
 
 // State interpolation: store previous + current snapshots
 let prevState = null;
@@ -266,7 +271,14 @@ function connectWS() {
       myId = msg.you;
       myName = msg.name;
       arena = msg.arena || arena;
-      console.log(`[ws] welcome: id=${myId}, name=${myName}`);
+      // Server sends the map's obstacle list once on join. The list
+      // doesn't change mid-game so we don't re-broadcast it in `state`.
+      mapId = msg.map ? msg.map.id : null;
+      obstacles = msg.map ? msg.map.obstacles : [];
+      console.log(`[ws] welcome: id=${myId}, name=${myName}, map=${mapId}`);
+      // Load this map's ground tileset (async — falls back to grid).
+      const tileset = MAPS[mapId]?.tileset;
+      loadTilePattern(ctx, tileset).then(p => { tilePattern = p; }).catch(() => {});
       return;
     }
 
@@ -581,23 +593,47 @@ function render(dt) {
   // Snap to integer pixels — sub-pixel translation causes shimmer on retina.
   ctx.translate(-Math.round(cx), -Math.round(cy));
 
-  // --- background grid ---
-  const gridSize = 60;
-  const startX = Math.floor(cx / gridSize) * gridSize;
-  const startY = Math.floor(cy / gridSize) * gridSize;
-  ctx.strokeStyle = '#12121a';
-  ctx.lineWidth = 1;
-  for (let x = startX; x < cx + W + gridSize; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x, cy + H); ctx.stroke();
-  }
-  for (let y = startY; y < cy + H + gridSize; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + W, y); ctx.stroke();
+  // --- background: tiled pattern (when map has a tileset loaded) or
+  //     fallback dark grid lines ---
+  if (tilePattern) {
+    ctx.fillStyle = tilePattern;
+    ctx.fillRect(0, 0, arena.w, arena.h);
+  } else {
+    const gridSize = 60;
+    const startX = Math.floor(cx / gridSize) * gridSize;
+    const startY = Math.floor(cy / gridSize) * gridSize;
+    ctx.strokeStyle = '#12121a';
+    ctx.lineWidth = 1;
+    for (let x = startX; x < cx + W + gridSize; x += gridSize) {
+      ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x, cy + H); ctx.stroke();
+    }
+    for (let y = startY; y < cy + H + gridSize; y += gridSize) {
+      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + W, y); ctx.stroke();
+    }
   }
 
   // --- world border ---
   ctx.strokeStyle = '#333';
   ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, arena.w, arena.h);
+
+  // --- map obstacles ---
+  for (const obs of obstacles) {
+    if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
+    if (obs.type === 'wall' || obs.type === 'tomb') {
+      ctx.fillStyle = '#1a1a2e';
+      ctx.strokeStyle = '#333';
+    } else if (obs.type === 'pillar') {
+      ctx.fillStyle = '#2a1a1e';
+      ctx.strokeStyle = '#533';
+    } else if (obs.type === 'tree') {
+      ctx.fillStyle = 'rgba(46, 100, 60, 0.5)';
+      ctx.strokeStyle = 'rgba(46, 204, 113, 0.5)';
+    }
+    ctx.lineWidth = 2;
+    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+    ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+  }
 
   // --- gems ---
   for (const gem of state.gems) {
