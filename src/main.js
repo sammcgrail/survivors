@@ -1,6 +1,6 @@
 // ============================================================
 // SURVIVORS v1a — single-player client entry point
-// Bundled by scripts/build.js → bundle.js (loaded by v1a.html)
+// Bundled by scripts/build.cjs → bundle.js (loaded by v1a.html)
 // ============================================================
 
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
@@ -8,14 +8,10 @@ import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_RADIUS
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from './shared/enemyTypes.js';
 import { createRng } from './shared/sim/rng.js';
-import { EVT, emit } from './shared/sim/events.js';
-import { spawnGem, updateGems } from './shared/sim/gems.js';
-import { damageEnemy, spawnHeart } from './shared/sim/damage.js';
-import { updateProjectiles } from './shared/sim/projectiles.js';
-import { spawnEnemy, updateEnemies } from './shared/sim/enemies.js';
-import { updateWaves } from './shared/sim/waves.js';
-import { updateWeapons, updateAuras, updateChainEffects, updateMeteorEffects } from './shared/sim/weapons_runtime.js';
+import { EVT } from './shared/sim/events.js';
+import { spawnEnemy } from './shared/sim/enemies.js';
 import { POWERUPS, resetPowerupStacks } from './shared/sim/powerups.js';
+import { tickSim } from './shared/sim/tick.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -468,14 +464,6 @@ function initGame() {
   };
 }
 
-// --- spawn enemy ---
-// spawnEnemy now imported from shared/sim/enemies.js
-
-// --- spawn gem ---
-// spawnGem now imported from shared/sim/gems.js — call as spawnGem(g, x, y, xp)
-
-// spawnHeart now imported from shared/sim/damage.js — call as spawnHeart(g, x, y, heal)
-
 // --- spawn particles ---
 function spawnParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
@@ -502,9 +490,6 @@ function update(dt) {
   g.time += dt;
   g.waveTimer += dt;
 
-  // --- wave progression + spawn bursts (sim logic in shared/sim/waves.js)
-  updateWaves(g, dt);
-
   // player movement — analog touch input takes priority over digital keys
   let dx, dy;
   if (analogMove.x !== 0 || analogMove.y !== 0) {
@@ -529,11 +514,10 @@ function update(dt) {
   // iframes countdown
   if (p.iframes > 0) p.iframes -= dt;
 
-  updateWeapons(g, dt);
-  updateProjectiles(g, dt);
-  updateAuras(g, dt);
-  updateEnemies(g, dt);
-  updateGems(g, dt);
+  // --- authoritative sim tick (waves → weapons → projectiles → auras
+  //     → enemies → gems → chain/meteor effect lifetimes). Order is
+  //     load-bearing; see src/shared/sim/tick.js for rationale.
+  tickSim(g, dt);
 
   // --- pick up hearts ---
   for (let i = g.heartDrops.length - 1; i >= 0; i--) {
@@ -581,9 +565,6 @@ function update(dt) {
     ft.life -= dt;
     if (ft.life <= 0) g.floatingTexts.splice(i, 1);
   }
-
-  updateChainEffects(g, dt);
-  updateMeteorEffects(g, dt);
 
   // --- camera ---
   // Frame-rate independent exponential smoothing: ~7 units/sec decay rate
