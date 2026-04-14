@@ -28,8 +28,8 @@ export const POWERUPS = [
   { id: 'meteor_up', name: 'Meteor+', desc: '+40% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.4;w.damage*=1.4;} } },
   { id: 'shield_up', name: 'Barrier+', desc: '+25% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.25;w.knockback*=1.25;} } },
   { id: 'lightning_field_up', name: 'Field+', desc: '+1 zap target & +20% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount++;w.radius*=1.2;} } },
-  // EVOLUTION: max spit_up + max breath_up = Dragon Storm. The unlock
-  // gate lives in `evolutionUnlocked()` since it depends on stacks.
+  // EVOLUTION: fuses spit + breath into dragon_storm once both _up
+  // powerups are maxed. `requiresEvo` is filtered by getAvailableChoices.
   { id: 'evo_dragon_storm', name: 'DRAGON STORM', desc: 'Spit + Breath fuse into homing fireballs + damage aura', icon: '🐉',
     max: 1, requiresEvo: ['spit_up', 'breath_up'],
     apply(g, p) {
@@ -39,12 +39,6 @@ export const POWERUPS = [
     }
   },
 ];
-
-const POWERUPS_BY_ID = Object.fromEntries(POWERUPS.map(p => [p.id, p]));
-
-export function getPowerup(id) {
-  return POWERUPS_BY_ID[id];
-}
 
 // Filter the catalog to entries the player can pick right now, given
 // their per-player stack map. Caller does the random pick.

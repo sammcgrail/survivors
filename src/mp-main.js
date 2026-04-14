@@ -6,6 +6,7 @@
 
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WEAPON_ICONS } from './shared/weapons.js';
+import { escapeHTML } from './shared/htmlEscape.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -289,10 +290,8 @@ function connectWS() {
 }
 
 // Show the level-up overlay with the three server-supplied choices.
-// Click or press 1/2/3 to send a `choose` reply. After 10s without a
-// reply we auto-pick the first option (matches server's pendingChoice
-// timeout — server doesn't actually time out today, but it's friendly
-// to not leave the player staring at a stuck overlay if they're afk).
+// Click or press 1/2/3 to send a `choose` reply. Auto-pick choice 1
+// after 10s so an AFK player doesn't softlock their own overlay.
 let levelUpTimeout = null;
 function showLevelUpChoices(choices) {
   sfx('levelup');
@@ -301,15 +300,14 @@ function showLevelUpChoices(choices) {
   container.innerHTML = '';
   overlay.style.display = 'flex';
 
-  const escape = (s) => String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
   window._levelChoices = [];
   for (let i = 0; i < choices.length; i++) {
     const c = choices[i];
     const div = document.createElement('div');
     div.className = 'choice';
     div.innerHTML = `
-      <div class="name"><span style="color:#555;font-size:0.6rem">[${i+1}]</span> ${escape(c.icon)} ${escape(c.name)}</div>
-      <div class="desc">${escape(c.desc)}</div>
+      <div class="name"><span style="color:#555;font-size:0.6rem">[${i+1}]</span> ${escapeHTML(c.icon)} ${escapeHTML(c.name)}</div>
+      <div class="desc">${escapeHTML(c.desc)}</div>
     `;
     const pick = () => {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;

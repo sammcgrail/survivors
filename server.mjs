@@ -14,7 +14,7 @@ import { WebSocketServer } from 'ws';
 import { tickSim } from './src/shared/sim/tick.js';
 import { createRng } from './src/shared/sim/rng.js';
 import { createWeapon } from './src/shared/weapons.js';
-import { getAvailableChoices, getPowerup } from './src/shared/sim/powerups.js';
+import { POWERUPS, getAvailableChoices } from './src/shared/sim/powerups.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP,
   XP_MAGNET_RANGE,
@@ -153,16 +153,14 @@ function sendLevelUp(pid) {
   const choices = available.slice(0, 3);
   if (choices.length === 0) return; // every powerup maxed; skip
   player.pendingChoice = choices.map(c => c.id);
-  for (const [ws, p] of players) {
-    if (p.id !== pid) continue;
-    try {
-      ws.send(JSON.stringify({
-        type: 'levelup',
-        choices: choices.map(c => ({ id: c.id, name: c.name, desc: c.desc, icon: c.icon })),
-      }));
-    } catch { /* dead socket — close handler cleans up */ }
-    return;
-  }
+  const entry = [...players].find(([, p]) => p.id === pid);
+  if (!entry) return;
+  try {
+    entry[0].send(JSON.stringify({
+      type: 'levelup',
+      choices: choices.map(c => ({ id: c.id, name: c.name, desc: c.desc, icon: c.icon })),
+    }));
+  } catch { /* dead socket — close handler cleans up */ }
 }
 
 function r1(n) { return Math.round(n * 10) / 10; }
@@ -294,7 +292,7 @@ wss.on('connection', (ws) => {
       // Reply to a pending levelup. choiceId must be one of the three the
       // server offered; otherwise drop silently (catch fat-finger races).
       if (!player.pendingChoice || !player.pendingChoice.includes(msg.choiceId)) return;
-      const choice = getPowerup(msg.choiceId);
+      const choice = POWERUPS.find(p => p.id === msg.choiceId);
       if (!choice) return;
       player.powerupStacks[choice.id] = (player.powerupStacks[choice.id] || 0) + 1;
       choice.apply(game, player);

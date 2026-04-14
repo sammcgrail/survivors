@@ -11,6 +11,7 @@ import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
 import { POWERUPS, getAvailableChoices } from './shared/sim/powerups.js';
 import { tickSim } from './shared/sim/tick.js';
+import { escapeHTML } from './shared/htmlEscape.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -667,11 +668,8 @@ function showLevelUp(g) {
   sfx('levelup');
   paused = true;
   const stacks = g.player.powerupStacks;
-  const available = getAvailableChoices(stacks);
-
-  // pick 3 random
-  const shuffled = available.sort(() => Math.random() - 0.5);
-  const choices = shuffled.slice(0, 3);
+  // pick 3 random valid options
+  const choices = getAvailableChoices(stacks).sort(() => Math.random() - 0.5).slice(0, 3);
 
   const container = document.getElementById('level-choices');
   container.innerHTML = '';
@@ -810,18 +808,15 @@ function showDeathScreen(g) {
           <span class="lb-rank">#</span><span class="lb-name">name</span>
           <span class="lb-wave">wave</span><span class="lb-kills">kills</span><span class="lb-time">time</span>
         </div>`;
-      // Escape names — they come from arbitrary players via the leaderboard
-      // backend. Without this, a name like <img onerror=alert(1)> would XSS.
-      const esc = (s) => String(s).replace(/[&<>"']/g, c => (
-        { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-      ));
+      // Names come from arbitrary players via the leaderboard backend —
+      // escape before innerHTML or `<img onerror=alert(1)>` would XSS.
       const rows = entries.map((e, i) => {
         const m = Math.floor(e.time / 60);
         const s = Math.floor(e.time % 60);
         const isYou = e.name === playerName && e.wave === g.wave && e.kills === g.kills;
         return `<div class="lb-row${isYou ? ' lb-you' : ''}">
           <span class="lb-rank">${i + 1}</span>
-          <span class="lb-name">${esc(e.name)}</span>
+          <span class="lb-name">${escapeHTML(e.name)}</span>
           <span class="lb-wave">W${e.wave | 0}</span>
           <span class="lb-kills">${e.kills | 0}k</span>
           <span class="lb-time">${m | 0}:${(s | 0).toString().padStart(2, '0')}</span>
