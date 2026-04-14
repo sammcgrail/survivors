@@ -868,7 +868,9 @@ function render() {
   ctx.fillStyle = '#0a0a0f';
   ctx.fillRect(0, 0, W, H);
 
-  // camera transform — snap to integer pixels to prevent sub-pixel shimmer on mobile
+  // camera transform — floor (not round) to integer pixels. Math.round
+  // causes diagonal jitter because x and y independently flip between
+  // rounding up/down on different frames. Floor is monotonic.
   let cx = g.camera.x - W / 2;
   let cy = g.camera.y - H / 2;
 
@@ -878,8 +880,8 @@ function render() {
     cy += (Math.random() - 0.5) * 8;
   }
 
-  cx = Math.round(cx);
-  cy = Math.round(cy);
+  cx = Math.floor(cx);
+  cy = Math.floor(cy);
 
   ctx.translate(-cx, -cy);
 
