@@ -906,6 +906,129 @@
     }
   });
 
+  // src/shared/sim/powerups.js
+  function resetPowerupStacks() {
+    POWERUPS.forEach((p) => p.stack = 0);
+  }
+  var POWERUPS;
+  var init_powerups = __esm({
+    "src/shared/sim/powerups.js"() {
+      init_weapons();
+      init_events();
+      POWERUPS = [
+        { id: "speed", name: "Swift Feet", desc: "Move 15% faster", icon: "\u26A1", stack: 0, max: 5, apply(g) {
+          g.player.speed *= 1.15;
+        } },
+        { id: "damage", name: "Raw Power", desc: "+25% damage to all weapons", icon: "\u{1F4A5}", stack: 0, max: 5, apply(g) {
+          g.player.damageMulti *= 1.25;
+        } },
+        { id: "hp_regen", name: "Regeneration", desc: "Heal 2 HP/sec", icon: "\u{1F49A}", stack: 0, max: 3, apply(g) {
+          g.player.hpRegen += 2;
+        } },
+        { id: "attack_speed", name: "Haste", desc: "+20% attack speed", icon: "\u{1F525}", stack: 0, max: 5, apply(g) {
+          g.player.attackSpeedMulti *= 1.2;
+        } },
+        { id: "magnet", name: "Magnet", desc: "+50% XP pickup range", icon: "\u{1F9F2}", stack: 0, max: 3, apply(g) {
+          g.player.magnetRange *= 1.5;
+        } },
+        { id: "max_hp", name: "Vitality", desc: "+25 max HP, heal to full", icon: "\u2764\uFE0F", stack: 0, max: 3, apply(g) {
+          g.player.maxHp += 25;
+          g.player.hp = g.player.maxHp;
+        } },
+        { id: "weapon_spit", name: "Magic Spit", desc: "Projectile weapon \u2014 fires at nearest enemy", icon: "\u{1F52E}", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("spit"));
+        } },
+        { id: "weapon_breath", name: "Dragon Breath", desc: "Aura weapon \u2014 damages nearby enemies", icon: "\u{1F300}", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("breath"));
+        } },
+        { id: "weapon_charge", name: "Bull Rush", desc: "Sweep weapon \u2014 charges in move direction", icon: "\u{1F402}", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("charge"));
+        } },
+        { id: "weapon_orbit", name: "Blade Orbit", desc: "Orbiting blades damage enemies on contact", icon: "\u{1F5E1}\uFE0F", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("orbit"));
+        } },
+        { id: "weapon_chain", name: "Chain Lightning", desc: "Zaps nearest enemy, chains to 2 more", icon: "\u26A1", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("chain"));
+        } },
+        { id: "weapon_meteor", name: "Meteor", desc: "Drops AoE on enemy clusters", icon: "\u2604\uFE0F", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("meteor"));
+        } },
+        { id: "weapon_shield", name: "Barrier", desc: "Knockback shield \u2014 pushes and damages nearby enemies", icon: "\u{1F6E1}\uFE0F", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("shield"));
+        } },
+        { id: "weapon_lightning_field", name: "Lightning Field", desc: "Passive zaps random nearby enemies", icon: "\u26A1", stack: 0, max: 1, apply(g) {
+          g.player.weapons.push(createWeapon("lightning_field"));
+        } },
+        { id: "spit_up", name: "Spit+", desc: "Extra projectile + pierce", icon: "\u{1F52E}+", stack: 0, max: 3, requires: "weapon_spit", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "spit");
+          if (w) {
+            w.count++;
+            w.pierce++;
+          }
+        } },
+        { id: "breath_up", name: "Breath+", desc: "+30% aura radius", icon: "\u{1F300}+", stack: 0, max: 3, requires: "weapon_breath", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "breath");
+          if (w) w.radius *= 1.3;
+        } },
+        { id: "charge_up", name: "Rush+", desc: "+40% charge damage & width", icon: "\u{1F402}+", stack: 0, max: 3, requires: "weapon_charge", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "charge");
+          if (w) {
+            w.damage *= 1.4;
+            w.width *= 1.4;
+          }
+        } },
+        { id: "orbit_up", name: "Orbit+", desc: "+1 orbiting blade", icon: "\u{1F5E1}\uFE0F+", stack: 0, max: 3, requires: "weapon_orbit", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "orbit");
+          if (w) w.bladeCount++;
+        } },
+        { id: "chain_up", name: "Chain+", desc: "+1 chain target", icon: "\u26A1+", stack: 0, max: 3, requires: "weapon_chain", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "chain");
+          if (w) w.chains++;
+        } },
+        { id: "meteor_up", name: "Meteor+", desc: "+40% blast radius & damage", icon: "\u2604\uFE0F+", stack: 0, max: 3, requires: "weapon_meteor", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "meteor");
+          if (w) {
+            w.blastRadius *= 1.4;
+            w.damage *= 1.4;
+          }
+        } },
+        { id: "shield_up", name: "Barrier+", desc: "+25% radius & knockback", icon: "\u{1F6E1}\uFE0F+", stack: 0, max: 3, requires: "weapon_shield", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "shield");
+          if (w) {
+            w.radius *= 1.25;
+            w.knockback *= 1.25;
+          }
+        } },
+        { id: "lightning_field_up", name: "Field+", desc: "+1 zap target & +20% radius", icon: "\u26A1+", stack: 0, max: 3, requires: "weapon_lightning_field", apply(g) {
+          let w = g.player.weapons.find((w2) => w2.type === "lightning_field");
+          if (w) {
+            w.zapCount++;
+            w.radius *= 1.2;
+          }
+        } },
+        // EVOLUTION: max spit (4 stacks) + max breath (4 stacks) = Dragon Storm
+        {
+          id: "evo_dragon_storm",
+          name: "DRAGON STORM",
+          desc: "Spit + Breath fuse into homing fireballs + damage aura",
+          icon: "\u{1F409}",
+          stack: 0,
+          max: 1,
+          get hidden() {
+            const spit = POWERUPS.find((p) => p.id === "spit_up");
+            const breath = POWERUPS.find((p) => p.id === "breath_up");
+            return !(spit && spit.stack >= 3 && breath && breath.stack >= 3);
+          },
+          apply(g) {
+            g.player.weapons = g.player.weapons.filter((w) => w.type !== "spit" && w.type !== "breath");
+            g.player.weapons.push(createWeapon("dragon_storm"));
+            emit(g, EVT.EVOLUTION, { x: g.player.x, y: g.player.y, name: "dragon_storm" });
+          }
+        }
+      ];
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
@@ -921,6 +1044,7 @@
       init_enemies();
       init_waves();
       init_weapons_runtime();
+      init_powerups();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -1303,120 +1427,8 @@
         });
       }
       var gameStarted = false;
-      var POWERUPS = [
-        { id: "speed", name: "Swift Feet", desc: "Move 15% faster", icon: "\u26A1", stack: 0, max: 5, apply(g) {
-          g.player.speed *= 1.15;
-        } },
-        { id: "damage", name: "Raw Power", desc: "+25% damage to all weapons", icon: "\u{1F4A5}", stack: 0, max: 5, apply(g) {
-          g.player.damageMulti *= 1.25;
-        } },
-        { id: "hp_regen", name: "Regeneration", desc: "Heal 2 HP/sec", icon: "\u{1F49A}", stack: 0, max: 3, apply(g) {
-          g.player.hpRegen += 2;
-        } },
-        { id: "attack_speed", name: "Haste", desc: "+20% attack speed", icon: "\u{1F525}", stack: 0, max: 5, apply(g) {
-          g.player.attackSpeedMulti *= 1.2;
-        } },
-        { id: "magnet", name: "Magnet", desc: "+50% XP pickup range", icon: "\u{1F9F2}", stack: 0, max: 3, apply(g) {
-          g.player.magnetRange *= 1.5;
-        } },
-        { id: "max_hp", name: "Vitality", desc: "+25 max HP, heal to full", icon: "\u2764\uFE0F", stack: 0, max: 3, apply(g) {
-          g.player.maxHp += 25;
-          g.player.hp = g.player.maxHp;
-        } },
-        { id: "weapon_spit", name: "Magic Spit", desc: "Projectile weapon \u2014 fires at nearest enemy", icon: "\u{1F52E}", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("spit"));
-        } },
-        { id: "weapon_breath", name: "Dragon Breath", desc: "Aura weapon \u2014 damages nearby enemies", icon: "\u{1F300}", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("breath"));
-        } },
-        { id: "weapon_charge", name: "Bull Rush", desc: "Sweep weapon \u2014 charges in move direction", icon: "\u{1F402}", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("charge"));
-        } },
-        { id: "weapon_orbit", name: "Blade Orbit", desc: "Orbiting blades damage enemies on contact", icon: "\u{1F5E1}\uFE0F", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("orbit"));
-        } },
-        { id: "weapon_chain", name: "Chain Lightning", desc: "Zaps nearest enemy, chains to 2 more", icon: "\u26A1", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("chain"));
-        } },
-        { id: "weapon_meteor", name: "Meteor", desc: "Drops AoE on enemy clusters", icon: "\u2604\uFE0F", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("meteor"));
-        } },
-        { id: "weapon_shield", name: "Barrier", desc: "Knockback shield \u2014 pushes and damages nearby enemies", icon: "\u{1F6E1}\uFE0F", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("shield"));
-        } },
-        { id: "weapon_lightning_field", name: "Lightning Field", desc: "Passive zaps random nearby enemies", icon: "\u26A1", stack: 0, max: 1, apply(g) {
-          g.player.weapons.push(createWeapon("lightning_field"));
-        } },
-        { id: "spit_up", name: "Spit+", desc: "Extra projectile + pierce", icon: "\u{1F52E}+", stack: 0, max: 3, requires: "weapon_spit", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "spit");
-          if (w) {
-            w.count++;
-            w.pierce++;
-          }
-        } },
-        { id: "breath_up", name: "Breath+", desc: "+30% aura radius", icon: "\u{1F300}+", stack: 0, max: 3, requires: "weapon_breath", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "breath");
-          if (w) w.radius *= 1.3;
-        } },
-        { id: "charge_up", name: "Rush+", desc: "+40% charge damage & width", icon: "\u{1F402}+", stack: 0, max: 3, requires: "weapon_charge", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "charge");
-          if (w) {
-            w.damage *= 1.4;
-            w.width *= 1.4;
-          }
-        } },
-        { id: "orbit_up", name: "Orbit+", desc: "+1 orbiting blade", icon: "\u{1F5E1}\uFE0F+", stack: 0, max: 3, requires: "weapon_orbit", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "orbit");
-          if (w) w.bladeCount++;
-        } },
-        { id: "chain_up", name: "Chain+", desc: "+1 chain target", icon: "\u26A1+", stack: 0, max: 3, requires: "weapon_chain", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "chain");
-          if (w) w.chains++;
-        } },
-        { id: "meteor_up", name: "Meteor+", desc: "+40% blast radius & damage", icon: "\u2604\uFE0F+", stack: 0, max: 3, requires: "weapon_meteor", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "meteor");
-          if (w) {
-            w.blastRadius *= 1.4;
-            w.damage *= 1.4;
-          }
-        } },
-        { id: "shield_up", name: "Barrier+", desc: "+25% radius & knockback", icon: "\u{1F6E1}\uFE0F+", stack: 0, max: 3, requires: "weapon_shield", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "shield");
-          if (w) {
-            w.radius *= 1.25;
-            w.knockback *= 1.25;
-          }
-        } },
-        { id: "lightning_field_up", name: "Field+", desc: "+1 zap target & +20% radius", icon: "\u26A1+", stack: 0, max: 3, requires: "weapon_lightning_field", apply(g) {
-          let w = g.player.weapons.find((w2) => w2.type === "lightning_field");
-          if (w) {
-            w.zapCount++;
-            w.radius *= 1.2;
-          }
-        } },
-        // EVOLUTION: max spit (4 stacks) + max breath (4 stacks) = Dragon Storm
-        {
-          id: "evo_dragon_storm",
-          name: "DRAGON STORM",
-          desc: "Spit + Breath fuse into homing fireballs + damage aura",
-          icon: "\u{1F409}",
-          stack: 0,
-          max: 1,
-          get hidden() {
-            const spit = POWERUPS.find((p) => p.id === "spit_up");
-            const breath = POWERUPS.find((p) => p.id === "breath_up");
-            return !(spit && spit.stack >= 3 && breath && breath.stack >= 3);
-          },
-          apply(g) {
-            g.player.weapons = g.player.weapons.filter((w) => w.type !== "spit" && w.type !== "breath");
-            g.player.weapons.push(createWeapon("dragon_storm"));
-            g.screenShake = 0.5;
-            spawnParticles(g.player.x, g.player.y, "#f39c12", 20);
-          }
-        }
-      ];
       function initGame() {
-        POWERUPS.forEach((p2) => p2.stack = 0);
+        resetPowerupStacks();
         const p = {
           x: WORLD_W / 2,
           y: WORLD_H / 2,
@@ -1674,6 +1686,10 @@
             g.screenShake = 0.1;
             sfx("meteor");
             spawnParticles(evt.x, evt.y, evt.color, 12);
+            break;
+          case EVT.EVOLUTION:
+            g.screenShake = 0.5;
+            spawnParticles(evt.x, evt.y, "#f39c12", 20);
             break;
         }
       }
