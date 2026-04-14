@@ -224,6 +224,12 @@ canvas {
 <div id="start-screen">
   <h1>SURVIVORS</h1>
   <div class="sub">vampire survivors battle royale — v1a single player</div>
+  <div style="margin-bottom:12px;">
+    <input id="name-input" type="text" maxlength="12" placeholder="your name" value=""
+      style="background:#181825; border:2px solid #333; color:#eee; padding:6px 14px; font-family:inherit;
+      font-size:0.9rem; border-radius:4px; text-align:center; outline:none; width:180px;"
+      onfocus="this.style.borderColor='#e74c3c'" onblur="this.style.borderColor='#333'">
+  </div>
   <div class="sub" style="margin-bottom:8px; color:#999;">choose your weapon</div>
   <div class="weapon-select" id="weapon-select">
     <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
@@ -1776,6 +1782,7 @@ document.addEventListener('keydown', e => {
       return;
     }
   }
+  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
   const k = KEY_MAP[e.key.toLowerCase()];
   if (k) { keys[k] = true; e.preventDefault(); }
 });
@@ -1879,6 +1886,8 @@ function startGame() {
   document.getElementById('level-up').style.display = 'none';
   paused = false;
   game = initGame();
+  const nameEl = document.getElementById('name-input');
+  if (nameEl && nameEl.value.trim()) game.playerName = nameEl.value.trim();
   startMusic();
   if (!gameStarted) {
     gameStarted = true;
