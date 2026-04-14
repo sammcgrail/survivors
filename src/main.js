@@ -14,6 +14,7 @@ import { damageEnemy, spawnHeart } from './shared/sim/damage.js';
 import { updateProjectiles } from './shared/sim/projectiles.js';
 import { spawnEnemy, updateEnemies } from './shared/sim/enemies.js';
 import { updateWaves } from './shared/sim/waves.js';
+import { updateWeapons, updateAuras, updateChainEffects, updateMeteorEffects } from './shared/sim/weapons_runtime.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -502,6 +503,10 @@ function initGame() {
     // queue. See src/shared/sim/events.js for the EVT enum.
     events: [],
     rng: createRng(Date.now() & 0x7fffffff),
+    // Visual effect arrays — chain bolts and meteor warn/explode rings.
+    // Eager-init here so sim modules don't need defensive `|| []` checks.
+    chainEffects: [],
+    meteorEffects: [],
   };
 }
 
@@ -566,140 +571,10 @@ function update(dt) {
   // iframes countdown
   if (p.iframes > 0) p.iframes -= dt;
 
-  // --- weapons ---
-  for (const w of p.weapons) {
-    w.timer -= dt * p.attackSpeedMulti;
-    if (w.timer <= 0) {
-      w.timer = w.cooldown;
-      fireWeapon(g, w);
-    }
-    // special: breath pulse phase
-    if (w.type === 'breath') w.pulsePhase = (w.pulsePhase || 0) + dt * 3;
-    // special: dragon storm aura pulse
-    if (w.type === 'dragon_storm') w.pulsePhase = (w.pulsePhase || 0) + dt * 4;
-    // special: charge active timer
-    if (w.type === 'charge' && w.active) {
-      w.chargeTimer -= dt;
-      if (w.chargeTimer <= 0) {
-        w.active = false;
-      }
-    }
-    // special: orbit blade rotation (always active, no cooldown)
-    if (w.type === 'orbit') {
-      w.phase = (w.phase || 0) + w.rotSpeed * dt;
-      // damage enemies touching blades
-      for (let b = 0; b < w.bladeCount; b++) {
-        const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
-        const bx = p.x + Math.cos(angle) * w.radius;
-        const by = p.y + Math.sin(angle) * w.radius;
-        for (let j = g.enemies.length - 1; j >= 0; j--) {
-          const e = g.enemies[j];
-          const dx = bx - e.x;
-          const dy = by - e.y;
-          if (dx * dx + dy * dy < (10 + e.radius) ** 2) {
-            damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 8);
-          }
-        }
-      }
-    }
-    // special: shield knockback + damage aura (always active)
-    if (w.type === 'shield') {
-      w.phase = (w.phase || 0) + dt * 4;
-      let shieldHit = false;
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        const e = g.enemies[j];
-        const edx = e.x - p.x;
-        const edy = e.y - p.y;
-        const dist = Math.sqrt(edx * edx + edy * edy);
-        if (dist < w.radius + e.radius && dist > 1) {
-          shieldHit = true;
-          // knockback
-          const nx = edx / dist;
-          const ny = edy / dist;
-          e.x += nx * w.knockback * dt;
-          e.y += ny * w.knockback * dt;
-          // damage on contact
-          damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 2);
-        }
-      }
-      // hum sfx throttled to once per 0.4s when actively pushing
-      if (shieldHit) {
-        w._humTimer = (w._humTimer || 0) - dt;
-        if (w._humTimer <= 0) {
-          sfx('shield_hum');
-          w._humTimer = 0.4;
-        }
-      }
-    }
-    // special: lightning field — zaps N random enemies in range on each fire
-    if (w.type === 'lightning_field' && w.timer >= w.cooldown - 0.01) {
-      // just fired (timer was reset) — zap targets
-      const inRange = [];
-      for (const e of g.enemies) {
-        const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
-        if (d2 < w.radius * w.radius) inRange.push(e);
-      }
-      // shuffle and pick zapCount targets
-      for (let z = inRange.length - 1; z > 0; z--) {
-        const r = Math.floor(Math.random() * (z + 1));
-        [inRange[z], inRange[r]] = [inRange[r], inRange[z]];
-      }
-      const targets = inRange.slice(0, w.zapCount);
-      g.chainEffects = g.chainEffects || [];
-      for (const t of targets) {
-        for (let j = g.enemies.length - 1; j >= 0; j--) {
-          if (g.enemies[j] === t) {
-            damageEnemy(g, g.enemies[j], j, w.damage * p.damageMulti);
-            break;
-          }
-        }
-        g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
-      }
-      if (targets.length > 0) sfx('zap');
-    }
-  }
-
-  // --- update projectiles --- (sim logic in shared/sim/projectiles.js)
+  updateWeapons(g, dt);
   updateProjectiles(g, dt);
-
-  // --- breath aura damage ---
-  for (const w of p.weapons) {
-    if (w.type === 'breath') {
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        const e = g.enemies[j];
-        const edx = p.x - e.x;
-        const edy = p.y - e.y;
-        const dist = Math.sqrt(edx * edx + edy * edy);
-        if (dist < w.radius + e.radius) {
-          damageEnemy(g, e, j, w.damage * p.damageMulti * dt);
-        }
-      }
-    }
-  }
-
-  // --- charge sweep damage (rectangle along charge vector) ---
-  for (const w of p.weapons) {
-    if (w.type === 'charge' && w.active) {
-      const cdx = w.chargeDx;
-      const cdy = w.chargeDy;
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        const e = g.enemies[j];
-        const ex = e.x - p.x;
-        const ey = e.y - p.y;
-        // project onto charge direction (forward) and perpendicular (lateral)
-        const forward = ex * cdx + ey * cdy;
-        const lateral = Math.abs(ex * (-cdy) + ey * cdx);
-        if (forward > -w.width && forward < w.speed * w.duration && lateral < w.width + e.radius) {
-          damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 3);
-        }
-      }
-    }
-  }
-
-  // --- update enemies + repulsion (sim logic in shared/sim/enemies.js)
+  updateAuras(g, dt);
   updateEnemies(g, dt);
-
-  // --- pick up gems --- (sim logic in shared/sim/gems.js, side effects via events)
   updateGems(g, dt);
 
   // --- pick up hearts ---
@@ -749,51 +624,8 @@ function update(dt) {
     if (ft.life <= 0) g.floatingTexts.splice(i, 1);
   }
 
-  // --- update chain effects ---
-  g.chainEffects = g.chainEffects || [];
-  for (let i = g.chainEffects.length - 1; i >= 0; i--) {
-    g.chainEffects[i].life -= dt;
-    if (g.chainEffects[i].life <= 0) g.chainEffects.splice(i, 1);
-  }
-
-  // --- update meteor effects ---
-  g.meteorEffects = g.meteorEffects || [];
-  for (let i = g.meteorEffects.length - 1; i >= 0; i--) {
-    const m = g.meteorEffects[i];
-    m.life -= dt;
-    if (m.phase === 'warn' && m.life <= 0) {
-      // explode — damage enemies in radius
-      m.phase = 'explode';
-      m.life = 0.3;
-      g.screenShake = 0.1;
-      sfx('meteor');
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        const e = g.enemies[j];
-        const dx = m.x - e.x;
-        const dy = m.y - e.y;
-        if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
-          damageEnemy(g, g.enemies[j], j, m.damage);
-        }
-      }
-      spawnParticles(m.x, m.y, m.color, 12);
-    } else if (m.phase === 'explode' && m.life <= 0) {
-      g.meteorEffects.splice(i, 1);
-    }
-  }
-
-  // --- dragon storm aura damage ---
-  for (const w of p.weapons) {
-    if (w.type === 'dragon_storm') {
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        const e = g.enemies[j];
-        const dx = p.x - e.x;
-        const dy = p.y - e.y;
-        if (dx * dx + dy * dy < (w.auraRadius + e.radius) ** 2) {
-          damageEnemy(g, e, j, w.auraDamage * p.damageMulti * dt);
-        }
-      }
-    }
-  }
+  updateChainEffects(g, dt);
+  updateMeteorEffects(g, dt);
 
   // --- camera ---
   // Frame-rate independent exponential smoothing: ~7 units/sec decay rate
@@ -880,156 +712,33 @@ function handleSimEvent(evt) {
       spawnParticles(evt.x, evt.y, '#fdcb6e', 8);
       sfx('hive_burst');
       break;
-  }
-}
-
-function fireWeapon(g, w) {
-  const p = g.player;
-  if (w.type === 'spit') {
-    // find nearest enemy
-    let nearest = null;
-    let nearestDist = w.range;
-    for (const e of g.enemies) {
-      const dx = e.x - p.x;
-      const dy = e.y - p.y;
-      const d = Math.sqrt(dx * dx + dy * dy);
-      if (d < nearestDist) { nearest = e; nearestDist = d; }
-    }
-    if (!nearest) return;
-    sfx('spit');
-
-    const dx = nearest.x - p.x;
-    const dy = nearest.y - p.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    const nx = dx / d;
-    const ny = dy / d;
-
-    for (let i = 0; i < w.count; i++) {
-      // slight spread for multiple projectiles
-      const spread = w.count > 1 ? (i - (w.count - 1) / 2) * 0.15 : 0;
-      const cos = Math.cos(spread);
-      const sin = Math.sin(spread);
-      const fx = nx * cos - ny * sin;
-      const fy = nx * sin + ny * cos;
-
-      g.projectiles.push({
-        x: p.x + fx * 20,
-        y: p.y + fy * 20,
-        vx: fx * w.speed,
-        vy: fy * w.speed,
-        speed: w.speed,
-        damage: w.damage,
-        range: w.range,
-        dist: 0,
-        pierce: w.pierce,
-        radius: 5,
-        color: w.color,
-      });
-    }
-  } else if (w.type === 'charge') {
-    // charge in facing direction
-    const f = p.facing;
-    const d = Math.sqrt(f.x * f.x + f.y * f.y);
-    if (d > 0.01) {
-      w.active = true;
-      w.chargeTimer = w.duration;
-      w.chargeDx = f.x / d;
-      w.chargeDy = f.y / d;
-      // boost player position in charge direction
-      p.x += w.chargeDx * w.speed * w.duration;
-      p.y += w.chargeDy * w.speed * w.duration;
-      p.x = Math.max(p.radius, Math.min(WORLD_W - p.radius, p.x));
-      p.y = Math.max(p.radius, Math.min(WORLD_H - p.radius, p.y));
+    case EVT.WEAPON_FIRE:
+      // Map weapon name to fire sfx. Most don't have one.
+      if (evt.weapon === 'spit')              sfx('spit');
+      else if (evt.weapon === 'chain')        sfx('chain');
+      else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
+      break;
+    case EVT.CHARGE_BURST:
       g.screenShake = 0.1;
       sfx('charge');
-      spawnParticles(p.x, p.y, w.color, 8);
-    }
-  } else if (w.type === 'chain') {
-    // chain lightning — zap nearest, chain to N more
-    if (g.enemies.length === 0) return;
-    sfx('chain');
-    // find nearest
-    let sorted = g.enemies.slice().sort((a, b) => {
-      const da = (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
-      const db = (b.x - p.x) ** 2 + (b.y - p.y) ** 2;
-      return da - db;
-    });
-    const inRange = sorted.filter(e => {
-      const d = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
-      return d < w.range;
-    });
-    if (inRange.length === 0) return;
-    const targets = [inRange[0]];
-    const hit = new Set([inRange[0]]);
-    for (let c = 0; c < w.chains && targets.length > 0; c++) {
-      const last = targets[targets.length - 1];
-      let best = null, bestDist = w.chainRange;
-      for (const e of g.enemies) {
-        if (hit.has(e)) continue;
-        const d = Math.sqrt((e.x - last.x) ** 2 + (e.y - last.y) ** 2);
-        if (d < bestDist) { best = e; bestDist = d; }
-      }
-      if (best) { targets.push(best); hit.add(best); }
-    }
-    // store chain for rendering
-    g.chainEffects = g.chainEffects || [];
-    const chainPoints = [{ x: p.x, y: p.y }];
-    for (const t of targets) {
-      chainPoints.push({ x: t.x, y: t.y });
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        if (g.enemies[j] === t) {
-          damageEnemy(g, g.enemies[j], j, w.damage * p.damageMulti);
-          break;
-        }
-      }
-    }
-    g.chainEffects.push({ points: chainPoints, life: 0.2, color: w.color });
-  } else if (w.type === 'meteor') {
-    // meteor — drop AoE on densest cluster
-    if (g.enemies.length === 0) return;
-    // pick random enemy as target center
-    const target = g.enemies[Math.floor(Math.random() * g.enemies.length)];
-    // create meteor effect
-    g.meteorEffects = g.meteorEffects || [];
-    g.meteorEffects.push({
-      x: target.x, y: target.y,
-      radius: w.blastRadius,
-      damage: w.damage * p.damageMulti,
-      life: 0.5,    // warning phase
-      phase: 'warn',
-      color: w.color,
-    });
-  } else if (w.type === 'dragon_storm') {
-    // homing fireballs in spread pattern
-    if (g.enemies.length === 0) return;
-    w._fireCount = (w._fireCount || 0) + 1;
-    if (w._fireCount % 3 === 1) sfx('dragonstorm');
-    let nearest = null, nearestDist = w.range;
-    for (const e of g.enemies) {
-      const d = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
-      if (d < nearestDist) { nearest = e; nearestDist = d; }
-    }
-    if (!nearest) return;
-    const dx = nearest.x - p.x;
-    const dy = nearest.y - p.y;
-    const d = Math.sqrt(dx * dx + dy * dy);
-    for (let i = 0; i < w.count; i++) {
-      const spread = (i - (w.count - 1) / 2) * 0.2;
-      const cos = Math.cos(spread), sin = Math.sin(spread);
-      const fx = (dx/d) * cos - (dy/d) * sin;
-      const fy = (dx/d) * sin + (dy/d) * cos;
-      g.projectiles.push({
-        x: p.x + fx * 20, y: p.y + fy * 20,
-        vx: fx * w.speed, vy: fy * w.speed,
-        speed: w.speed, damage: w.damage, range: w.range,
-        dist: 0, pierce: w.pierce, radius: 7, color: w.color,
-      });
-    }
+      spawnParticles(evt.x, evt.y, evt.color, 8);
+      break;
+    case EVT.SHIELD_HUM:
+      sfx('shield_hum');
+      break;
+    case EVT.CHAIN_ZAP:
+      sfx('zap');
+      break;
+    case EVT.METEOR_WARN:
+      // The warn ring lives in g.meteorEffects; no extra side-effect needed.
+      break;
+    case EVT.METEOR_EXPLODE:
+      g.screenShake = 0.1;
+      sfx('meteor');
+      spawnParticles(evt.x, evt.y, evt.color, 12);
+      break;
   }
-  // breath and orbit don't fire — they're always-on
 }
-
-// damageEnemy now imported from shared/sim/damage.js
 
 // --- level up UI ---
 function showLevelUp(g) {
