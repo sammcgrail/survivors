@@ -3,11 +3,11 @@
 // client over WebSocket, joins, holds D for 1 second, asserts the
 // server sends welcome + state with expected shape.
 //
-// Run with: SURVIVORS_PORT=7800 node tests/server_smoke.mjs
-// (assumes server.mjs is already running on that port)
+// Run with: node tests/server_smoke.mjs
+// (assumes server.mjs is already running on port 7700, or set SURVIVORS_PORT)
 import { WebSocket } from 'ws';
 
-const PORT = Number(process.env.SURVIVORS_PORT) || 7800;
+const PORT = Number(process.env.SURVIVORS_PORT) || 7700;
 const URL = `ws://localhost:${PORT}/ws`;
 
 const ws = new WebSocket(URL);

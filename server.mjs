@@ -1,16 +1,14 @@
 #!/usr/bin/env node
-// Survivors v1b multiplayer server — Node port of server.py.
+// Survivors v1b multiplayer server.
 //
 // Reuses the canonical game data from src/shared/ so SP and MP read from
 // one place: enemy stats, wave pools, special waves, weapon defs, world
 // dims. Game loop is its own implementation for now since the tick.js
-// orchestrator is single-player oriented (one g.player). Future phase
+// orchestrator is single-player oriented (one g.player). Future work
 // will unify with shared/sim/.
 //
-// Protocol mirrors server.py exactly so the existing v1b client works
-// unchanged. Listens on a separate port so we can run alongside the
-// Python server during validation (PORT=7800 by default; override with
-// SURVIVORS_PORT env var).
+// Listens on port 7700 by default (override with SURVIVORS_PORT).
+// WebSocket path is /ws to match the existing v1b client.
 import { WebSocketServer } from 'ws';
 import {
   ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType,
@@ -21,7 +19,7 @@ import {
   XP_RADIUS, XP_MAGNET_RANGE, XP_MAGNET_SPEED,
 } from './src/shared/constants.js';
 
-const PORT = Number(process.env.SURVIVORS_PORT) || 7800;
+const PORT = Number(process.env.SURVIVORS_PORT) || 7700;
 const TICK_RATE = 20;
 const TICK_DT = 1 / TICK_RATE;
 const MAX_PLAYERS = 8;
