@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 <title>survivors v1a</title>
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
 body {
   background: #0a0a0f;
   color: #ccc;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
+  font-family: 'Press Start 2P', 'Courier New', monospace;
   overflow: hidden;
   height: 100vh;
   display: flex;
@@ -219,26 +221,74 @@ function createWeapon(type) {
 }
 
 // --- enemy types ---
+const ENEMY_TYPES = [
+  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10 },
+  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8 },
+  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30 },
+  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4 },
+  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60 },
+  { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12 },
+];
+
+// Wave composition tables — weights for each enemy type per wave bracket
+const WAVE_POOLS = [
+  { maxWave: 2,  weights: { blob: 5, swarm: 3 } },
+  { maxWave: 4,  weights: { blob: 4, swarm: 4, fast: 2 } },
+  { maxWave: 6,  weights: { blob: 3, swarm: 3, fast: 3, tank: 1 } },
+  { maxWave: 9,  weights: { blob: 2, swarm: 4, fast: 3, tank: 2, ghost: 2 } },
+  { maxWave: 12, weights: { blob: 1, swarm: 5, fast: 3, tank: 3, ghost: 2, brute: 1 } },
+  { maxWave: 999,weights: { blob: 1, swarm: 6, fast: 4, tank: 3, ghost: 3, brute: 2 } },
+];
+
+// Special wave events — override normal spawns
+const SPECIAL_WAVES = {
+  5:  { name: 'SWARM RUSH',  override: 'swarm',  countMulti: 3 },
+  8:  { name: 'TANK PARADE', override: 'tank',   countMulti: 1.5 },
+  10: { name: 'GHOST STORM', override: 'ghost',  countMulti: 2 },
+  13: { name: 'BRUTE FORCE', override: 'brute',  countMulti: 1 },
+  15: { name: 'THE HORDE',   override: null,      countMulti: 4 },
+};
+
 function enemyType(wave) {
-  const types = [
-    { name: 'blob', hp: 20, speed: 60, radius: 10, color: '#2ecc71', damage: 8, xp: 10 },
-    { name: 'fast', hp: 12, speed: 120, radius: 8, color: '#1abc9c', damage: 5, xp: 8 },
-    { name: 'tank', hp: 60, speed: 35, radius: 16, color: '#e67e22', damage: 15, xp: 25 },
-    { name: 'swarm', hp: 8, speed: 90, radius: 6, color: '#fd79a8', damage: 3, xp: 5 },
-  ];
-  // scale with wave
-  const scale = 1 + (wave - 1) * 0.15;
-  const pool = wave < 3 ? [types[0], types[3]] :
-               wave < 6 ? [types[0], types[1], types[3]] :
-               types;
-  const base = pool[Math.floor(Math.random() * pool.length)];
+  // check for special wave override
+  const special = SPECIAL_WAVES[wave];
+  if (special && special.override) {
+    const base = ENEMY_TYPES.find(t => t.name === special.override);
+    return scaleEnemy(base, wave);
+  }
+
+  // pick from weighted pool
+  const pool = WAVE_POOLS.find(p => wave <= p.maxWave) || WAVE_POOLS[WAVE_POOLS.length - 1];
+  const entries = Object.entries(pool.weights);
+  const totalWeight = entries.reduce((s, [, w]) => s + w, 0);
+  let roll = Math.random() * totalWeight;
+  for (const [name, weight] of entries) {
+    roll -= weight;
+    if (roll <= 0) {
+      const base = ENEMY_TYPES.find(t => t.name === name);
+      return scaleEnemy(base, wave);
+    }
+  }
+  return scaleEnemy(ENEMY_TYPES[0], wave);
+}
+
+function scaleEnemy(base, wave) {
+  // HP scales quadratically — enemies get tanky fast after wave 8
+  const hpScale = 1 + (wave - 1) * 0.12 + Math.max(0, wave - 8) * 0.08;
+  // Speed scales gently — don't make it impossible to dodge
+  const speedScale = 1 + (wave - 1) * 0.03;
+  // Damage scales linearly
+  const dmgScale = 1 + (wave - 1) * 0.1;
+  // XP scales with HP so kills always feel rewarding
+  const xpScale = hpScale * 0.9;
   return {
     ...base,
-    hp: Math.floor(base.hp * scale),
-    maxHp: Math.floor(base.hp * scale),
-    speed: base.speed * (1 + (wave - 1) * 0.05),
-    damage: Math.floor(base.damage * scale),
-    xp: Math.floor(base.xp * scale),
+    hp: Math.floor(base.hp * hpScale),
+    maxHp: Math.floor(base.hp * hpScale),
+    speed: base.speed * speedScale,
+    damage: Math.floor(base.damage * dmgScale),
+    xp: Math.floor(base.xp * xpScale),
+    hitFlash: 0,
   };
 }
 
@@ -260,7 +310,7 @@ function initGame() {
     hpRegen: 0,
     magnetRange: XP_MAGNET_RANGE,
     xp: 0,
-    xpToLevel: 30,
+    xpToLevel: 25,
     level: 1,
     weapons: [createWeapon('spit')], // start with magic spit
     alive: true,
@@ -282,9 +332,11 @@ function initGame() {
     time: 0,
     wave: 1,
     waveTimer: 0,
-    waveDuration: 15, // seconds per wave
+    waveDuration: 20, // seconds per wave (longer waves = more time to feel the pressure)
     spawnTimer: 0,
-    spawnRate: 1.5, // seconds between spawns (decreases)
+    spawnRate: 2.0, // seconds between spawn bursts (decreases per wave)
+    specialWaveMsg: null,
+    specialWaveMsgTimer: 0,
     kills: 0,
     camera: { x: p.x, y: p.y },
     screenShake: 0,
@@ -339,14 +391,30 @@ function update(dt) {
   if (g.waveTimer >= g.waveDuration) {
     g.wave++;
     g.waveTimer = 0;
-    g.spawnRate = Math.max(0.3, g.spawnRate * 0.85);
+    // spawn rate curve: fast early ramp, then gradual
+    g.spawnRate = Math.max(0.25, 2.0 * Math.pow(0.88, g.wave - 1));
+    // check for special wave
+    const special = SPECIAL_WAVES[g.wave];
+    if (special) {
+      g.specialWaveMsg = special.name;
+      g.specialWaveMsgTimer = 2.5;
+    }
   }
 
-  // spawn enemies
+  // special wave message timer
+  if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
+
+  // spawn enemies — burst count scales with wave
   g.spawnTimer -= dt;
   if (g.spawnTimer <= 0) {
-    const count = Math.min(1 + Math.floor(g.wave / 3), 5);
-    for (let i = 0; i < count; i++) spawnEnemy(g);
+    const special = SPECIAL_WAVES[g.wave];
+    let baseCount = 1 + Math.floor(g.wave / 2);
+    if (special) baseCount = Math.ceil(baseCount * special.countMulti);
+    const count = Math.min(baseCount, 12); // hard cap to prevent lag
+    // cap total enemies on screen
+    const maxEnemies = 80 + g.wave * 10;
+    const toSpawn = Math.min(count, maxEnemies - g.enemies.length);
+    for (let i = 0; i < toSpawn; i++) spawnEnemy(g);
     g.spawnTimer = g.spawnRate;
   }
 
@@ -452,13 +520,25 @@ function update(dt) {
   // --- update enemies ---
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const e = g.enemies[i];
-    // move toward player
+    // move toward player — ghosts orbit/flank
     const edx = p.x - e.x;
     const edy = p.y - e.y;
     const dist = Math.sqrt(edx * edx + edy * edy);
     if (dist > 1) {
-      e.x += (edx / dist) * e.speed * dt;
-      e.y += (edy / dist) * e.speed * dt;
+      if (e.name === 'ghost') {
+        // ghosts spiral inward — perpendicular component + inward pull
+        const nx = edx / dist;
+        const ny = edy / dist;
+        const perpX = -ny; // perpendicular
+        const perpY = nx;
+        const inward = dist > 100 ? 0.6 : 1.0; // close in when near
+        const orbit = dist > 60 ? 0.8 : 0.3;
+        e.x += (nx * inward + perpX * orbit) * e.speed * dt;
+        e.y += (ny * inward + perpY * orbit) * e.speed * dt;
+      } else {
+        e.x += (edx / dist) * e.speed * dt;
+        e.y += (edy / dist) * e.speed * dt;
+      }
     }
 
     // enemy-enemy repulsion (simple)
@@ -969,6 +1049,21 @@ function render() {
   }
 
   ctx.restore();
+
+  // --- special wave announcement ---
+  if (g.specialWaveMsgTimer > 0) {
+    const alpha = Math.min(1, g.specialWaveMsgTimer / 0.5);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 32px "Press Start 2P", monospace';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#e74c3c';
+    ctx.shadowBlur = 20;
+    ctx.fillText(`⚠ WAVE ${g.wave}: ${g.specialWaveMsg} ⚠`, W / 2, H * 0.3);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
 
   // --- HUD ---
   const mins = Math.floor(g.time / 60);
