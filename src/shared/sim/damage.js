@@ -8,8 +8,8 @@ import { EVT, emit } from './events.js';
 // drop more often; bosses always drop.
 function heartDropChance(name) {
   if (name === 'boss') return 1.0;
-  if (name === 'elite' || name === 'brute') return 0.2;
-  return 0.08;
+  if (name === 'elite' || name === 'brute') return 0.25;
+  return 0.12;
 }
 
 export function spawnHeart(g, x, y, heal) {
