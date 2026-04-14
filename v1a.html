@@ -1499,10 +1499,16 @@ function render() {
     const spriteName = e.sprite || 'blob';
 
     if (e.hitFlash > 0) {
-      // white flash — draw shape fallback
-      ctx.fillStyle = '#fff';
+      // draw sprite then overlay white flash circle
+      if (!drawSprite(spriteName, e.x, e.y, spriteScale)) {
+        ctx.fillStyle = e.color;
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(e.hitFlash * 5, 0.6)})`;
       ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.arc(e.x, e.y, e.radius * 0.8, 0, Math.PI * 2);
       ctx.fill();
     } else if (!drawSprite(spriteName, e.x, e.y, spriteScale)) {
       // fallback to colored circle if sprites not loaded
@@ -1837,6 +1843,16 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Enter' || e.key === ' ') { startGame(); e.preventDefault(); }
   }
 });
+
+// --- dev hook for stress testing (localhost only) ---
+if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+  window._dev = {
+    spawnEnemies: (n) => { if (game) for (let i = 0; i < n; i++) spawnEnemy(game); },
+    spawnParticles: (x, y, n) => spawnParticles(x, y, '#ff0', n),
+    getStats: () => game ? { enemies: game.enemies.length, projectiles: game.projectiles.length, particles: game.particles.length, gems: game.gems.length } : null,
+    getGame: () => game,
+  };
+}
 </script>
 </body>
 </html>
