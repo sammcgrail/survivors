@@ -322,6 +322,112 @@ function drawSprite(name, x, y, scale, alpha) {
   return true;
 }
 
+// --- sound effects (Web Audio API) ---
+let audioCtx = null;
+function getAudio() {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  return audioCtx;
+}
+
+function sfx(type) {
+  try {
+    const ac = getAudio();
+    const t = ac.currentTime;
+    const osc = ac.createOscillator();
+    const gain = ac.createGain();
+    osc.connect(gain);
+    gain.connect(ac.destination);
+
+    switch (type) {
+      case 'hit': // enemy takes damage — short blip
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(220, t);
+        osc.frequency.linearRampToValueAtTime(110, t + 0.06);
+        gain.gain.setValueAtTime(0.08, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.06);
+        osc.start(t); osc.stop(t + 0.06);
+        break;
+
+      case 'kill': // enemy dies — satisfying pop
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(400, t);
+        osc.frequency.linearRampToValueAtTime(800, t + 0.08);
+        gain.gain.setValueAtTime(0.12, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.1);
+        osc.start(t); osc.stop(t + 0.1);
+        break;
+
+      case 'xp': // gem pickup — tiny chime
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(880, t);
+        osc.frequency.linearRampToValueAtTime(1320, t + 0.06);
+        gain.gain.setValueAtTime(0.06, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.08);
+        osc.start(t); osc.stop(t + 0.08);
+        break;
+
+      case 'levelup': { // level up — ascending arpeggio
+        gain.gain.setValueAtTime(0, t); // silence main osc
+        osc.start(t); osc.stop(t + 0.01);
+        const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
+        notes.forEach((freq, i) => {
+          const o = ac.createOscillator();
+          const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.type = 'triangle';
+          o.frequency.setValueAtTime(freq, t + i * 0.08);
+          g.gain.setValueAtTime(0.1, t + i * 0.08);
+          g.gain.linearRampToValueAtTime(0, t + i * 0.08 + 0.12);
+          o.start(t + i * 0.08);
+          o.stop(t + i * 0.08 + 0.12);
+        });
+        break;
+      }
+
+      case 'playerhit': // player takes damage — harsh buzz
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(150, t);
+        osc.frequency.linearRampToValueAtTime(80, t + 0.12);
+        gain.gain.setValueAtTime(0.15, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.15);
+        osc.start(t); osc.stop(t + 0.15);
+        break;
+
+      case 'death': { // player death — descending doom
+        gain.gain.setValueAtTime(0, t);
+        osc.start(t); osc.stop(t + 0.01);
+        const freqs = [440, 330, 220, 110];
+        freqs.forEach((freq, i) => {
+          const o = ac.createOscillator();
+          const g = ac.createGain();
+          o.connect(g); g.connect(ac.destination);
+          o.type = 'sawtooth';
+          o.frequency.setValueAtTime(freq, t + i * 0.15);
+          o.frequency.linearRampToValueAtTime(freq * 0.7, t + i * 0.15 + 0.15);
+          g.gain.setValueAtTime(0.12, t + i * 0.15);
+          g.gain.linearRampToValueAtTime(0, t + i * 0.15 + 0.18);
+          o.start(t + i * 0.15);
+          o.stop(t + i * 0.15 + 0.18);
+        });
+        break;
+      }
+
+      case 'spit': // projectile fire — pew
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(600, t);
+        osc.frequency.linearRampToValueAtTime(200, t + 0.07);
+        gain.gain.setValueAtTime(0.05, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.07);
+        osc.start(t); osc.stop(t + 0.07);
+        break;
+
+      default:
+        gain.gain.setValueAtTime(0, t);
+        osc.start(t); osc.stop(t + 0.01);
+    }
+  } catch (e) { /* audio not available, that's fine */ }
+}
+
 // --- resize ---
 function resize() {
   canvas.width = window.innerWidth;
@@ -801,9 +907,11 @@ function update(dt) {
       p.iframes = 0.5;
       g.screenShake = 0.15;
       spawnParticles(p.x, p.y, '#e74c3c', 5);
+      sfx('playerhit');
       if (p.hp <= 0) {
         p.hp = 0;
         p.alive = false;
+        sfx('death');
         showDeathScreen(g);
       }
     }
@@ -826,6 +934,7 @@ function update(dt) {
     // pick up
     if (dist < p.radius + gem.radius) {
       p.xp += gem.xp;
+      sfx('xp');
       // floating xp text
       g.floatingTexts.push({
         x: gem.x, y: gem.y, text: '+' + gem.xp,
@@ -931,6 +1040,7 @@ function fireWeapon(g, w) {
       if (d < nearestDist) { nearest = e; nearestDist = d; }
     }
     if (!nearest) return;
+    sfx('spit');
 
     const dx = nearest.x - p.x;
     const dy = nearest.y - p.y;
@@ -1064,6 +1174,7 @@ function damageEnemy(g, e, idx, dmg) {
   e.hitFlash = 1;
   // damage number (only show for hits > 5 to avoid spam from breath ticks)
   if (dmg >= 5) {
+    sfx('hit');
     g.floatingTexts.push({
       x: e.x + (Math.random() - 0.5) * 10,
       y: e.y - e.radius - 4,
@@ -1072,6 +1183,7 @@ function damageEnemy(g, e, idx, dmg) {
     });
   }
   if (e.hp <= 0) {
+    sfx('kill');
     spawnGem(e.x, e.y, e.xp);
     spawnParticles(e.x, e.y, e.color, 6);
     g.enemies.splice(idx, 1);
@@ -1081,6 +1193,7 @@ function damageEnemy(g, e, idx, dmg) {
 
 // --- level up UI ---
 function showLevelUp(g) {
+  sfx('levelup');
   paused = true;
   const available = POWERUPS.filter(p => {
     if (p.stack >= p.max) return false;
