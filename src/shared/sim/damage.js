@@ -16,7 +16,7 @@ export function spawnHeart(g, x, y, heal) {
   g.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: g.rng.range(0, Math.PI * 2) });
 }
 
-export function damageEnemy(g, e, idx, dmg) {
+export function damageEnemy(g, e, idx, dmg, killerId) {
   if (e.dying) return; // already dead, ignore further damage
   e.hp -= dmg;
   e.hitFlash = 1;
@@ -31,5 +31,8 @@ export function damageEnemy(g, e, idx, dmg) {
     emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name });
     e.dying = 0.2; // 200ms death animation
     g.kills++;
+    if (killerId !== undefined) {
+      for (const p of g.players) if (p.id === killerId) { p.kills++; break; }
+    }
   }
 }

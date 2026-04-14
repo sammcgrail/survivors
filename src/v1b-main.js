@@ -676,6 +676,33 @@ function render(dt) {
           ctx.restore();
         }
       }
+      if (wtype === 'shield') {
+        const r = 60;
+        const grad = ctx.createRadialGradient(pl.x, pl.y, r * 0.7, pl.x, pl.y, r);
+        grad.addColorStop(0, 'rgba(52, 152, 219, 0)');
+        grad.addColorStop(0.7, 'rgba(52, 152, 219, 0.15)');
+        grad.addColorStop(1, 'rgba(52, 152, 219, 0.35)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(pl.x, pl.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(52, 152, 219, 0.6)';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+      if (wtype === 'lightning_field') {
+        const r = 100;
+        const a = 0.04 + Math.sin(gameTime * 6) * 0.02;
+        ctx.fillStyle = `rgba(241, 196, 15, ${a})`;
+        ctx.beginPath();
+        ctx.arc(pl.x, pl.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(241, 196, 15, 0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
     }
   }
 
@@ -726,6 +753,45 @@ function render(dt) {
       ctx.fill();
     }
     ctx.shadowBlur = 0;
+  }
+
+  // --- chain effects (chain lightning bolts + lightning_field zaps) ---
+  for (const ce of (state.chainEffects || [])) {
+    const alpha = Math.max(0, Math.min(1, ce.life / 0.2));
+    ctx.strokeStyle = ce.color;
+    ctx.globalAlpha = alpha;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = ce.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.moveTo(ce.points[0].x, ce.points[0].y);
+    for (let i = 1; i < ce.points.length; i++) ctx.lineTo(ce.points[i].x, ce.points[i].y);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.globalAlpha = 1;
+  }
+
+  // --- meteor effects (warn ring then explosion flash) ---
+  for (const m of (state.meteorEffects || [])) {
+    if (m.x < cx - m.radius || m.x > cx + W + m.radius || m.y < cy - m.radius || m.y > cy + H + m.radius) continue;
+    if (m.phase === 'warn') {
+      const a = 0.5 + Math.sin(gameTime * 12) * 0.3;
+      ctx.strokeStyle = m.color;
+      ctx.globalAlpha = a;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+    } else {
+      const a = Math.max(0, Math.min(1, m.life / 0.3));
+      ctx.fillStyle = m.color;
+      ctx.globalAlpha = a * 0.5;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // --- players ---
