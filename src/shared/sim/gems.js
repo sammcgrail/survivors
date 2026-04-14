@@ -5,7 +5,7 @@ import { XP_MAGNET_SPEED, XP_RADIUS } from '../constants.js';
 import { EVT, emit } from './events.js';
 
 export function spawnGem(g, x, y, xp) {
-  g.gems.push({ x, y, xp, radius: XP_RADIUS, alpha: 1 });
+  g.gems.push({ x, y, xp, radius: XP_RADIUS });
 }
 
 // Magnet pull + pickup + level-up trigger. Mutates g.gems and the

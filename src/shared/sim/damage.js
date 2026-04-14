@@ -16,14 +16,14 @@ export function spawnHeart(g, x, y, heal) {
   g.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: g.rng.range(0, Math.PI * 2) });
 }
 
-export function damageEnemy(g, e, idx, dmg, killerId) {
+export function damageEnemy(g, e, dmg, killerId) {
   if (e.dying) return; // already dead, ignore further damage
   e.hp -= dmg;
   e.hitFlash = 1;
   // damage numbers gated to dmg >= 5 to avoid floating-text spam from
   // breath ticks. Client decides what to render based on the dmg value.
   emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
-  if (e.hp <= 0 && !e.dying) {
+  if (e.hp <= 0) {
     spawnGem(g, e.x, e.y, e.xp);
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
       spawnHeart(g, e.x, e.y, 15);
@@ -31,8 +31,6 @@ export function damageEnemy(g, e, idx, dmg, killerId) {
     emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name });
     e.dying = 0.2; // 200ms death animation
     g.kills++;
-    if (killerId !== undefined) {
-      for (const p of g.players) if (p.id === killerId) { p.kills++; break; }
-    }
+    for (const p of g.players) if (p.id === killerId) { p.kills++; break; }
   }
 }
