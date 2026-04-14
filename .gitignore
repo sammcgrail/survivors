@@ -1,4 +1,5 @@
 node_modules/
+bundle.js.map
 *.csv
 results/
 .playwright-mcp/

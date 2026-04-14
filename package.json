@@ -7,7 +7,9 @@
     "test": "tests"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "node scripts/build.js",
+    "watch": "node scripts/build.js --watch",
+    "stress": "node tests/stress.mjs"
   },
   "repository": {
     "type": "git",
@@ -22,6 +24,7 @@
   },
   "homepage": "https://github.com/sammcgrail/survivors#readme",
   "devDependencies": {
+    "esbuild": "^0.28.0",
     "playwright": "^1.59.1"
   }
 }
