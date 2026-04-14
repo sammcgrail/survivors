@@ -274,6 +274,9 @@ canvas {
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+// Pixel art needs nearest-neighbor scaling. Set once here so drawSprite
+// doesn't have to reassign it 2000+ times per frame at high enemy density.
+ctx.imageSmoothingEnabled = false;
 
 // --- sprite sheet ---
 const SPRITE_SIZE = 16;
@@ -302,17 +305,23 @@ const SP = {
   magnet:     [7, 1],
 };
 
+// imageSmoothingEnabled is set once at canvas init (search for `ctx = canvas.getContext`).
+// drawSprite avoids per-call state churn: only touches globalAlpha when an explicit
+// alpha is passed, and skips the read-and-restore pair in the common case.
 function drawSprite(name, x, y, scale, alpha) {
   if (!spritesReady || !SP[name]) return false;
-  const [col, row] = SP[name];
+  const sp = SP[name];
   const s = SPRITE_SIZE;
   const drawSize = s * (scale || 2);
-  const prevAlpha = ctx.globalAlpha;
-  if (alpha !== undefined) ctx.globalAlpha = alpha;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(spriteSheet, col * s, row * s, s, s,
-    x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
-  ctx.globalAlpha = prevAlpha;
+  const half = drawSize * 0.5;
+  if (alpha !== undefined) {
+    const prev = ctx.globalAlpha;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
+    ctx.globalAlpha = prev;
+  } else {
+    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
+  }
   return true;
 }
 
@@ -1632,21 +1641,18 @@ function render() {
     // death animation — shrink + fade
     if (e.dying !== undefined) {
       const t = e.dying / 0.2; // 1.0 → 0.0 over 200ms
-      const scale = 0.3 + t * 0.7; // shrink from 100% to 30%
-      const alpha = t; // fade out
-      ctx.save();
-      ctx.globalAlpha = alpha;
-      ctx.translate(e.x, e.y);
-      ctx.scale(scale, scale);
-      const spriteScale = e.radius / 8;
+      const dyingScale = (0.3 + t * 0.7) * (e.radius / 8); // fold shrink into final scale
       const spriteName = e.sprite || 'blob';
-      if (!drawSprite(spriteName, 0, 0, spriteScale)) {
+      // single drawImage with alpha — no save/translate/scale/restore
+      if (!drawSprite(spriteName, e.x, e.y, dyingScale, t)) {
+        const prev = ctx.globalAlpha;
+        ctx.globalAlpha = t;
         ctx.fillStyle = '#fff';
         ctx.beginPath();
-        ctx.arc(0, 0, e.radius, 0, Math.PI * 2);
+        ctx.arc(e.x, e.y, e.radius * (0.3 + t * 0.7), 0, Math.PI * 2);
         ctx.fill();
+        ctx.globalAlpha = prev;
       }
-      ctx.restore();
       continue; // skip normal render + hp bar
     }
 
