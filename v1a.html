@@ -940,7 +940,10 @@ function update(dt) {
     }
   }
 
-  // --- update enemies ---
+  // --- update enemies (movement + per-enemy work) ---
+  // Cell size for spatial hash. Brute is largest at radius 24, so 50u keeps
+  // any colliding pair within own cell + 1 neighbor.
+  const HASH_CELL = 50;
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const e = g.enemies[i];
     // move toward player — ghosts orbit/flank
@@ -966,24 +969,6 @@ function update(dt) {
       }
     }
 
-    // enemy-enemy repulsion (simple)
-    for (let j = i + 1; j < g.enemies.length; j++) {
-      const e2 = g.enemies[j];
-      const rx = e.x - e2.x;
-      const ry = e.y - e2.y;
-      const rd = Math.sqrt(rx * rx + ry * ry);
-      const minD = e.radius + e2.radius;
-      if (rd < minD && rd > 0.1) {
-        const push = (minD - rd) * 0.5;
-        const nx = rx / rd;
-        const ny = ry / rd;
-        e.x += nx * push;
-        e.y += ny * push;
-        e2.x -= nx * push;
-        e2.y -= ny * push;
-      }
-    }
-
     // hit flash decay
     if (e.hitFlash > 0) e.hitFlash -= dt * 5;
 
@@ -1000,6 +985,50 @@ function update(dt) {
         sfx('death');
         g.deathFeed.push({ text: `${g.playerName} killed by ${e.name}`, time: g.time });
         showDeathScreen(g);
+      }
+    }
+  }
+
+  // --- enemy-enemy repulsion via spatial hash ---
+  // Bucket enemies into cells, then each enemy only checks 9 cells (own +
+  // neighbors) instead of all N. Drops cost from O(N²) to ~O(N) at the
+  // typical low-density per-cell counts.
+  const cells = new Map();
+  for (let i = 0; i < g.enemies.length; i++) {
+    const e = g.enemies[i];
+    const cx = Math.floor(e.x / HASH_CELL);
+    const cy = Math.floor(e.y / HASH_CELL);
+    const k = cx * 100000 + cy; // numeric key avoids string interning
+    let bucket = cells.get(k);
+    if (!bucket) { bucket = []; cells.set(k, bucket); }
+    bucket.push(i);
+  }
+  for (let i = 0; i < g.enemies.length; i++) {
+    const e = g.enemies[i];
+    const cx = Math.floor(e.x / HASH_CELL);
+    const cy = Math.floor(e.y / HASH_CELL);
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const bucket = cells.get((cx + dx) * 100000 + (cy + dy));
+        if (!bucket) continue;
+        for (let bi = 0; bi < bucket.length; bi++) {
+          const j = bucket[bi];
+          if (j <= i) continue; // each pair handled once
+          const e2 = g.enemies[j];
+          const rx = e.x - e2.x;
+          const ry = e.y - e2.y;
+          const rd = Math.sqrt(rx * rx + ry * ry);
+          const minD = e.radius + e2.radius;
+          if (rd < minD && rd > 0.1) {
+            const push = (minD - rd) * 0.5;
+            const nx = rx / rd;
+            const ny = ry / rd;
+            e.x += nx * push;
+            e.y += ny * push;
+            e2.x -= nx * push;
+            e2.y -= ny * push;
+          }
+        }
       }
     }
   }
