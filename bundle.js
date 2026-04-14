@@ -257,6 +257,34 @@
     }
   });
 
+  // src/shared/sim/rng.js
+  function createRng(seed) {
+    let s = seed >>> 0 || 1;
+    function next() {
+      s |= 0;
+      s = s + 1831565813 | 0;
+      let t = Math.imul(s ^ s >>> 15, 1 | s);
+      t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+      return ((t ^ t >>> 14) >>> 0) / 4294967296;
+    }
+    return {
+      random: next,
+      int: (n) => Math.floor(next() * n),
+      pick: (arr) => arr[Math.floor(next() * arr.length)],
+      range: (lo, hi) => lo + next() * (hi - lo)
+    };
+  }
+  var init_rng = __esm({
+    "src/shared/sim/rng.js"() {
+    }
+  });
+
+  // src/shared/sim/events.js
+  var init_events = __esm({
+    "src/shared/sim/events.js"() {
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
@@ -264,6 +292,8 @@
       init_constants();
       init_weapons();
       init_enemyTypes();
+      init_rng();
+      init_events();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -786,7 +816,12 @@
           deathFeed: [],
           // { text, time } — fading event log
           camera: { x: p.x, y: p.y },
-          screenShake: 0
+          screenShake: 0,
+          // Event queue drained by client each frame. Sim modules push typed
+          // events here; client handles sfx/particles/HUD flashes from the
+          // queue. See src/shared/sim/events.js for the EVT enum.
+          events: [],
+          rng: createRng(Date.now() & 2147483647)
         };
       }
       function spawnEnemy(g) {
@@ -1230,6 +1265,13 @@
           hudEl.xpFill.style.width = xpPct / 10 + "%";
           hudCache.xpPct = xpPct;
         }
+        if (g.events.length > 0) {
+          for (const evt of g.events) handleSimEvent(evt);
+          g.events.length = 0;
+        }
+      }
+      function handleSimEvent(evt) {
+        void evt;
       }
       function fireWeapon(g, w) {
         const p = g.player;

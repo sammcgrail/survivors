@@ -7,6 +7,8 @@ import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_RADIUS, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from './shared/enemyTypes.js';
+import { createRng } from './shared/sim/rng.js';
+import { EVT, emit } from './shared/sim/events.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -469,6 +471,11 @@ function initGame() {
     deathFeed: [], // { text, time } — fading event log
     camera: { x: p.x, y: p.y },
     screenShake: 0,
+    // Event queue drained by client each frame. Sim modules push typed
+    // events here; client handles sfx/particles/HUD flashes from the
+    // queue. See src/shared/sim/events.js for the EVT enum.
+    events: [],
+    rng: createRng(Date.now() & 0x7fffffff),
   };
 }
 
@@ -1003,6 +1010,23 @@ function update(dt) {
     hudEl.xpFill.style.width = (xpPct / 10) + '%';
     hudCache.xpPct = xpPct;
   }
+
+  // Drain sim event queue. Sim modules push events here (sfx, particle
+  // spawns, screen shake triggers); client decides what to do. Empty
+  // until PR #12 starts emitting from extracted sim code.
+  if (g.events.length > 0) {
+    for (const evt of g.events) handleSimEvent(evt);
+    g.events.length = 0;
+  }
+}
+
+// Handle a single event from the sim. Sim is forbidden from touching
+// DOM/canvas/audio directly — it emits events here, client side-effects
+// happen here. This stub is the seam the rest of the migration plugs
+// into; events for sfx/particles/screen-shake will be added in PR #12+.
+function handleSimEvent(evt) {
+  // No-op for now — the event pipeline exists; sim modules don't emit yet.
+  void evt;
 }
 
 function fireWeapon(g, w) {
