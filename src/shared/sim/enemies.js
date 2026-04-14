@@ -15,7 +15,7 @@ export function spawnEnemy(g) {
   const dist = 500 + g.rng.random() * 200;
   const ex = g.player.x + Math.cos(angle) * dist;
   const ey = g.player.y + Math.sin(angle) * dist;
-  const e = enemyType(g.wave);
+  const e = enemyType(g.wave, g.rng);
   e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
   e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
   e.hitFlash = 0;
@@ -75,7 +75,7 @@ function updateSpawnerAi(g, e, dt) {
     const sa = g.rng.random() * Math.PI * 2;
     const sr = 20 + g.rng.random() * 20;
     const base = ENEMY_TYPES.find(t => t.name === 'swarm');
-    const minion = scaleEnemy(base, g.wave);
+    const minion = scaleEnemy(base, g.wave, g.rng);
     minion.x = e.x + Math.cos(sa) * sr;
     minion.y = e.y + Math.sin(sa) * sr;
     minion.hitFlash = 0;

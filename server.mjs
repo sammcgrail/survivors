@@ -14,6 +14,7 @@ import {
   ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType,
 } from './src/shared/enemyTypes.js';
 import { createWeapon } from './src/shared/weapons.js';
+import { createRng } from './src/shared/sim/rng.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP,
   XP_RADIUS, XP_MAGNET_RANGE, XP_MAGNET_SPEED,
@@ -33,15 +34,13 @@ const players = new Map(); // ws -> player
 let game = null;
 let nextId = 0;
 
-function rand(min, max) { return min + Math.random() * (max - min); }
-
-function makePlayer(pid, name, weaponType) {
+function makePlayer(pid, name, weaponType, rng) {
   return {
     id: pid,
     name: (name || `player${pid}`).slice(0, 12),
     color: COLORS[pid % COLORS.length],
-    x: WORLD_W / 2 + rand(-200, 200),
-    y: WORLD_H / 2 + rand(-200, 200),
+    x: WORLD_W / 2 + (rng.random() - 0.5) * 400,
+    y: WORLD_H / 2 + (rng.random() - 0.5) * 400,
     hp: PLAYER_MAX_HP,
     maxHp: PLAYER_MAX_HP,
     radius: PLAYER_RADIUS,
@@ -75,16 +74,19 @@ function initGame() {
     spawnTimer: 0,
     spawnRate: 2.0,
     kills: 0,
+    // Seed with wall-clock so each session is unique, but the within-
+    // session sequence is reproducible from this seed.
+    rng: createRng(Date.now() & 0x7fffffff),
   };
 }
 
 function spawnEnemy(g) {
   const alive = [...players.values()].filter(p => p.alive);
   if (alive.length === 0) return;
-  const target = alive[Math.floor(Math.random() * alive.length)];
-  const angle = Math.random() * Math.PI * 2;
-  const dist = 500 + Math.random() * 200;
-  const e = enemyType(g.wave);
+  const target = alive[g.rng.int(alive.length)];
+  const angle = g.rng.random() * Math.PI * 2;
+  const dist = 500 + g.rng.random() * 200;
+  const e = enemyType(g.wave, g.rng);
   // Scale HP up with player count: +30% per extra player.
   const pcMulti = 1 + (alive.length - 1) * 0.3;
   e.hp = Math.floor(e.hp * pcMulti);
@@ -420,7 +422,7 @@ wss.on('connection', (ws) => {
       }
       const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
       const weapon = ['spit', 'breath', 'charge'].includes(msg.weapon) ? msg.weapon : 'spit';
-      player = makePlayer(pid, name, weapon);
+      player = makePlayer(pid, name, weapon, game.rng);
       players.set(ws, player);
       console.log(`[+] ${name} joined with ${weapon} (${players.size} players)`);
       ws.send(JSON.stringify({
@@ -445,7 +447,7 @@ wss.on('connection', (ws) => {
       if (newName) player.name = newName;
     } else if (msg.type === 'respawn') {
       const weapon = ['spit', 'breath', 'charge'].includes(msg.weapon) ? msg.weapon : 'spit';
-      Object.assign(player, makePlayer(pid, player.name, weapon));
+      Object.assign(player, makePlayer(pid, player.name, weapon, game.rng));
     }
   });
 
