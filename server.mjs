@@ -241,6 +241,9 @@ wss.on('connection', (ws) => {
       const newName = String(msg.name || '').slice(0, 12).trim();
       if (newName) player.name = newName;
     } else if (msg.type === 'respawn') {
+      // Only let dead players respawn. Without this guard a live player
+      // could spam respawn to reset iframes + heal to full + reroll weapon.
+      if (player.alive) return;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
       Object.assign(player, makePlayer(pid, player.name, weapon, game.rng));
     }
