@@ -19,11 +19,3 @@ export function createRng(seed) {
   };
 }
 
-// Math-backed rng for code paths that don't care about determinism (client
-// visual fluff). Same shape as createRng so callers can swap freely.
-export const mathRng = {
-  random: Math.random,
-  int: (n) => Math.floor(Math.random() * n),
-  pick: (arr) => arr[Math.floor(Math.random() * arr.length)],
-  range: (lo, hi) => lo + Math.random() * (hi - lo),
-};

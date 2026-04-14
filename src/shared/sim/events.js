@@ -22,7 +22,5 @@ export const EVT = {
 };
 
 export function emit(g, type, payload) {
-  // payload may be omitted; keep the event shape stable.
-  if (payload) g.events.push({ type, ...payload });
-  else g.events.push({ type });
+  g.events.push({ type, ...payload });
 }

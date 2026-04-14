@@ -81,6 +81,11 @@ export function scaleEnemy(base, wave, rng) {
     xp: Math.floor(base.xp * xpScale),
     hitFlash: 0,
     orbitSign: rng.random() < 0.5 ? 1 : -1,
-    spawnTimer: base.name === 'spawner' ? 2 + rng.random() * 2 : 0, // spawners birth swarms
+    // Per-AI cadence/state, initialized here so the per-tick loop never
+    // has to lazy-init: spawner birth jitter, boss charge/step timers.
+    spawnTimer: base.name === 'spawner' ? 2 + rng.random() * 2 : 0,
+    chargeTimer: base.name === 'boss' ? 3 + rng.random() * 2 : 0,
+    charging: 0,
+    stepTimer: base.name === 'boss' ? 0.8 : 0,
   };
 }

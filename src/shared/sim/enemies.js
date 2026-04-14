@@ -28,7 +28,6 @@ export function spawnEnemy(g) {
   const e = enemyType(g.wave, g.rng);
   e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
   e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
-  e.hitFlash = 0;
   g.enemies.push(e);
 }
 
@@ -50,8 +49,6 @@ function nearestAlivePlayer(g, ex, ey) {
 // Boss steps + telegraph use g.rng for cadence so server replay stays
 // in sync. Ghost orbit and movement are deterministic given current pos.
 function updateBossAi(g, e, dt, edx, edy, dist) {
-  if (e.chargeTimer === undefined) e.chargeTimer = 3 + g.rng.random() * 2;
-  if (e.charging === undefined) e.charging = 0;
   if (e.charging > 0) {
     e.x += e.chargeDx * e.speed * 3 * dt;
     e.y += e.chargeDy * e.speed * 3 * dt;
@@ -62,7 +59,6 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
   e.x += (edx / dist) * e.speed * 0.5 * dt;
   e.y += (edy / dist) * e.speed * 0.5 * dt;
   e.chargeTimer -= dt;
-  if (e.stepTimer === undefined) e.stepTimer = 0.8;
   e.stepTimer -= dt;
   if (e.stepTimer <= 0 && dist < 500) {
     emit(g, EVT.BOSS_STEP, { x: e.x, y: e.y });
@@ -84,14 +80,13 @@ function updateGhostMovement(e, dt, edx, edy, dist) {
   const perpX = -ny * sign;
   const perpY = nx * sign;
   // closing at range, committed up close, drive-by prevented at melee
-  const inward = dist > 100 ? 0.8 : dist > 30 ? 1.0 : 1.0;
+  const inward = dist > 100 ? 0.8 : 1.0;
   const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
   e.x += (nx * inward + perpX * orbit) * e.speed * dt;
   e.y += (ny * inward + perpY * orbit) * e.speed * dt;
 }
 
 function updateSpawnerAi(g, e, dt) {
-  if (e.spawnTimer === undefined) return;
   e.spawnTimer -= dt;
   if (e.spawnTimer > 0) return;
   e.spawnTimer = 3 + g.rng.random() * 2;
@@ -103,7 +98,6 @@ function updateSpawnerAi(g, e, dt) {
     const minion = scaleEnemy(base, g.wave, g.rng);
     minion.x = e.x + Math.cos(sa) * sr;
     minion.y = e.y + Math.sin(sa) * sr;
-    minion.hitFlash = 0;
     g.enemies.push(minion);
   }
   emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y });

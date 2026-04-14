@@ -7,13 +7,13 @@ import { EVT, emit } from './events.js';
 import { damageEnemy } from './damage.js';
 
 // --- one-shot fire dispatch (called when w.timer hits 0) ---
-export function fireWeapon(g, w, p) {
+// breath, orbit, shield, lightning_field don't "fire" — always-on.
+function fireWeapon(g, w, p) {
   if (w.type === 'spit')         fireSpit(g, w, p);
   else if (w.type === 'charge')  fireCharge(g, w, p);
   else if (w.type === 'chain')   fireChain(g, w, p);
   else if (w.type === 'meteor')  fireMeteor(g, w, p);
   else if (w.type === 'dragon_storm') fireDragonStorm(g, w, p);
-  // breath, orbit, shield, lightning_field don't "fire" — always-on.
 }
 
 function fireSpit(g, w, p) {
@@ -59,7 +59,6 @@ function fireCharge(g, w, p) {
 
 function fireChain(g, w, p) {
   if (g.enemies.length === 0) return;
-  emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', pid: p.id });
   const sorted = g.enemies.slice().sort((a, b) => {
     const da = (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
     const db = (b.x - p.x) ** 2 + (b.y - p.y) ** 2;
@@ -67,6 +66,7 @@ function fireChain(g, w, p) {
   });
   const inRange = sorted.filter(e => Math.hypot(e.x - p.x, e.y - p.y) < w.range);
   if (inRange.length === 0) return;
+  emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', pid: p.id });
   const targets = [inRange[0]];
   const hit = new Set([inRange[0]]);
   for (let c = 0; c < w.chains && targets.length > 0; c++) {
@@ -84,7 +84,7 @@ function fireChain(g, w, p) {
     chainPoints.push({ x: t.x, y: t.y });
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       if (g.enemies[j] === t) {
-        damageEnemy(g, g.enemies[j], j, w.damage * p.damageMulti, p.id);
+        damageEnemy(g, g.enemies[j], w.damage * p.damageMulti, p.id);
         break;
       }
     }
@@ -170,7 +170,7 @@ function tickOrbit(g, w, p, dt) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
       if (dx * dx + dy * dy < (10 + e.radius) ** 2) {
-        damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 8, p.id);
+        damageEnemy(g, e, w.damage * p.damageMulti * dt * 8, p.id);
       }
     }
   }
@@ -188,7 +188,7 @@ function tickShield(g, w, p, dt) {
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
-      damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 2, p.id);
+      damageEnemy(g, e, w.damage * p.damageMulti * dt * 2, p.id);
     }
   }
   if (hit) {
@@ -214,7 +214,7 @@ function tickLightningField(g, w, p) {
   for (const t of targets) {
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       if (g.enemies[j] === t) {
-        damageEnemy(g, g.enemies[j], j, w.damage * p.damageMulti, p.id);
+        damageEnemy(g, g.enemies[j], w.damage * p.damageMulti, p.id);
         break;
       }
     }
@@ -242,7 +242,7 @@ function tickBreathAura(g, w, p, dt) {
     const edx = p.x - e.x, edy = p.y - e.y;
     const dist = Math.hypot(edx, edy);
     if (dist < w.radius + e.radius) {
-      damageEnemy(g, e, j, w.damage * p.damageMulti * dt, p.id);
+      damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id);
     }
   }
 }
@@ -255,7 +255,7 @@ function tickChargeSweep(g, w, p, dt) {
     const forward = ex * cdx + ey * cdy;
     const lateral = Math.abs(ex * (-cdy) + ey * cdx);
     if (forward > -w.width && forward < w.speed * w.duration && lateral < w.width + e.radius) {
-      damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 3, p.id);
+      damageEnemy(g, e, w.damage * p.damageMulti * dt * 3, p.id);
     }
   }
 }
@@ -265,7 +265,7 @@ function tickDragonStormAura(g, w, p, dt) {
     const e = g.enemies[j];
     const dx = p.x - e.x, dy = p.y - e.y;
     if (dx * dx + dy * dy < (w.auraRadius + e.radius) ** 2) {
-      damageEnemy(g, e, j, w.auraDamage * p.damageMulti * dt, p.id);
+      damageEnemy(g, e, w.auraDamage * p.damageMulti * dt, p.id);
     }
   }
 }
@@ -290,7 +290,7 @@ export function updateMeteorEffects(g, dt) {
         const e = g.enemies[j];
         const dx = m.x - e.x, dy = m.y - e.y;
         if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
-          damageEnemy(g, g.enemies[j], j, m.damage, m.owner);
+          damageEnemy(g, g.enemies[j], m.damage, m.owner);
         }
       }
     } else if (m.phase === 'explode' && m.life <= 0) {

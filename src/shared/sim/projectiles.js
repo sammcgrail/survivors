@@ -15,14 +15,16 @@ export function updateProjectiles(g, dt) {
       continue;
     }
 
+    // Look up owner once per projectile, not per enemy collision.
+    const owner = g.players.find(p => p.id === proj.owner);
+    const dmg = proj.damage * (owner ? owner.damageMulti : 1);
+
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       const e = g.enemies[j];
       const edx = proj.x - e.x;
       const edy = proj.y - e.y;
       if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
-        const owner = g.players.find(p => p.id === proj.owner);
-        const dmgMulti = owner ? owner.damageMulti : 1;
-        damageEnemy(g, e, j, proj.damage * dmgMulti, proj.owner);
+        damageEnemy(g, e, dmg, proj.owner);
         proj.pierce--;
         if (proj.pierce <= 0) {
           g.projectiles.splice(i, 1);
