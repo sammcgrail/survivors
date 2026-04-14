@@ -407,7 +407,7 @@ function initGame() {
     hpRegen: 0,
     magnetRange: XP_MAGNET_RANGE,
     xp: 0,
-    xpToLevel: 25,
+    xpToLevel: 45,
     level: 1,
     weapons: [createWeapon('spit')], // start with magic spit
     alive: true,
@@ -704,7 +704,7 @@ function update(dt) {
       while (p.xp >= p.xpToLevel) {
         p.xp -= p.xpToLevel;
         p.level++;
-        p.xpToLevel = Math.floor(p.xpToLevel * 1.3);
+        p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
         showLevelUp(g);
       }
     }
