@@ -13,6 +13,7 @@ import { spawnGem, updateGems } from './shared/sim/gems.js';
 import { damageEnemy, spawnHeart } from './shared/sim/damage.js';
 import { updateProjectiles } from './shared/sim/projectiles.js';
 import { spawnEnemy, updateEnemies } from './shared/sim/enemies.js';
+import { updateWaves } from './shared/sim/waves.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -538,41 +539,8 @@ function update(dt) {
   g.time += dt;
   g.waveTimer += dt;
 
-  // wave progression
-  if (g.waveTimer >= g.waveDuration) {
-    g.wave++;
-    g.waveTimer = 0;
-    g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
-    // spawn rate curve: fast early ramp, then gradual
-    g.spawnRate = Math.max(0.25, 2.0 * Math.pow(0.88, g.wave - 1));
-    // Show wave announcement for ALL waves
-    g.waveMsg = `WAVE ${g.wave}`;
-    g.waveMsgTimer = 2.0;
-    // check for special wave
-    const special = SPECIAL_WAVES[g.wave];
-    if (special) {
-      g.specialWaveMsg = special.name;
-      g.specialWaveMsgTimer = 2.5;
-    }
-  }
-
-  // wave message timers
-  if (g.waveMsgTimer > 0) g.waveMsgTimer -= dt;
-  if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
-
-  // spawn enemies — burst count scales with wave
-  g.spawnTimer -= dt;
-  if (g.spawnTimer <= 0) {
-    const special = SPECIAL_WAVES[g.wave];
-    let baseCount = 1 + Math.floor(g.wave / 2);
-    if (special) baseCount = Math.ceil(baseCount * special.countMulti);
-    const count = Math.min(baseCount, 12); // hard cap to prevent lag
-    // cap total enemies on screen
-    const maxEnemies = 80 + g.wave * 10;
-    const toSpawn = Math.min(count, maxEnemies - g.enemies.length);
-    for (let i = 0; i < toSpawn; i++) spawnEnemy(g);
-    g.spawnTimer = g.spawnRate;
-  }
+  // --- wave progression + spawn bursts (sim logic in shared/sim/waves.js)
+  updateWaves(g, dt);
 
   // player movement — analog touch input takes priority over digital keys
   let dx, dy;

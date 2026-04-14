@@ -569,6 +569,45 @@
     }
   });
 
+  // src/shared/sim/waves.js
+  function updateWaves(g, dt) {
+    if (g.waveTimer >= g.waveDuration) {
+      g.wave++;
+      g.waveTimer = 0;
+      g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
+      g.spawnRate = Math.max(0.25, 2 * Math.pow(0.88, g.wave - 1));
+      g.waveMsg = `WAVE ${g.wave}`;
+      g.waveMsgTimer = 2;
+      emit(g, EVT.WAVE_START, { wave: g.wave });
+      const special = SPECIAL_WAVES[g.wave];
+      if (special) {
+        g.specialWaveMsg = special.name;
+        g.specialWaveMsgTimer = 2.5;
+        emit(g, EVT.SPECIAL_WAVE_START, { wave: g.wave, name: special.name });
+      }
+    }
+    if (g.waveMsgTimer > 0) g.waveMsgTimer -= dt;
+    if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
+    g.spawnTimer -= dt;
+    if (g.spawnTimer <= 0) {
+      const special = SPECIAL_WAVES[g.wave];
+      let baseCount = 1 + Math.floor(g.wave / 2);
+      if (special) baseCount = Math.ceil(baseCount * special.countMulti);
+      const count = Math.min(baseCount, 12);
+      const maxEnemies = 80 + g.wave * 10;
+      const toSpawn = Math.min(count, maxEnemies - g.enemies.length);
+      for (let i = 0; i < toSpawn; i++) spawnEnemy(g);
+      g.spawnTimer = g.spawnRate;
+    }
+  }
+  var init_waves = __esm({
+    "src/shared/sim/waves.js"() {
+      init_enemyTypes();
+      init_events();
+      init_enemies();
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
@@ -582,6 +621,7 @@
       init_damage();
       init_projectiles();
       init_enemies();
+      init_waves();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -1157,32 +1197,7 @@
         const p = g.player;
         g.time += dt;
         g.waveTimer += dt;
-        if (g.waveTimer >= g.waveDuration) {
-          g.wave++;
-          g.waveTimer = 0;
-          g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
-          g.spawnRate = Math.max(0.25, 2 * Math.pow(0.88, g.wave - 1));
-          g.waveMsg = `WAVE ${g.wave}`;
-          g.waveMsgTimer = 2;
-          const special = SPECIAL_WAVES[g.wave];
-          if (special) {
-            g.specialWaveMsg = special.name;
-            g.specialWaveMsgTimer = 2.5;
-          }
-        }
-        if (g.waveMsgTimer > 0) g.waveMsgTimer -= dt;
-        if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
-        g.spawnTimer -= dt;
-        if (g.spawnTimer <= 0) {
-          const special = SPECIAL_WAVES[g.wave];
-          let baseCount = 1 + Math.floor(g.wave / 2);
-          if (special) baseCount = Math.ceil(baseCount * special.countMulti);
-          const count = Math.min(baseCount, 12);
-          const maxEnemies = 80 + g.wave * 10;
-          const toSpawn = Math.min(count, maxEnemies - g.enemies.length);
-          for (let i = 0; i < toSpawn; i++) spawnEnemy(g);
-          g.spawnTimer = g.spawnRate;
-        }
+        updateWaves(g, dt);
         let dx, dy;
         if (analogMove.x !== 0 || analogMove.y !== 0) {
           dx = analogMove.x;
