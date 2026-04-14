@@ -139,7 +139,7 @@ function r2(n) { return Math.round(n * 100) / 100; }
 function gameStateFor(viewerId) {
   const ps = game.players.map(p => ({
     id: p.id, name: p.name, color: p.color,
-    x: r1(p.x), y: r1(p.y),
+    x: r2(p.x), y: r2(p.y),
     hp: r1(p.hp), maxHp: p.maxHp,
     alive: p.alive, level: p.level, kills: p.kills,
     weapons: p.weapons.map(w => w.type),
