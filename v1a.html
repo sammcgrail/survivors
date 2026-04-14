@@ -180,20 +180,6 @@ canvas {
   z-index: 15;
   display: none;
 }
-#joystick-base {
-  display: none;
-  pointer-events: none;
-}
-#joystick-thumb {
-  display: none;
-  width: 50px;
-  height: 50px;
-  border-radius: 50%;
-  background: rgba(255,255,255,0.25);
-  border: 2px solid rgba(255,255,255,0.35);
-  display: none;
-  pointer-events: none;
-}
 #touch-hint {
   position: fixed;
   bottom: 20%;
@@ -393,6 +379,12 @@ const POWERUPS = [
   },
 ];
 
+const WEAPON_ICONS = {
+  spit: '🔮', breath: '🌀', charge: '🐂',
+  orbit: '🗡️', chain: '⚡', meteor: '☄️',
+  dragon_storm: '🐉',
+};
+
 function createWeapon(type) {
   switch (type) {
     case 'spit': return {
@@ -431,12 +423,12 @@ function createWeapon(type) {
 
 // --- enemy types ---
 const ENEMY_TYPES = [
-  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10 },
-  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8 },
-  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30 },
-  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4 },
-  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60 },
-  { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12 },
+  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10, sprite: 'blob' },
+  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8,  sprite: 'fast' },
+  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30, sprite: 'tank' },
+  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm' },
+  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'tank' },
+  { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12, sprite: 'skull' },
 ];
 
 // Wave composition tables — weights for each enemy type per wave bracket
@@ -538,7 +530,6 @@ function initGame() {
     projectiles: [],
     gems: [],
     particles: [],
-    chargeEffects: [],
     floatingTexts: [],
     time: 0,
     wave: 1,
@@ -1132,8 +1123,7 @@ function showLevelUp(g) {
 function showDeathScreen(g) {
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
-  const weaponIcons = { spit: '🔮', breath: '🌀', charge: '🐂', orbit: '🗡️', chain: '⚡', meteor: '☄️', dragon_storm: '🐉' };
-  const weaponList = g.player.weapons.map(w => weaponIcons[w.type] || '?').join(' ');
+  const weaponList = g.player.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
   const powerupList = POWERUPS.filter(p => p.stack > 0 && !p.id.startsWith('weapon_'))
     .map(p => `${p.icon}×${p.stack}`).join(' ');
   document.getElementById('death-stats').innerHTML = `
@@ -1346,10 +1336,7 @@ function render() {
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
 
     const spriteScale = e.radius / 8; // scale sprite to match enemy radius
-    const spriteName = e.name === 'tank' ? 'tank' :
-                       e.name === 'swarm' ? 'swarm' :
-                       e.name === 'fast' ? 'fast' :
-                       e.name === 'ghost' ? 'skull' : 'blob';
+    const spriteName = e.sprite || 'blob';
 
     if (e.hitFlash > 0) {
       // white flash — draw shape fallback
@@ -1524,8 +1511,7 @@ function render() {
   document.getElementById('hud-level').textContent = `Lv ${p.level}`;
   document.getElementById('hud-kills').textContent = `${g.kills} kills`;
   document.getElementById('hud-wave').textContent = `Wave ${g.wave}`;
-  const wicons = { spit:'🔮', breath:'🌀', charge:'🐂', orbit:'🗡️', chain:'⚡', meteor:'☄️', dragon_storm:'🐉' };
-  document.getElementById('hud-weapons').textContent = p.weapons.map(w => wicons[w.type] || '?').join(' ');
+  document.getElementById('hud-weapons').textContent = p.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
 
   requestAnimationFrame(render);
 }
