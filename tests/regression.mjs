@@ -7,7 +7,7 @@
 //   - index.html replaced with the wrong file (barn-arena vs survivors)
 //   - bundle import-graph break that JS-errors on load
 //   - a render path that pages to a blank canvas
-//   - v1b HTML drift (wrong / missing weapon cards)
+//   - mp HTML drift (wrong / missing weapon cards)
 //
 // Run with: npm run regression
 import { chromium } from 'playwright';
@@ -101,17 +101,17 @@ async function checkMp(browser) {
   check(/survivors/i.test(title), `title looks like survivors (got: "${title}")`);
 
   // Weapon cards: SP supports 9, but dragon_storm is an evolution, not a
-  // starting choice. v1b's start screen should expose all 8 starting weapons.
+  // starting choice. The start screen should expose all 8 starting weapons.
   const expected = ['spit', 'breath', 'charge', 'orbit', 'chain', 'meteor', 'shield', 'lightning_field'];
   const weapons = await page.$$eval('#weapon-select .weapon-card', els => els.map(el => el.dataset.weapon));
   for (const w of expected) check(weapons.includes(w), `weapon card present: ${w}`);
 
   // Bundle is referenced and loaded (404 here would be silent without this check).
   const bundleStatus = await page.evaluate(async () => {
-    const r = await fetch('/bundle-v1b.js');
+    const r = await fetch('/bundle-mp.js');
     return { ok: r.ok, len: (await r.text()).length };
   });
-  check(bundleStatus.ok && bundleStatus.len > 1000, `bundle-v1b.js served and non-trivial (${bundleStatus.len} bytes)`);
+  check(bundleStatus.ok && bundleStatus.len > 1000, `bundle-mp.js served and non-trivial (${bundleStatus.len} bytes)`);
 
   // Don't attempt to join — that needs a Node server. Just confirm the page
   // didn't error on bundle execution.

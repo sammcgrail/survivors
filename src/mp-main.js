@@ -1,7 +1,7 @@
 // ============================================================
-// SURVIVORS v1b — multiplayer WebSocket client
-// Thin display layer: server runs all game logic
-// Bundled by scripts/build.cjs → bundle-v1b.js
+// SURVIVORS — multiplayer WebSocket client.
+// Thin display layer: server runs all game logic.
+// Bundled by scripts/build.cjs → bundle-mp.js (loaded by mp.html).
 // ============================================================
 
 import { SPRITE_SIZE, SP } from './shared/sprites.js';

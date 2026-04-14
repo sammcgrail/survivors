@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Survivors v1b multiplayer server — thin shell over shared/sim/.
+// Survivors multiplayer server — thin shell over shared/sim/.
 //
 // The game loop is `tickSim(g, dt)` from src/shared/sim/tick.js — the
 // exact same code that drives the SP client. SP wraps a single player in
@@ -254,6 +254,6 @@ wss.on('connection', (ws) => {
   });
 });
 
-console.log(`survivors v1b node server on :${PORT}`);
+console.log(`survivors mp server on :${PORT}`);
 console.log(`world: ${WORLD_W}x${WORLD_H}, tick: ${TICK_RATE}Hz, max players: ${MAX_PLAYERS}`);
 startLoop();

@@ -1,5 +1,5 @@
-// World/player constants. Both v1a and (eventually) v1b's JS port read
-// from here so balance changes hit one place.
+// World/player constants. SP, MP server, and MP client all read from
+// here so balance changes hit one place.
 
 export const WORLD_W = 3000;
 export const WORLD_H = 3000;

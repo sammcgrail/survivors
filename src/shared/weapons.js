@@ -1,4 +1,4 @@
-// Pure weapon definitions + icon map. Both v1a and v1b read from here.
+// Pure weapon definitions + icon map. SP and MP both read from here.
 // Keep free of game-state mutations and DOM/canvas references.
 
 export const WEAPON_ICONS = {

@@ -1,6 +1,6 @@
 // ============================================================
-// SURVIVORS v1a — single-player client entry point
-// Bundled by scripts/build.cjs → bundle.js (loaded by v1a.html)
+// SURVIVORS — single-player client entry point.
+// Bundled by scripts/build.cjs → bundle.js (loaded by sp.html).
 // ============================================================
 
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
