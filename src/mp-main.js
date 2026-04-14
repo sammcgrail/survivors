@@ -17,11 +17,9 @@ spriteSheet.src = 'sprites.png';
 let spritesReady = false;
 spriteSheet.onload = () => { spritesReady = true; };
 
-// enemy name -> sprite name mapping
-const ENEMY_SPRITES = {
-  blob: 'blob', fast: 'fast', tank: 'tank', swarm: 'swarm',
-  brute: 'tank', ghost: 'skull',
-};
+// Most enemy names match their sprite name; only ghost diverges (uses
+// skull sprite). Server doesn't broadcast `sprite`, so we derive it.
+const ENEMY_SPRITES = { ghost: 'skull' };
 
 function drawSprite(name, x, y, scale, alpha) {
   if (!spritesReady || !SP[name]) return false;
@@ -190,7 +188,6 @@ resize();
 let ws = null;
 let myId = null;
 let myName = '';
-let myColor = '#eee';
 let selectedWeapon = 'spit';
 let connected = false;
 let arena = { w: 3000, h: 3000 };
@@ -273,7 +270,6 @@ function connectWS() {
     if (msg.type === 'welcome') {
       myId = msg.you;
       myName = msg.name;
-      myColor = msg.color;
       arena = msg.arena || arena;
       console.log(`[ws] welcome: id=${myId}, name=${myName}`);
       return;
@@ -722,7 +718,7 @@ function render(dt) {
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
 
     const spriteScale = e.radius / 8;
-    const spriteName = ENEMY_SPRITES[e.name] || 'blob';
+    const spriteName = ENEMY_SPRITES[e.name] || e.name;
 
     if (e.hitFlash > 0) {
       ctx.fillStyle = '#fff';
@@ -1041,7 +1037,7 @@ window.addEventListener('load', () => {
 // `startGame` is the unified PLAY/RETRY entry point — joins on first
 // press, respawns after death. SP exposes its own `startGame`; both pages
 // use the same template so the inline `onclick="startGame()"` is shared.
+// Both PLAY and RETRY use `onclick="startGame()"` in template.html — alias
+// to joinGame on first press, respawnGame after death.
 window.startGame = () => (renderStarted && prevMyAlive === false ? respawnGame() : joinGame());
-window.joinGame = joinGame;
-window.respawnGame = respawnGame;
 window.selectWeapon = selectWeapon;

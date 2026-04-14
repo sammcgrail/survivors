@@ -1064,7 +1064,7 @@ function render() {
   }
 
   // --- chain lightning effects ---
-  for (const ce of (g.chainEffects || [])) {
+  for (const ce of g.chainEffects) {
     ctx.strokeStyle = ce.color;
     ctx.lineWidth = 2;
     ctx.shadowColor = ce.color;
@@ -1087,7 +1087,7 @@ function render() {
   }
 
   // --- meteor effects ---
-  for (const m of (g.meteorEffects || [])) {
+  for (const m of g.meteorEffects) {
     if (m.phase === 'warn') {
       ctx.strokeStyle = 'rgba(255, 99, 72, 0.5)';
       ctx.lineWidth = 2;
