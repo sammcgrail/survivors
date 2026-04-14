@@ -1352,6 +1352,60 @@ function showDeathScreen(g) {
   } else {
     loadoutEl.innerHTML = '<div class="loadout-item" style="color:#555">no powerups</div>';
   }
+  // submit to leaderboard + fetch top 10
+  const lbEl = document.getElementById('death-leaderboard');
+  const lbPlaceEl = document.getElementById('death-lb-placement');
+  lbEl.innerHTML = '<div class="lb-title">leaderboard</div><div style="color:#555;font-size:0.7rem;text-align:center">loading...</div>';
+  lbPlaceEl.innerHTML = '';
+
+  const playerName = g.playerName || 'anon';
+  const weaponTypes = g.player.weapons.map(w => w.type);
+
+  // submit score
+  fetch(`${ANALYTICS_URL}/leaderboard`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: playerName, wave: g.wave, kills: g.kills, time: g.time, weapons: weaponTypes }),
+  })
+    .then(r => r.json())
+    .then(res => {
+      if (res.rank) {
+        lbPlaceEl.innerHTML = `<div class="lb-placement">#${res.rank} of ${res.total}</div>`;
+      }
+    })
+    .catch(() => {});
+
+  // fetch top 10
+  fetch(`${ANALYTICS_URL}/leaderboard?limit=10`)
+    .then(r => r.json())
+    .then(entries => {
+      if (!entries || entries.length === 0) {
+        lbEl.innerHTML = '<div class="lb-title">leaderboard</div><div style="color:#555;font-size:0.7rem;text-align:center">no runs yet</div>';
+        return;
+      }
+      const header = `<div class="lb-title">leaderboard</div>
+        <div class="lb-row" style="color:#444;font-size:0.6rem;border-bottom:1px solid #333">
+          <span class="lb-rank">#</span><span class="lb-name">name</span>
+          <span class="lb-wave">wave</span><span class="lb-kills">kills</span><span class="lb-time">time</span>
+        </div>`;
+      const rows = entries.map((e, i) => {
+        const m = Math.floor(e.time / 60);
+        const s = Math.floor(e.time % 60);
+        const isYou = e.name === playerName && e.wave === g.wave && e.kills === g.kills;
+        return `<div class="lb-row${isYou ? ' lb-you' : ''}">
+          <span class="lb-rank">${i + 1}</span>
+          <span class="lb-name">${e.name}</span>
+          <span class="lb-wave">W${e.wave}</span>
+          <span class="lb-kills">${e.kills}k</span>
+          <span class="lb-time">${m}:${s.toString().padStart(2, '0')}</span>
+        </div>`;
+      }).join('');
+      lbEl.innerHTML = header + rows;
+    })
+    .catch(() => {
+      lbEl.innerHTML = '<div class="lb-title">leaderboard</div><div style="color:#555;font-size:0.7rem;text-align:center">offline</div>';
+    });
+
   document.getElementById('death-screen').style.display = 'flex';
 }
 
