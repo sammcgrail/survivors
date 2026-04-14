@@ -249,6 +249,16 @@ canvas {
       <div class="wc-name">Bull Rush</div>
       <div class="wc-desc">Sweep — charges in your move direction</div>
     </div>
+    <div class="weapon-card" data-weapon="shield" onclick="selectWeapon('shield')">
+      <div class="wc-icon">🛡️</div>
+      <div class="wc-name">Barrier</div>
+      <div class="wc-desc">Shield — knocks back and damages nearby enemies</div>
+    </div>
+    <div class="weapon-card" data-weapon="lightning_field" onclick="selectWeapon('lightning_field')">
+      <div class="wc-icon">⚡</div>
+      <div class="wc-name">Lightning Field</div>
+      <div class="wc-desc">Passive — zaps random nearby enemies periodically</div>
+    </div>
   </div>
   <button onclick="startGame()">PLAY</button>
   <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
@@ -593,12 +603,16 @@ const POWERUPS = [
   { id: 'weapon_orbit', name: 'Blade Orbit', desc: 'Orbiting blades damage enemies on contact', icon: '🗡️', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('orbit')); } },
   { id: 'weapon_chain', name: 'Chain Lightning', desc: 'Zaps nearest enemy, chains to 2 more', icon: '⚡', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('chain')); } },
   { id: 'weapon_meteor', name: 'Meteor', desc: 'Drops AoE on enemy clusters', icon: '☄️', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('meteor')); } },
+  { id: 'weapon_shield', name: 'Barrier', desc: 'Knockback shield — pushes and damages nearby enemies', icon: '🛡️', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('shield')); } },
+  { id: 'weapon_lightning_field', name: 'Lightning Field', desc: 'Passive zaps random nearby enemies', icon: '⚡', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('lightning_field')); } },
   { id: 'spit_up', name: 'Spit+', desc: 'Extra projectile + pierce', icon: '🔮+', stack: 0, max: 3, requires: 'weapon_spit', apply(g) { let w = g.player.weapons.find(w=>w.type==='spit'); if(w){w.count++;w.pierce++;} } },
   { id: 'breath_up', name: 'Breath+', desc: '+30% aura radius', icon: '🌀+', stack: 0, max: 3, requires: 'weapon_breath', apply(g) { let w = g.player.weapons.find(w=>w.type==='breath'); if(w) w.radius *= 1.3; } },
   { id: 'charge_up', name: 'Rush+', desc: '+40% charge damage & width', icon: '🐂+', stack: 0, max: 3, requires: 'weapon_charge', apply(g) { let w = g.player.weapons.find(w=>w.type==='charge'); if(w){w.damage*=1.4;w.width*=1.4;} } },
   { id: 'orbit_up', name: 'Orbit+', desc: '+1 orbiting blade', icon: '🗡️+', stack: 0, max: 3, requires: 'weapon_orbit', apply(g) { let w = g.player.weapons.find(w=>w.type==='orbit'); if(w) w.bladeCount++; } },
   { id: 'chain_up', name: 'Chain+', desc: '+1 chain target', icon: '⚡+', stack: 0, max: 3, requires: 'weapon_chain', apply(g) { let w = g.player.weapons.find(w=>w.type==='chain'); if(w) w.chains++; } },
   { id: 'meteor_up', name: 'Meteor+', desc: '+40% blast radius & damage', icon: '☄️+', stack: 0, max: 3, requires: 'weapon_meteor', apply(g) { let w = g.player.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.4;w.damage*=1.4;} } },
+  { id: 'shield_up', name: 'Barrier+', desc: '+25% radius & knockback', icon: '🛡️+', stack: 0, max: 3, requires: 'weapon_shield', apply(g) { let w = g.player.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.25;w.knockback*=1.25;} } },
+  { id: 'lightning_field_up', name: 'Field+', desc: '+1 zap target & +20% radius', icon: '⚡+', stack: 0, max: 3, requires: 'weapon_lightning_field', apply(g) { let w = g.player.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount++;w.radius*=1.2;} } },
   // EVOLUTION: max spit (4 stacks) + max breath (4 stacks) = Dragon Storm
   { id: 'evo_dragon_storm', name: 'DRAGON STORM', desc: 'Spit + Breath fuse into homing fireballs + damage aura', icon: '🐉',
     stack: 0, max: 1,
@@ -649,6 +663,14 @@ function createWeapon(type) {
     case 'meteor': return {
       type: 'meteor', cooldown: 3.5, timer: 0, damage: 50, blastRadius: 60,
       color: '#ff6348',
+    };
+    case 'shield': return {
+      type: 'shield', cooldown: 99999, timer: 99999, damage: 20, radius: 50,
+      color: '#74b9ff', knockback: 200, phase: 0,
+    };
+    case 'lightning_field': return {
+      type: 'lightning_field', cooldown: 0.6, timer: 0, damage: 18, radius: 140,
+      color: '#ffeaa7', zapCount: 3,
     };
     case 'dragon_storm': return {
       type: 'dragon_storm', cooldown: 0.4, timer: 0, damage: 25, speed: 300,
@@ -928,6 +950,51 @@ function update(dt) {
           }
         }
       }
+    }
+    // special: shield knockback + damage aura (always active)
+    if (w.type === 'shield') {
+      w.phase = (w.phase || 0) + dt * 4;
+      for (let j = g.enemies.length - 1; j >= 0; j--) {
+        const e = g.enemies[j];
+        const edx = e.x - p.x;
+        const edy = e.y - p.y;
+        const dist = Math.sqrt(edx * edx + edy * edy);
+        if (dist < w.radius + e.radius && dist > 1) {
+          // knockback
+          const nx = edx / dist;
+          const ny = edy / dist;
+          e.x += nx * w.knockback * dt;
+          e.y += ny * w.knockback * dt;
+          // damage on contact
+          damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 2);
+        }
+      }
+    }
+    // special: lightning field — zaps N random enemies in range on each fire
+    if (w.type === 'lightning_field' && w.timer >= w.cooldown - 0.01) {
+      // just fired (timer was reset) — zap targets
+      const inRange = [];
+      for (const e of g.enemies) {
+        const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+        if (d2 < w.radius * w.radius) inRange.push(e);
+      }
+      // shuffle and pick zapCount targets
+      for (let z = inRange.length - 1; z > 0; z--) {
+        const r = Math.floor(Math.random() * (z + 1));
+        [inRange[z], inRange[r]] = [inRange[r], inRange[z]];
+      }
+      const targets = inRange.slice(0, w.zapCount);
+      g.chainEffects = g.chainEffects || [];
+      for (const t of targets) {
+        for (let j = g.enemies.length - 1; j >= 0; j--) {
+          if (g.enemies[j] === t) {
+            damageEnemy(g, g.enemies[j], j, w.damage * p.damageMulti);
+            break;
+          }
+        }
+        g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
+      }
+      if (targets.length > 0) sfx('chain');
     }
   }
 
@@ -1639,6 +1706,46 @@ function render() {
         ctx.shadowBlur = 0;
         ctx.restore();
       }
+    }
+
+    // shield barrier
+    if (w.type === 'shield') {
+      const pulse = 1 + Math.sin(w.phase) * 0.08;
+      const r = w.radius * pulse;
+      const grad = ctx.createRadialGradient(p.x, p.y, r * 0.7, p.x, p.y, r);
+      grad.addColorStop(0, 'rgba(116, 185, 255, 0)');
+      grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.12)');
+      grad.addColorStop(1, 'rgba(116, 185, 255, 0.25)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      // shield ring
+      ctx.strokeStyle = 'rgba(116, 185, 255, 0.6)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.stroke();
+      // hexagonal pattern dots on ring
+      const hexCount = 6;
+      for (let h = 0; h < hexCount; h++) {
+        const a = w.phase * 0.5 + (Math.PI * 2 / hexCount) * h;
+        ctx.fillStyle = 'rgba(116, 185, 255, 0.8)';
+        ctx.beginPath();
+        ctx.arc(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 3, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // lightning field radius indicator
+    if (w.type === 'lightning_field') {
+      ctx.strokeStyle = 'rgba(255, 234, 167, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 8]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, w.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
     }
   }
 
