@@ -3,12 +3,9 @@
  * Survivors build script. Bundles src/main.js → bundle.js via esbuild.
  *
  * Usage:
- *   node scripts/build.js          # one-shot build
- *   node scripts/build.js --watch  # rebuild on file change
- *
- * The output sits at the repo root next to v1a.html so Caddy / CF Pages
- * keep serving from the same place. No dist/ directory yet — kept simple
- * for the first modularization PR.
+ *   node scripts/build.cjs          # production build (minified)
+ *   node scripts/build.cjs --watch  # dev: unminified + sourcemap, rebuild on change
+ *   node scripts/build.cjs --dev    # dev one-shot (unminified + sourcemap)
  */
 const esbuild = require('esbuild');
 const path = require('path');
@@ -16,9 +13,8 @@ const fs = require('fs');
 
 const ROOT = path.resolve(__dirname, '..');
 const watch = process.argv.includes('--watch');
+const dev = watch || process.argv.includes('--dev');
 
-// Two bundles: v1a single-player and v1b multiplayer client.
-// Both pull from src/shared/ for one-source-of-truth on game data.
 const targets = [
   { entry: 'src/main.js',     out: 'bundle.js' },
   { entry: 'src/v1b-main.js', out: 'bundle-v1b.js' },
@@ -26,9 +22,10 @@ const targets = [
 const baseOpts = {
   bundle: true,
   format: 'iife',
-  sourcemap: 'linked',
   target: ['es2020'],
   logLevel: 'info',
+  minify: !dev,
+  sourcemap: dev ? 'linked' : false,
 };
 
 (async () => {

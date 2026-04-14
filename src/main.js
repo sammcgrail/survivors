@@ -4,9 +4,8 @@
 // ============================================================
 
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
-import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_RADIUS, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
+import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
-import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from './shared/enemyTypes.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
