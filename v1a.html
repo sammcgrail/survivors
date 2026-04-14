@@ -214,6 +214,47 @@ canvas {
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 
+// --- sprite sheet ---
+const SPRITE_SIZE = 16;
+const spriteSheet = new Image();
+spriteSheet.src = 'sprites.png';
+let spritesReady = false;
+spriteSheet.onload = () => { spritesReady = true; };
+
+// sprite coords: (col, row) in 16px grid
+const SP = {
+  player:     [0, 0],
+  blob:       [1, 0],
+  fast:       [2, 0],
+  tank:       [3, 0],
+  swarm:      [4, 0],
+  gem:        [5, 0],
+  heart:      [6, 0],
+  crate:      [7, 0],
+  spit:       [0, 1],
+  spitTrail:  [1, 1],
+  flame:      [2, 1],
+  chargeSpark:[3, 1],
+  explosion:  [4, 1],
+  skull:      [5, 1],
+  shield:     [6, 1],
+  magnet:     [7, 1],
+};
+
+function drawSprite(name, x, y, scale, alpha) {
+  if (!spritesReady || !SP[name]) return false;
+  const [col, row] = SP[name];
+  const s = SPRITE_SIZE;
+  const drawSize = s * (scale || 2);
+  const prevAlpha = ctx.globalAlpha;
+  if (alpha !== undefined) ctx.globalAlpha = alpha;
+  ctx.imageSmoothingEnabled = false;
+  ctx.drawImage(spriteSheet, col * s, row * s, s, s,
+    x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
+  ctx.globalAlpha = prevAlpha;
+  return true;
+}
+
 // --- resize ---
 function resize() {
   canvas.width = window.innerWidth;
@@ -883,19 +924,20 @@ function render() {
   ctx.lineWidth = 3;
   ctx.strokeRect(0, 0, WORLD_W, WORLD_H);
 
-  // --- gems ---
+  // --- gems (sprites) ---
   for (const gem of g.gems) {
-    ctx.fillStyle = '#3498db';
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    // diamond shape
-    ctx.moveTo(gem.x, gem.y - gem.radius);
-    ctx.lineTo(gem.x + gem.radius, gem.y);
-    ctx.lineTo(gem.x, gem.y + gem.radius);
-    ctx.lineTo(gem.x - gem.radius, gem.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    if (!drawSprite('gem', gem.x, gem.y, 0.9, 0.85)) {
+      ctx.fillStyle = '#3498db';
+      ctx.globalAlpha = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(gem.x, gem.y - gem.radius);
+      ctx.lineTo(gem.x + gem.radius, gem.y);
+      ctx.lineTo(gem.x, gem.y + gem.radius);
+      ctx.lineTo(gem.x - gem.radius, gem.y);
+      ctx.closePath();
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
   }
 
   // --- breath aura ---
@@ -936,49 +978,26 @@ function render() {
     }
   }
 
-  // --- enemies (varied shapes by type) ---
+  // --- enemies (sprites with shape fallback) ---
   for (const e of g.enemies) {
     // skip if off screen
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
 
-    const ecolor = e.hitFlash > 0 ? '#fff' : e.color;
-    ctx.fillStyle = ecolor;
+    const spriteScale = e.radius / 8; // scale sprite to match enemy radius
+    const spriteName = e.name === 'tank' ? 'tank' :
+                       e.name === 'swarm' ? 'swarm' :
+                       e.name === 'fast' ? 'fast' :
+                       e.name === 'ghost' ? 'skull' : 'blob';
 
-    if (e.name === 'tank') {
-      // chunky hexagon
+    if (e.hitFlash > 0) {
+      // white flash — draw shape fallback
+      ctx.fillStyle = '#fff';
       ctx.beginPath();
-      for (let i = 0; i < 6; i++) {
-        const a = Math.PI / 3 * i - Math.PI / 6;
-        const px = e.x + Math.cos(a) * e.radius;
-        const py = e.y + Math.sin(a) * e.radius;
-        i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
-      }
-      ctx.closePath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-      ctx.lineWidth = 3;
-      ctx.stroke();
-    } else if (e.name === 'swarm') {
-      // jittery small triangle
-      const jx = (Math.random() - 0.5) * 2;
-      const jy = (Math.random() - 0.5) * 2;
-      ctx.beginPath();
-      ctx.moveTo(e.x + jx, e.y - e.radius + jy);
-      ctx.lineTo(e.x + e.radius + jx, e.y + e.radius + jy);
-      ctx.lineTo(e.x - e.radius + jx, e.y + e.radius + jy);
-      ctx.closePath();
-      ctx.fill();
-    } else if (e.name === 'fast') {
-      // diamond shape
-      ctx.beginPath();
-      ctx.moveTo(e.x, e.y - e.radius * 1.2);
-      ctx.lineTo(e.x + e.radius * 0.8, e.y);
-      ctx.lineTo(e.x, e.y + e.radius * 1.2);
-      ctx.lineTo(e.x - e.radius * 0.8, e.y);
-      ctx.closePath();
-      ctx.fill();
-    } else {
-      // blob — default circle
+    } else if (!drawSprite(spriteName, e.x, e.y, spriteScale)) {
+      // fallback to colored circle if sprites not loaded
+      ctx.fillStyle = e.color;
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
       ctx.fill();
@@ -994,30 +1013,36 @@ function render() {
     }
   }
 
-  // --- projectiles (with trails) ---
+  // --- projectiles (sprites with trail) ---
   for (const proj of g.projectiles) {
-    // trail
+    // trail sprites
     const trailLen = 4;
     const speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
     if (speed > 0) {
       const nx = -proj.vx / speed;
       const ny = -proj.vy / speed;
       for (let t = 1; t <= trailLen; t++) {
-        ctx.globalAlpha = 0.3 - t * 0.06;
-        ctx.fillStyle = proj.color;
-        ctx.beginPath();
-        ctx.arc(proj.x + nx * t * 6, proj.y + ny * t * 6, proj.radius * (1 - t * 0.15), 0, Math.PI * 2);
-        ctx.fill();
+        const alpha = 0.3 - t * 0.06;
+        const tScale = (1 - t * 0.15) * 0.7;
+        if (!drawSprite('spitTrail', proj.x + nx * t * 6, proj.y + ny * t * 6, tScale, alpha)) {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = proj.color;
+          ctx.beginPath();
+          ctx.arc(proj.x + nx * t * 6, proj.y + ny * t * 6, proj.radius * (1 - t * 0.15), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
       }
-      ctx.globalAlpha = 1;
     }
-    // main projectile
-    ctx.fillStyle = proj.color;
+    // main projectile sprite
     ctx.shadowColor = proj.color;
     ctx.shadowBlur = 10;
-    ctx.beginPath();
-    ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
-    ctx.fill();
+    if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
+      ctx.fillStyle = proj.color;
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.shadowBlur = 0;
   }
 
@@ -1042,20 +1067,25 @@ function render() {
 
   // --- player ---
   if (p.alive) {
+    // iframe flicker
+    const flickerHide = p.iframes > 0 && Math.floor(p.iframes * 10) % 2;
+    const playerAlpha = flickerHide ? 0.4 : 1.0;
+
     // glow
     ctx.shadowColor = p.iframes > 0 ? '#fff' : '#3498db';
     ctx.shadowBlur = 15;
 
-    // body
-    ctx.fillStyle = p.iframes > 0 && Math.floor(p.iframes * 10) % 2 ? 'rgba(255,255,255,0.5)' : '#eee';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-    ctx.fill();
-
-    // outline
-    ctx.strokeStyle = '#3498db';
-    ctx.lineWidth = 2;
-    ctx.stroke();
+    // player sprite
+    if (!drawSprite('player', p.x, p.y, 2, playerAlpha)) {
+      // fallback circle
+      ctx.fillStyle = flickerHide ? 'rgba(255,255,255,0.5)' : '#eee';
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#3498db';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
     ctx.shadowBlur = 0;
 
     // facing indicator (little triangle pointing in move direction)
@@ -1068,12 +1098,14 @@ function render() {
       const perpX = -fy;
       const perpY = fx;
       ctx.fillStyle = '#3498db';
+      ctx.globalAlpha = playerAlpha;
       ctx.beginPath();
       ctx.moveTo(tipX, tipY);
       ctx.lineTo(p.x + fx * p.radius - perpX * 4, p.y + fy * p.radius - perpY * 4);
       ctx.lineTo(p.x + fx * p.radius + perpX * 4, p.y + fy * p.radius + perpY * 4);
       ctx.closePath();
       ctx.fill();
+      ctx.globalAlpha = 1;
     }
 
     // hp bar above player
