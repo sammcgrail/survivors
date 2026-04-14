@@ -114,13 +114,11 @@ function applyInputs(g, dt) {
 
 function tick(dt) {
   if (!game) return;
-  // Snapshot the active players into g.players for the sim. Includes
-  // dead players too (sim checks p.alive); they vanish from the broadcast
-  // in gameStateFor since we filter the snapshot, but keeping them in
-  // g.players means their `id` stays attributable for kill credit.
+  // Snapshot includes dead players too — sim checks p.alive itself, and
+  // keeping them in the array means their `id` stays attributable for
+  // kill credit. Broadcast still ships them so spectators see the body.
   game.players = [...players.values()];
-  if (game.players.filter(p => p.alive).length === 0) {
-    // Drain the event queue so it doesn't grow unboundedly while idle.
+  if (!game.players.some(p => p.alive)) {
     game.events.length = 0;
     return;
   }
@@ -128,57 +126,58 @@ function tick(dt) {
   game.waveTimer += dt;
   applyInputs(game, dt);
   tickSim(game, dt);
-  // Sim-emitted events aren't consumed by anyone server-side; drop them
-  // each tick rather than letting the queue grow.
+  // Server doesn't consume sim-emitted events — drop them each tick.
   game.events.length = 0;
 }
 
 function r1(n) { return Math.round(n * 10) / 10; }
 function r2(n) { return Math.round(n * 100) / 100; }
 
-function gameStateFor(viewerId) {
-  const ps = game.players.map(p => ({
-    id: p.id, name: p.name, color: p.color,
-    x: r2(p.x), y: r2(p.y),
-    hp: r1(p.hp), maxHp: p.maxHp,
-    alive: p.alive, level: p.level, kills: p.kills,
-    weapons: p.weapons.map(w => w.type),
-  }));
-  const enemies = game.enemies.map(e => ({
-    name: e.name,
-    x: r1(e.x), y: r1(e.y),
-    hp: e.hp, maxHp: e.maxHp,
-    radius: e.radius, color: e.color,
-    hitFlash: r2(e.hitFlash || 0),
-  }));
-  const gems = game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y), xp: gem.xp }));
-  const projectiles = game.projectiles.map(pr => ({
-    x: r1(pr.x), y: r1(pr.y), radius: pr.radius, owner: pr.owner,
-  }));
-  const chainEffects = game.chainEffects.map(c => ({
-    points: c.points.map(pt => ({ x: r1(pt.x), y: r1(pt.y) })),
-    life: r2(c.life), color: c.color,
-  }));
-  const meteorEffects = game.meteorEffects.map(m => ({
-    x: r1(m.x), y: r1(m.y), radius: m.radius,
-    life: r2(m.life), phase: m.phase, color: m.color,
-  }));
+// Build the world snapshot once per tick. `you` is per-recipient and
+// stamped at send time so we don't re-stringify the whole state N times.
+function gameSnapshot() {
   return {
     type: 'state',
     t: Date.now() / 1000,
     wave: game.wave,
     time: r1(game.time),
     kills: game.kills,
-    players: ps,
-    enemies, gems, projectiles, chainEffects, meteorEffects,
-    you: viewerId,
+    players: game.players.map(p => ({
+      id: p.id, name: p.name, color: p.color,
+      x: r2(p.x), y: r2(p.y),
+      hp: r1(p.hp), maxHp: p.maxHp,
+      alive: p.alive, level: p.level, kills: p.kills,
+      weapons: p.weapons.map(w => w.type),
+    })),
+    enemies: game.enemies.map(e => ({
+      name: e.name,
+      x: r1(e.x), y: r1(e.y),
+      hp: e.hp, maxHp: e.maxHp,
+      radius: e.radius, color: e.color,
+      hitFlash: r2(e.hitFlash || 0),
+    })),
+    gems: game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y), xp: gem.xp })),
+    projectiles: game.projectiles.map(pr => ({
+      x: r1(pr.x), y: r1(pr.y), radius: pr.radius, owner: pr.owner,
+    })),
+    chainEffects: game.chainEffects.map(c => ({
+      points: c.points.map(pt => ({ x: r1(pt.x), y: r1(pt.y) })),
+      life: r2(c.life), color: c.color,
+    })),
+    meteorEffects: game.meteorEffects.map(m => ({
+      x: r1(m.x), y: r1(m.y), radius: m.radius,
+      life: r2(m.life), phase: m.phase, color: m.color,
+    })),
     arena: { w: WORLD_W, h: WORLD_H },
   };
 }
 
 function broadcast() {
+  if (players.size === 0) return;
+  const base = gameSnapshot();
   for (const [ws, p] of players) {
-    try { ws.send(JSON.stringify(gameStateFor(p.id))); } catch { /* dead socket — close handler cleans up */ }
+    base.you = p.id;
+    try { ws.send(JSON.stringify(base)); } catch { /* dead socket — close handler cleans up */ }
   }
 }
 
@@ -210,8 +209,8 @@ wss.on('connection', (ws) => {
       }
       // Reset game state when first player joins an empty server so they
       // don't spawn into a wave-18 death trap left over from prior sessions.
-      const aliveCount = [...players.values()].filter(p => p.alive).length;
-      if (aliveCount === 0) {
+      const anyAlive = [...players.values()].some(p => p.alive);
+      if (!anyAlive) {
         game = initGame();
         console.log('[*] game reset (no alive players)');
       }
