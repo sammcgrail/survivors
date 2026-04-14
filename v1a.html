@@ -821,6 +821,8 @@ function initGame() {
     spawnRate: 2.0, // seconds between spawn bursts (decreases per wave)
     specialWaveMsg: null,
     specialWaveMsgTimer: 0,
+    waveMsg: '',
+    waveMsgTimer: 0,
     kills: 0,
     playerName: 'you',
     deathFeed: [], // { text, time } — fading event log
@@ -880,6 +882,9 @@ function update(dt) {
     g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
     // spawn rate curve: fast early ramp, then gradual
     g.spawnRate = Math.max(0.25, 2.0 * Math.pow(0.88, g.wave - 1));
+    // Show wave announcement for ALL waves
+    g.waveMsg = `WAVE ${g.wave}`;
+    g.waveMsgTimer = 2.0;
     // check for special wave
     const special = SPECIAL_WAVES[g.wave];
     if (special) {
@@ -888,7 +893,8 @@ function update(dt) {
     }
   }
 
-  // special wave message timer
+  // wave message timers
+  if (g.waveMsgTimer > 0) g.waveMsgTimer -= dt;
   if (g.specialWaveMsgTimer > 0) g.specialWaveMsgTimer -= dt;
 
   // spawn enemies — burst count scales with wave
@@ -2040,7 +2046,22 @@ function render() {
 
   ctx.restore();
 
-  // --- special wave announcement ---
+  // --- wave announcement banner ---
+  if (g.waveMsgTimer > 0) {
+    const alpha = Math.min(1, g.waveMsgTimer / 0.5);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#f1c40f';
+    ctx.font = 'bold 28px "Orbitron", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#f39c12';
+    ctx.shadowBlur = 15;
+    ctx.fillText(g.waveMsg, W / 2, H * 0.3);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+
+  // --- special wave announcement (below wave number) ---
   if (g.specialWaveMsgTimer > 0) {
     const alpha = Math.min(1, g.specialWaveMsgTimer / 0.5);
     ctx.save();
@@ -2050,7 +2071,7 @@ function render() {
     ctx.textAlign = 'center';
     ctx.shadowColor = '#e74c3c';
     ctx.shadowBlur = 20;
-    ctx.fillText(`⚠ WAVE ${g.wave}: ${g.specialWaveMsg} ⚠`, W / 2, H * 0.3);
+    ctx.fillText(`⚠ ${g.specialWaveMsg} ⚠`, W / 2, H * 0.3 + 44);
     ctx.shadowBlur = 0;
     ctx.restore();
   }
