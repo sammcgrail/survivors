@@ -2,325 +2,352 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>barn arena</title>
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Orbitron:wght@700;900&display=swap" rel="stylesheet">
+<title>survivors v1a</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    background: #0a0a0f;
-    color: #ccc;
-    font-family: 'IBM Plex Mono', 'Courier New', monospace;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    overflow: hidden;
-  }
-  .hdr {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    margin-bottom: 10px;
-    font-size: 0.75rem;
-    color: #666;
-  }
-  .hdr a { color: #555; text-decoration: none; }
-  .hdr a:hover { color: #aaa; }
-  .hdr-title { color: #aaa; }
-  .hdr-title span { color: #e74c3c; }
-  #status { color: #555; }
-  #status.ok { color: #2ecc71; }
-  canvas {
-    border: 1px solid #222;
-    border-radius: 4px;
-    image-rendering: pixelated;
-  }
-  .ftr {
-    margin-top: 10px;
-    display: flex;
-    gap: 16px;
-    font-size: 0.65rem;
-    color: #444;
-  }
-  .name-input {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 12px;
-    z-index: 10;
-  }
-  .name-input label { color: #888; font-size: 0.8rem; }
-  .name-input input {
-    background: #111;
-    border: 1px solid #333;
-    color: #eee;
-    padding: 8px 16px;
-    font-family: inherit;
-    font-size: 1rem;
-    border-radius: 4px;
-    text-align: center;
-    outline: none;
-    width: 200px;
-  }
-  .name-input input:focus { border-color: #e74c3c; }
-  .name-input button {
-    background: #e74c3c;
-    border: none;
-    color: #fff;
-    padding: 6px 24px;
-    font-family: inherit;
-    font-size: 0.8rem;
-    border-radius: 4px;
-    cursor: pointer;
-  }
-  .name-input button:hover { background: #c0392b; }
-  .players-list {
-    position: absolute;
-    top: 10px;
-    right: 10px;
-    font-size: 0.6rem;
-    color: #666;
-    text-align: right;
-  }
-  .players-list div { margin-bottom: 2px; }
-  .player-dot {
-    display: inline-block;
-    width: 6px; height: 6px;
-    border-radius: 50%;
-    margin-right: 4px;
-  }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+  background: #0a0a0f;
+  color: #ccc;
+  font-family: 'Chakra Petch', 'Segoe UI', sans-serif;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+canvas { display: block; image-rendering: pixelated; }
+#ui {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #aaa;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  pointer-events: none;
+  z-index: 10;
+}
+#ui .left, #ui .right { display: flex; gap: 16px; }
+#level-up {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+}
+#level-up h2 { color: #f1c40f; margin-bottom: 24px; font-size: 2rem; font-family: 'Orbitron', sans-serif; font-weight: 900; text-shadow: 0 0 20px rgba(241,196,15,0.5); letter-spacing: 4px; }
+#level-up .choices { display: flex; gap: 16px; }
+#level-up .choice {
+  background: #181825;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 20px;
+  width: 180px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s;
+}
+#level-up .choice:hover { border-color: #f1c40f; }
+#level-up .choice .name { color: #f1c40f; font-size: 1rem; font-weight: 700; margin-bottom: 8px; }
+#level-up .choice .desc { color: #999; font-size: 0.8rem; line-height: 1.5; }
+#start-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+#start-screen h1 { color: #e74c3c; font-size: 3rem; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 30px rgba(231,76,60,0.6); margin-bottom: 8px; }
+#start-screen .sub { color: #777; font-size: 0.85rem; margin-bottom: 32px; }
+#start-screen button {
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  padding: 12px 40px;
+  font-family: inherit;
+  font-size: 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#start-screen button:hover { background: #c0392b; }
+#death-screen {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.9);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 30;
+}
+#death-screen h1 { color: #e74c3c; font-size: 3rem; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 6px; text-shadow: 0 0 30px rgba(231,76,60,0.6); margin-bottom: 8px; }
+#death-screen .stats { color: #aaa; font-size: 1rem; margin-bottom: 16px; text-align: center; line-height: 2; }
+#death-screen .best-run {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 10px 20px;
+  margin-bottom: 16px;
+  text-align: center;
+  font-size: 0.75rem;
+  color: #666;
+}
+#death-screen .best-run .best-label { text-transform: uppercase; letter-spacing: 2px; font-size: 0.6rem; color: #555; margin-bottom: 4px; }
+#death-screen .best-run .best-value { color: #f39c12; font-size: 0.85rem; }
+#death-screen .new-best {
+  color: #f1c40f;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  animation: bestPulse 0.6s ease-in-out infinite alternate;
+}
+@keyframes bestPulse {
+  from { text-shadow: 0 0 8px rgba(241,196,15,0.4); opacity: 0.8; }
+  to { text-shadow: 0 0 20px rgba(241,196,15,0.8); opacity: 1; }
+}
+#death-screen button {
+  background: #e74c3c;
+  border: none;
+  color: #fff;
+  padding: 10px 32px;
+  font-family: inherit;
+  font-size: 0.9rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+#death-screen .loadout {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+#death-screen .loadout-item {
+  background: #181825;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  color: #aaa;
+}
+#death-screen .loadout-item .li-icon { margin-right: 4px; }
+#death-screen .loadout-label { color: #666; font-size: 0.7rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 2px; }
+#death-screen .leaderboard {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  width: 320px;
+  max-width: 90vw;
+}
+#death-screen .leaderboard .lb-title {
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.6rem;
+  color: #555;
+  margin-bottom: 8px;
+  text-align: center;
+}
+#death-screen .leaderboard .lb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+  font-size: 0.72rem;
+  color: #888;
+  border-bottom: 1px solid #222;
+}
+#death-screen .leaderboard .lb-row:last-child { border-bottom: none; }
+#death-screen .leaderboard .lb-row.lb-you {
+  color: #f1c40f;
+  font-weight: 700;
+}
+#death-screen .leaderboard .lb-rank { width: 24px; color: #555; }
+#death-screen .leaderboard .lb-row.lb-you .lb-rank { color: #f1c40f; }
+#death-screen .leaderboard .lb-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#death-screen .leaderboard .lb-wave { width: 36px; text-align: right; }
+#death-screen .leaderboard .lb-kills { width: 44px; text-align: right; }
+#death-screen .leaderboard .lb-time { width: 40px; text-align: right; color: #555; }
+#death-screen .lb-placement {
+  text-align: center;
+  font-size: 0.75rem;
+  color: #f39c12;
+  margin-bottom: 6px;
+}
+/* weapon select */
+.weapon-select {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+.weapon-card {
+  background: #181825;
+  border: 2px solid #333;
+  border-radius: 8px;
+  padding: 16px 20px;
+  width: 170px;
+  cursor: pointer;
+  text-align: center;
+  transition: border-color 0.15s, transform 0.1s;
+}
+.weapon-card:hover { border-color: #e74c3c; transform: translateY(-2px); }
+.weapon-card.selected { border-color: #e74c3c; background: #1a1020; }
+.weapon-card .wc-icon { font-size: 1.8rem; margin-bottom: 6px; }
+.weapon-card .wc-name { color: #e74c3c; font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
+.weapon-card .wc-desc { color: #777; font-size: 0.7rem; line-height: 1.4; }
+@media (pointer: coarse) {
+  .weapon-select { flex-direction: column; align-items: center; gap: 10px; }
+  .weapon-card { width: 240px; padding: 12px; }
+}
+#xp-bar {
+  position: fixed;
+  bottom: 0; left: 0; right: 0;
+  height: 6px;
+  background: #111;
+  z-index: 10;
+}
+#xp-fill {
+  height: 100%;
+  background: #3498db;
+  width: 0%;
+  transition: width 0.15s;
+}
+/* --- MOBILE FIXES --- */
+html, body {
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  overscroll-behavior: none;
+}
+canvas {
+  touch-action: none;
+}
+/* Invisible touch joystick — full screen touch zone, no visible elements */
+#joystick-zone {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 15;
+  display: none;
+}
+#touch-hint {
+  position: fixed;
+  bottom: 20%;
+  left: 50%;
+  transform: translateX(-50%);
+  color: rgba(255,255,255,0.4);
+  font-size: 0.8rem;
+  pointer-events: none;
+  z-index: 16;
+  display: none;
+  transition: opacity 1s;
+}
+@media (pointer: coarse) {
+  #joystick-zone { display: block; }
+  #touch-hint { display: block; }
+  #level-up .choices { flex-direction: column; gap: 10px; }
+  #level-up .choice { width: 260px; padding: 14px; }
+}
 </style>
 </head>
 <body>
 
-<div class="hdr">
-  <a href="/toys/">← toys</a>
-  <span>·</span>
-  <div class="hdr-title">barn <span>arena</span></div>
-  <span>·</span>
-  <div id="status">connecting…</div>
+<div id="joystick-zone"></div>
+<div id="touch-hint">drag anywhere to move</div>
+
+<div id="ui">
+  <div class="left">
+    <span id="hud-time">0:00</span>
+    <span id="hud-level">Lv 1</span>
+    <span id="hud-kills">0 kills</span>
+  </div>
+  <div class="right">
+    <span id="hud-wave">Wave 1</span>
+    <span id="hud-weapons"></span>
+  </div>
 </div>
 
-<canvas id="c" width="800" height="600"></canvas>
+<canvas id="c"></canvas>
 
-<div class="ftr">
-  <div>wasd to move</div>
-  <div id="ping">—</div>
-  <div id="player-count">0 players</div>
+<div id="xp-bar"><div id="xp-fill"></div></div>
+
+<div id="start-screen">
+  <h1>SURVIVORS</h1>
+  <div class="sub">vampire survivors battle royale — v1a single player</div>
+  <div style="margin-bottom:12px;">
+    <input id="name-input" type="text" maxlength="12" placeholder="your name" value=""
+      style="background:#181825; border:2px solid #333; color:#eee; padding:6px 14px; font-family:inherit;
+      font-size:0.9rem; border-radius:4px; text-align:center; outline:none; width:180px;"
+      onfocus="this.style.borderColor='#e74c3c'" onblur="this.style.borderColor='#333'">
+  </div>
+  <div class="sub" style="margin-bottom:8px; color:#999;">choose your weapon</div>
+  <div class="weapon-select" id="weapon-select">
+    <div class="weapon-card selected" data-weapon="spit" onclick="selectWeapon('spit')">
+      <div class="wc-icon">🔮</div>
+      <div class="wc-name">Magic Spit</div>
+      <div class="wc-desc">Projectile — fires at the nearest enemy</div>
+    </div>
+    <div class="weapon-card" data-weapon="breath" onclick="selectWeapon('breath')">
+      <div class="wc-icon">🌀</div>
+      <div class="wc-name">Dragon Breath</div>
+      <div class="wc-desc">Aura — damages all nearby enemies</div>
+    </div>
+    <div class="weapon-card" data-weapon="charge" onclick="selectWeapon('charge')">
+      <div class="wc-icon">🐂</div>
+      <div class="wc-name">Bull Rush</div>
+      <div class="wc-desc">Sweep — charges in your move direction</div>
+    </div>
+    <div class="weapon-card" data-weapon="shield" onclick="selectWeapon('shield')">
+      <div class="wc-icon">🛡️</div>
+      <div class="wc-name">Barrier</div>
+      <div class="wc-desc">Shield — knocks back and damages nearby enemies</div>
+    </div>
+    <div class="weapon-card" data-weapon="lightning_field" onclick="selectWeapon('lightning_field')">
+      <div class="wc-icon">⚡</div>
+      <div class="wc-name">Lightning Field</div>
+      <div class="wc-desc">Passive — zaps random nearby enemies periodically</div>
+    </div>
+  </div>
+  <button onclick="startGame()">PLAY</button>
+  <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
 </div>
 
-<div class="name-input" id="name-screen">
-  <label>enter name</label>
-  <input id="name-field" maxlength="12" placeholder="barn" autofocus>
-  <button onclick="joinGame()">join</button>
+<div id="level-up">
+  <h2>LEVEL UP</h2>
+  <div class="choices" id="level-choices"></div>
 </div>
 
-<div class="players-list" id="players-list"></div>
+<div id="death-screen">
+  <h1>DEAD</h1>
+  <div id="death-new-best"></div>
+  <div class="stats" id="death-stats"></div>
+  <div class="loadout-label">loadout</div>
+  <div class="loadout" id="death-loadout"></div>
+  <div class="best-run" id="death-best-run"></div>
+  <div id="death-lb-placement"></div>
+  <div class="leaderboard" id="death-leaderboard"></div>
+  <button onclick="startGame()">RETRY</button>
+</div>
 
-<script>
-const canvas = document.getElementById('c');
-const ctx = canvas.getContext('2d');
-const statusEl = document.getElementById('status');
-const pingEl = document.getElementById('ping');
-const countEl = document.getElementById('player-count');
-const nameScreen = document.getElementById('name-screen');
-const nameField = document.getElementById('name-field');
-const playersList = document.getElementById('players-list');
-
-let ws = null;
-let myId = null;
-let myName = '';
-let myColor = '#fff';
-let state = { players: [], arena: { w: 800, h: 600 } };
-let keys = { up: false, down: false, left: false, right: false };
-let lastKeys = '';
-let joined = false;
-let lastStateTime = 0;
-let prevPositions = {};  // id -> {x, y}
-let currPositions = {};  // id -> {x, y}
-let stateArrived = 0;    // perf timestamp of last state
-
-// --- name entry ---
-nameField.addEventListener('keydown', e => {
-  if (e.key === 'Enter') joinGame();
-});
-
-function joinGame() {
-  const name = nameField.value.trim() || 'barn';
-  myName = name;
-  nameScreen.style.display = 'none';
-  joined = true;
-  if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify({ type: 'name', name }));
-  }
-  canvas.focus();
-}
-
-// --- websocket ---
-function connect() {
-  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const url = proto + '//' + location.host + '/toys/app/';
-  ws = new WebSocket(url);
-
-  ws.onopen = () => {
-    statusEl.textContent = 'connected';
-    statusEl.className = 'ok';
-  };
-
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.type === 'welcome') {
-      myId = msg.you;
-      myName = msg.name;
-      myColor = msg.color;
-      if (joined) {
-        ws.send(JSON.stringify({ type: 'name', name: nameField.value.trim() || myName }));
-      }
-    } else if (msg.type === 'state') {
-      // shift current -> prev for interpolation
-      prevPositions = currPositions;
-      currPositions = {};
-      for (const p of msg.players) {
-        currPositions[p.id] = { x: p.x, y: p.y };
-      }
-      state = msg;
-      stateArrived = performance.now();
-      countEl.textContent = msg.players.length + ' player' + (msg.players.length !== 1 ? 's' : '');
-      updatePlayersList();
-    }
-  };
-
-  ws.onclose = () => {
-    statusEl.textContent = 'disconnected';
-    statusEl.className = '';
-    setTimeout(connect, 2000);
-  };
-
-  ws.onerror = () => ws.close();
-}
-
-// --- input ---
-const KEY_MAP = {
-  'w': 'up', 'arrowup': 'up',
-  's': 'down', 'arrowdown': 'down',
-  'a': 'left', 'arrowleft': 'left',
-  'd': 'right', 'arrowright': 'right',
-};
-
-document.addEventListener('keydown', e => {
-  if (!joined) return;
-  const k = KEY_MAP[e.key.toLowerCase()];
-  if (k) { keys[k] = true; e.preventDefault(); sendInput(); }
-});
-
-document.addEventListener('keyup', e => {
-  const k = KEY_MAP[e.key.toLowerCase()];
-  if (k) { keys[k] = false; e.preventDefault(); sendInput(); }
-});
-
-function sendInput() {
-  const s = JSON.stringify(keys);
-  if (s === lastKeys) return;
-  lastKeys = s;
-  if (ws && ws.readyState === 1) {
-    ws.send(JSON.stringify({ type: 'input', keys }));
-  }
-}
-
-// --- render ---
-function render() {
-  const W = canvas.width, H = canvas.height;
-  ctx.fillStyle = '#0a0a0f';
-  ctx.fillRect(0, 0, W, H);
-
-  // grid
-  ctx.strokeStyle = '#151520';
-  ctx.lineWidth = 1;
-  for (let x = 0; x < W; x += 40) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke();
-  }
-  for (let y = 0; y < H; y += 40) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  }
-
-  // arena border
-  ctx.strokeStyle = '#333';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, W - 2, H - 2);
-
-  // interpolation factor: how far between prev and curr state (0-1, clamped)
-  const TICK_MS = 50; // 1000/20hz
-  const elapsed = performance.now() - stateArrived;
-  const t = Math.min(elapsed / TICK_MS, 1.0);
-
-  // players
-  for (const p of state.players || []) {
-    const isMe = p.id === myId;
-    const prev = prevPositions[p.id];
-    const curr = currPositions[p.id] || { x: p.x, y: p.y };
-    // lerp position
-    let drawX, drawY;
-    if (prev) {
-      drawX = prev.x + (curr.x - prev.x) * t;
-      drawY = prev.y + (curr.y - prev.y) * t;
-    } else {
-      drawX = curr.x;
-      drawY = curr.y;
-    }
-
-    // glow
-    if (isMe) {
-      ctx.shadowColor = p.color;
-      ctx.shadowBlur = 20;
-    }
-
-    // body
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(drawX, drawY, 12, 0, Math.PI * 2);
-    ctx.fill();
-
-    // outline
-    ctx.strokeStyle = isMe ? '#fff' : 'rgba(255,255,255,0.15)';
-    ctx.lineWidth = isMe ? 2 : 1;
-    ctx.stroke();
-
-    ctx.shadowBlur = 0;
-
-    // name
-    ctx.fillStyle = isMe ? '#fff' : '#888';
-    ctx.font = '10px "IBM Plex Mono", monospace';
-    ctx.textAlign = 'center';
-    ctx.fillText(p.name, drawX, drawY - 18);
-
-    // hp bar
-    if (p.hp < 100) {
-      const bw = 24;
-      ctx.fillStyle = '#300';
-      ctx.fillRect(drawX - bw/2, drawY + 16, bw, 3);
-      ctx.fillStyle = p.hp > 30 ? '#2ecc71' : '#e74c3c';
-      ctx.fillRect(drawX - bw/2, drawY + 16, bw * (p.hp / 100), 3);
-    }
-  }
-
-  requestAnimationFrame(render);
-}
-
-function updatePlayersList() {
-  const ps = state.players || [];
-  playersList.innerHTML = ps.map(p =>
-    `<div><span class="player-dot" style="background:${p.color}"></span>${p.name}${p.id === myId ? ' (you)' : ''}</div>`
-  ).join('');
-}
-
-// --- init ---
-connect();
-render();
-</script>
+<script src="bundle.js"></script>
 </body>
 </html>
