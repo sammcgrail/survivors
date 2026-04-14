@@ -8,6 +8,7 @@ export const EVT = {
   PLAYER_HIT:          'playerHit',
   PLAYER_DEATH:        'playerDeath',
   GEM_PICKUP:          'gemPickup',
+  HEART_PICKUP:        'heartPickup',
   LEVEL_UP:            'levelUp',
   WEAPON_FIRE:         'weaponFire',
   METEOR_WARN:         'meteorWarn',
