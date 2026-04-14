@@ -12,7 +12,8 @@
     "stress": "node tests/stress.mjs",
     "smoke": "node tests/sim_smoke.mjs",
     "mp-server": "node server.mjs",
-    "mp-smoke": "node tests/server_smoke.mjs"
+    "mp-smoke": "node tests/server_smoke.mjs",
+    "regression": "node tests/regression.mjs"
   },
   "repository": {
     "type": "git",
