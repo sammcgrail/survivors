@@ -296,9 +296,31 @@ const POWERUPS = [
   { id: 'weapon_spit', name: 'Magic Spit', desc: 'Projectile weapon — fires at nearest enemy', icon: '🔮', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('spit')); } },
   { id: 'weapon_breath', name: 'Dragon Breath', desc: 'Aura weapon — damages nearby enemies', icon: '🌀', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('breath')); } },
   { id: 'weapon_charge', name: 'Bull Rush', desc: 'Sweep weapon — charges in move direction', icon: '🐂', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('charge')); } },
+  { id: 'weapon_orbit', name: 'Blade Orbit', desc: 'Orbiting blades damage enemies on contact', icon: '🗡️', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('orbit')); } },
+  { id: 'weapon_chain', name: 'Chain Lightning', desc: 'Zaps nearest enemy, chains to 2 more', icon: '⚡', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('chain')); } },
+  { id: 'weapon_meteor', name: 'Meteor', desc: 'Drops AoE on enemy clusters', icon: '☄️', stack: 0, max: 1, apply(g) { g.player.weapons.push(createWeapon('meteor')); } },
   { id: 'spit_up', name: 'Spit+', desc: 'Extra projectile + pierce', icon: '🔮+', stack: 0, max: 3, requires: 'weapon_spit', apply(g) { let w = g.player.weapons.find(w=>w.type==='spit'); if(w){w.count++;w.pierce++;} } },
   { id: 'breath_up', name: 'Breath+', desc: '+30% aura radius', icon: '🌀+', stack: 0, max: 3, requires: 'weapon_breath', apply(g) { let w = g.player.weapons.find(w=>w.type==='breath'); if(w) w.radius *= 1.3; } },
   { id: 'charge_up', name: 'Rush+', desc: '+40% charge damage & width', icon: '🐂+', stack: 0, max: 3, requires: 'weapon_charge', apply(g) { let w = g.player.weapons.find(w=>w.type==='charge'); if(w){w.damage*=1.4;w.width*=1.4;} } },
+  { id: 'orbit_up', name: 'Orbit+', desc: '+1 orbiting blade', icon: '🗡️+', stack: 0, max: 3, requires: 'weapon_orbit', apply(g) { let w = g.player.weapons.find(w=>w.type==='orbit'); if(w) w.bladeCount++; } },
+  { id: 'chain_up', name: 'Chain+', desc: '+1 chain target', icon: '⚡+', stack: 0, max: 3, requires: 'weapon_chain', apply(g) { let w = g.player.weapons.find(w=>w.type==='chain'); if(w) w.chains++; } },
+  { id: 'meteor_up', name: 'Meteor+', desc: '+40% blast radius & damage', icon: '☄️+', stack: 0, max: 3, requires: 'weapon_meteor', apply(g) { let w = g.player.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.4;w.damage*=1.4;} } },
+  // EVOLUTION: max spit (4 stacks) + max breath (4 stacks) = Dragon Storm
+  { id: 'evo_dragon_storm', name: 'DRAGON STORM', desc: 'Spit + Breath fuse into homing fireballs + damage aura', icon: '🐉',
+    stack: 0, max: 1,
+    get hidden() {
+      const spit = POWERUPS.find(p=>p.id==='spit_up');
+      const breath = POWERUPS.find(p=>p.id==='breath_up');
+      return !(spit && spit.stack >= 3 && breath && breath.stack >= 3);
+    },
+    apply(g) {
+      // remove spit and breath, add dragon storm weapon
+      g.player.weapons = g.player.weapons.filter(w => w.type !== 'spit' && w.type !== 'breath');
+      g.player.weapons.push(createWeapon('dragon_storm'));
+      g.screenShake = 0.5;
+      spawnParticles(g.player.x, g.player.y, '#f39c12', 20);
+    }
+  },
 ];
 
 function createWeapon(type) {
@@ -315,6 +337,23 @@ function createWeapon(type) {
       type: 'charge', cooldown: 2.5, timer: 0, damage: 40, speed: 500,
       duration: 0.3, width: 40, color: '#e74c3c',
       active: false, chargeTimer: 0, chargeDx: 0, chargeDy: 0,
+    };
+    case 'orbit': return {
+      type: 'orbit', cooldown: 0, timer: 0, damage: 12, radius: 70,
+      bladeCount: 2, rotSpeed: 3, color: '#ecf0f1', phase: 0,
+    };
+    case 'chain': return {
+      type: 'chain', cooldown: 1.2, timer: 0, damage: 20, range: 250,
+      chainRange: 120, chains: 2, color: '#00d2d3',
+    };
+    case 'meteor': return {
+      type: 'meteor', cooldown: 3.5, timer: 0, damage: 50, blastRadius: 60,
+      color: '#ff6348',
+    };
+    case 'dragon_storm': return {
+      type: 'dragon_storm', cooldown: 0.4, timer: 0, damage: 25, speed: 300,
+      range: 350, count: 3, pierce: 3, color: '#f39c12',
+      auraRadius: 100, auraDamage: 15,
     };
     default: return null;
   }
@@ -547,11 +586,31 @@ function update(dt) {
     }
     // special: breath pulse phase
     if (w.type === 'breath') w.pulsePhase = (w.pulsePhase || 0) + dt * 3;
+    // special: dragon storm aura pulse
+    if (w.type === 'dragon_storm') w.pulsePhase = (w.pulsePhase || 0) + dt * 4;
     // special: charge active timer
     if (w.type === 'charge' && w.active) {
       w.chargeTimer -= dt;
       if (w.chargeTimer <= 0) {
         w.active = false;
+      }
+    }
+    // special: orbit blade rotation (always active, no cooldown)
+    if (w.type === 'orbit') {
+      w.phase = (w.phase || 0) + w.rotSpeed * dt;
+      // damage enemies touching blades
+      for (let b = 0; b < w.bladeCount; b++) {
+        const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
+        const bx = p.x + Math.cos(angle) * w.radius;
+        const by = p.y + Math.sin(angle) * w.radius;
+        for (let j = g.enemies.length - 1; j >= 0; j--) {
+          const e = g.enemies[j];
+          const dx = bx - e.x;
+          const dy = by - e.y;
+          if (dx * dx + dy * dy < (10 + e.radius) ** 2) {
+            damageEnemy(g, e, j, w.damage * p.damageMulti * dt * 8);
+          }
+        }
       }
     }
   }
@@ -732,6 +791,51 @@ function update(dt) {
     if (ft.life <= 0) g.floatingTexts.splice(i, 1);
   }
 
+  // --- update chain effects ---
+  g.chainEffects = g.chainEffects || [];
+  for (let i = g.chainEffects.length - 1; i >= 0; i--) {
+    g.chainEffects[i].life -= dt;
+    if (g.chainEffects[i].life <= 0) g.chainEffects.splice(i, 1);
+  }
+
+  // --- update meteor effects ---
+  g.meteorEffects = g.meteorEffects || [];
+  for (let i = g.meteorEffects.length - 1; i >= 0; i--) {
+    const m = g.meteorEffects[i];
+    m.life -= dt;
+    if (m.phase === 'warn' && m.life <= 0) {
+      // explode — damage enemies in radius
+      m.phase = 'explode';
+      m.life = 0.3;
+      g.screenShake = 0.1;
+      for (let j = g.enemies.length - 1; j >= 0; j--) {
+        const e = g.enemies[j];
+        const dx = m.x - e.x;
+        const dy = m.y - e.y;
+        if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
+          damageEnemy(g, g.enemies[j], j, m.damage);
+        }
+      }
+      spawnParticles(m.x, m.y, m.color, 12);
+    } else if (m.phase === 'explode' && m.life <= 0) {
+      g.meteorEffects.splice(i, 1);
+    }
+  }
+
+  // --- dragon storm aura damage ---
+  for (const w of p.weapons) {
+    if (w.type === 'dragon_storm') {
+      for (let j = g.enemies.length - 1; j >= 0; j--) {
+        const e = g.enemies[j];
+        const dx = p.x - e.x;
+        const dy = p.y - e.y;
+        if (dx * dx + dy * dy < (w.auraRadius + e.radius) ** 2) {
+          damageEnemy(g, e, j, w.auraDamage * p.damageMulti * dt);
+        }
+      }
+    }
+  }
+
   // --- camera ---
   const camSmooth = 1 - Math.pow(0.001, dt);
   g.camera.x += (p.x - g.camera.x) * camSmooth;
@@ -803,8 +907,86 @@ function fireWeapon(g, w) {
       g.screenShake = 0.1;
       spawnParticles(p.x, p.y, w.color, 8);
     }
+  } else if (w.type === 'chain') {
+    // chain lightning — zap nearest, chain to N more
+    if (g.enemies.length === 0) return;
+    // find nearest
+    let sorted = g.enemies.slice().sort((a, b) => {
+      const da = (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
+      const db = (b.x - p.x) ** 2 + (b.y - p.y) ** 2;
+      return da - db;
+    });
+    const inRange = sorted.filter(e => {
+      const d = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
+      return d < w.range;
+    });
+    if (inRange.length === 0) return;
+    const targets = [inRange[0]];
+    const hit = new Set([inRange[0]]);
+    for (let c = 0; c < w.chains && targets.length > 0; c++) {
+      const last = targets[targets.length - 1];
+      let best = null, bestDist = w.chainRange;
+      for (const e of g.enemies) {
+        if (hit.has(e)) continue;
+        const d = Math.sqrt((e.x - last.x) ** 2 + (e.y - last.y) ** 2);
+        if (d < bestDist) { best = e; bestDist = d; }
+      }
+      if (best) { targets.push(best); hit.add(best); }
+    }
+    // store chain for rendering
+    g.chainEffects = g.chainEffects || [];
+    const chainPoints = [{ x: p.x, y: p.y }];
+    for (const t of targets) {
+      chainPoints.push({ x: t.x, y: t.y });
+      for (let j = g.enemies.length - 1; j >= 0; j--) {
+        if (g.enemies[j] === t) {
+          damageEnemy(g, g.enemies[j], j, w.damage * p.damageMulti);
+          break;
+        }
+      }
+    }
+    g.chainEffects.push({ points: chainPoints, life: 0.2, color: w.color });
+  } else if (w.type === 'meteor') {
+    // meteor — drop AoE on densest cluster
+    if (g.enemies.length === 0) return;
+    // pick random enemy as target center
+    const target = g.enemies[Math.floor(Math.random() * g.enemies.length)];
+    // create meteor effect
+    g.meteorEffects = g.meteorEffects || [];
+    g.meteorEffects.push({
+      x: target.x, y: target.y,
+      radius: w.blastRadius,
+      damage: w.damage * p.damageMulti,
+      life: 0.5,    // warning phase
+      phase: 'warn',
+      color: w.color,
+    });
+  } else if (w.type === 'dragon_storm') {
+    // homing fireballs in spread pattern
+    if (g.enemies.length === 0) return;
+    let nearest = null, nearestDist = w.range;
+    for (const e of g.enemies) {
+      const d = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
+      if (d < nearestDist) { nearest = e; nearestDist = d; }
+    }
+    if (!nearest) return;
+    const dx = nearest.x - p.x;
+    const dy = nearest.y - p.y;
+    const d = Math.sqrt(dx * dx + dy * dy);
+    for (let i = 0; i < w.count; i++) {
+      const spread = (i - (w.count - 1) / 2) * 0.2;
+      const cos = Math.cos(spread), sin = Math.sin(spread);
+      const fx = (dx/d) * cos - (dy/d) * sin;
+      const fy = (dx/d) * sin + (dy/d) * cos;
+      g.projectiles.push({
+        x: p.x + fx * 20, y: p.y + fy * 20,
+        vx: fx * w.speed, vy: fy * w.speed,
+        speed: w.speed, damage: w.damage, range: w.range,
+        dist: 0, pierce: w.pierce, radius: 7, color: w.color,
+      });
+    }
   }
-  // breath doesn't fire — it's always-on aura
+  // breath and orbit don't fire — they're always-on
 }
 
 function damageEnemy(g, e, idx, dmg) {
@@ -832,6 +1014,7 @@ function showLevelUp(g) {
   paused = true;
   const available = POWERUPS.filter(p => {
     if (p.stack >= p.max) return false;
+    if (p.hidden) return false;
     if (p.requires) {
       const req = POWERUPS.find(r => r.id === p.requires);
       if (!req || req.stack === 0) return false;
@@ -879,11 +1062,16 @@ function showLevelUp(g) {
 function showDeathScreen(g) {
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
+  const weaponIcons = { spit: '🔮', breath: '🌀', charge: '🐂', orbit: '🗡️', chain: '⚡', meteor: '☄️', dragon_storm: '🐉' };
+  const weaponList = g.player.weapons.map(w => weaponIcons[w.type] || '?').join(' ');
+  const powerupList = POWERUPS.filter(p => p.stack > 0 && !p.id.startsWith('weapon_'))
+    .map(p => `${p.icon}×${p.stack}`).join(' ');
   document.getElementById('death-stats').innerHTML = `
     Survived: ${mins}:${secs.toString().padStart(2, '0')}<br>
-    Level: ${g.player.level}<br>
+    Level: ${g.player.level} · Wave: ${g.wave}<br>
     Kills: ${g.kills}<br>
-    Wave: ${g.wave}
+    <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
+    ${powerupList ? `<div style="font-size:0.65rem;color:#555">Powerups: ${powerupList}</div>` : ''}
   `;
   document.getElementById('death-screen').style.display = 'flex';
 }
@@ -980,6 +1168,94 @@ function render() {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+    }
+
+    // dragon storm aura
+    if (w.type === 'dragon_storm') {
+      const pulse = 1 + Math.sin((w.pulsePhase || 0)) * 0.1;
+      const r = w.auraRadius * pulse;
+      const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
+      grad.addColorStop(0, 'rgba(243, 156, 18, 0.2)');
+      grad.addColorStop(0.6, 'rgba(231, 76, 60, 0.1)');
+      grad.addColorStop(1, 'rgba(231, 76, 60, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(243, 156, 18, 0.4)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+
+    // orbit blades
+    if (w.type === 'orbit') {
+      for (let b = 0; b < w.bladeCount; b++) {
+        const angle = (w.phase || 0) + (b * Math.PI * 2 / w.bladeCount);
+        const bx = p.x + Math.cos(angle) * w.radius;
+        const by = p.y + Math.sin(angle) * w.radius;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillStyle = w.color;
+        ctx.shadowColor = w.color;
+        ctx.shadowBlur = 6;
+        ctx.beginPath();
+        ctx.moveTo(0, -10);
+        ctx.lineTo(4, 4);
+        ctx.lineTo(-4, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
+  }
+
+  // --- chain lightning effects ---
+  for (const ce of (g.chainEffects || [])) {
+    ctx.strokeStyle = ce.color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = ce.color;
+    ctx.shadowBlur = 10;
+    ctx.globalAlpha = ce.life / 0.2;
+    for (let i = 0; i < ce.points.length - 1; i++) {
+      const a = ce.points[i];
+      const b = ce.points[i + 1];
+      ctx.beginPath();
+      ctx.moveTo(a.x, a.y);
+      // jagged lightning
+      const mx = (a.x + b.x) / 2 + (Math.random() - 0.5) * 20;
+      const my = (a.y + b.y) / 2 + (Math.random() - 0.5) * 20;
+      ctx.lineTo(mx, my);
+      ctx.lineTo(b.x, b.y);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+  }
+
+  // --- meteor effects ---
+  for (const m of (g.meteorEffects || [])) {
+    if (m.phase === 'warn') {
+      ctx.strokeStyle = 'rgba(255, 99, 72, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // pulsing center
+      ctx.fillStyle = `rgba(255, 99, 72, ${0.1 + Math.sin(m.life * 20) * 0.1})`;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius * 0.5, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // explosion
+      const t = m.life / 0.3;
+      ctx.fillStyle = `rgba(255, 99, 72, ${t * 0.4})`;
+      ctx.beginPath();
+      ctx.arc(m.x, m.y, m.radius * (2 - t), 0, Math.PI * 2);
+      ctx.fill();
     }
   }
 
@@ -1167,12 +1443,8 @@ function render() {
   document.getElementById('hud-level').textContent = `Lv ${p.level}`;
   document.getElementById('hud-kills').textContent = `${g.kills} kills`;
   document.getElementById('hud-wave').textContent = `Wave ${g.wave}`;
-  document.getElementById('hud-weapons').textContent = p.weapons.map(w => {
-    if (w.type === 'spit') return '🔮';
-    if (w.type === 'breath') return '🌀';
-    if (w.type === 'charge') return '🐂';
-    return '?';
-  }).join(' ');
+  const wicons = { spit:'🔮', breath:'🌀', charge:'🐂', orbit:'🗡️', chain:'⚡', meteor:'☄️', dragon_storm:'🐉' };
+  document.getElementById('hud-weapons').textContent = p.weapons.map(w => wicons[w.type] || '?').join(' ');
 
   requestAnimationFrame(render);
 }
