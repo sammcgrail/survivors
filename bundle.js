@@ -280,8 +280,69 @@
   });
 
   // src/shared/sim/events.js
+  function emit(g, type, payload) {
+    if (payload) g.events.push({ type, ...payload });
+    else g.events.push({ type });
+  }
+  var EVT;
   var init_events = __esm({
     "src/shared/sim/events.js"() {
+      EVT = {
+        ENEMY_HIT: "enemyHit",
+        ENEMY_KILLED: "enemyKilled",
+        PLAYER_HIT: "playerHit",
+        PLAYER_DEATH: "playerDeath",
+        GEM_PICKUP: "gemPickup",
+        LEVEL_UP: "levelUp",
+        WAVE_START: "waveStart",
+        SPECIAL_WAVE_START: "specialWaveStart",
+        WEAPON_FIRE: "weaponFire",
+        METEOR_WARN: "meteorWarn",
+        METEOR_EXPLODE: "meteorExplode",
+        CHAIN_ZAP: "chainZap",
+        SHIELD_HUM: "shieldHum",
+        BOSS_STEP: "bossStep",
+        BOSS_TELEGRAPH: "bossTelegraph",
+        CHARGE_BURST: "chargeBurst",
+        HIVE_BURST: "hiveBurst",
+        EVOLUTION: "evolution"
+      };
+    }
+  });
+
+  // src/shared/sim/gems.js
+  function spawnGem(g, x, y, xp) {
+    g.gems.push({ x, y, xp, radius: XP_RADIUS, alpha: 1 });
+  }
+  function updateGems(g, dt) {
+    const p = g.player;
+    for (let i = g.gems.length - 1; i >= 0; i--) {
+      const gem = g.gems[i];
+      const gdx = p.x - gem.x;
+      const gdy = p.y - gem.y;
+      const dist = Math.sqrt(gdx * gdx + gdy * gdy);
+      if (dist < p.magnetRange) {
+        const pull = XP_MAGNET_SPEED * dt;
+        gem.x += gdx / dist * Math.min(pull, dist);
+        gem.y += gdy / dist * Math.min(pull, dist);
+      }
+      if (dist < p.radius + gem.radius) {
+        p.xp += gem.xp;
+        emit(g, EVT.GEM_PICKUP, { x: gem.x, y: gem.y, xp: gem.xp });
+        g.gems.splice(i, 1);
+        while (p.xp >= p.xpToLevel) {
+          p.xp -= p.xpToLevel;
+          p.level++;
+          p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
+          emit(g, EVT.LEVEL_UP, { level: p.level });
+        }
+      }
+    }
+  }
+  var init_gems = __esm({
+    "src/shared/sim/gems.js"() {
+      init_constants();
+      init_events();
     }
   });
 
@@ -294,6 +355,7 @@
       init_enemyTypes();
       init_rng();
       init_events();
+      init_gems();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -835,9 +897,6 @@
         e.hitFlash = 0;
         g.enemies.push(e);
       }
-      function spawnGem(x, y, xp) {
-        game.gems.push({ x, y, xp, radius: XP_RADIUS, alpha: 1 });
-      }
       function spawnParticles(x, y, color, count) {
         for (let i = 0; i < count; i++) {
           const angle = Math.random() * Math.PI * 2;
@@ -1170,39 +1229,7 @@
             }
           }
         }
-        for (let i = g.gems.length - 1; i >= 0; i--) {
-          const gem = g.gems[i];
-          const gdx = p.x - gem.x;
-          const gdy = p.y - gem.y;
-          const dist = Math.sqrt(gdx * gdx + gdy * gdy);
-          if (dist < p.magnetRange) {
-            const pull = XP_MAGNET_SPEED * dt;
-            gem.x += gdx / dist * Math.min(pull, dist);
-            gem.y += gdy / dist * Math.min(pull, dist);
-          }
-          if (dist < p.radius + gem.radius) {
-            p.xp += gem.xp;
-            sfx("xp");
-            g.floatingTexts.push({
-              x: gem.x,
-              y: gem.y,
-              text: "+" + gem.xp,
-              color: "#3498db",
-              life: 0.8,
-              maxLife: 0.8,
-              vy: -60
-            });
-            spawnParticles(gem.x, gem.y, "#3498db", 3);
-            g.gems.splice(i, 1);
-            while (p.xp >= p.xpToLevel) {
-              p.xp -= p.xpToLevel;
-              p.level++;
-              p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
-              g.levelFlash = 0.15;
-              showLevelUp(g);
-            }
-          }
-        }
+        updateGems(g, dt);
         for (let i = g.particles.length - 1; i >= 0; i--) {
           const pt = g.particles[i];
           pt.x += pt.vx * dt;
@@ -1271,7 +1298,27 @@
         }
       }
       function handleSimEvent(evt) {
-        void evt;
+        const g = game;
+        if (!g) return;
+        switch (evt.type) {
+          case EVT.GEM_PICKUP:
+            sfx("xp");
+            g.floatingTexts.push({
+              x: evt.x,
+              y: evt.y,
+              text: "+" + evt.xp,
+              color: "#3498db",
+              life: 0.8,
+              maxLife: 0.8,
+              vy: -60
+            });
+            spawnParticles(evt.x, evt.y, "#3498db", 3);
+            break;
+          case EVT.LEVEL_UP:
+            g.levelFlash = 0.15;
+            showLevelUp(g);
+            break;
+        }
       }
       function fireWeapon(g, w) {
         const p = g.player;
@@ -1442,7 +1489,7 @@
         }
         if (e.hp <= 0 && !e.dying) {
           sfx("kill");
-          spawnGem(e.x, e.y, e.xp);
+          spawnGem(g, e.x, e.y, e.xp);
           spawnParticles(e.x, e.y, e.color, 6);
           e.dying = 0.2;
           g.kills++;
@@ -1490,19 +1537,50 @@
           paused = false;
         }
       }
+      function getBestRun() {
+        try {
+          const raw = localStorage.getItem("survivors_best");
+          return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          return null;
+        }
+      }
+      function saveBestRun(run) {
+        try {
+          localStorage.setItem("survivors_best", JSON.stringify(run));
+        } catch (e) {
+        }
+      }
       function showDeathScreen(g) {
         fadeOutMusic();
         track({ type: "death", wave: g.wave, kills: g.kills, weapons: g.player.weapons.map((w) => w.type) });
         const mins = Math.floor(g.time / 60);
         const secs = Math.floor(g.time % 60);
+        const timeStr = `${mins}:${secs.toString().padStart(2, "0")}`;
         const weaponList = g.player.weapons.map((w) => WEAPON_ICONS[w.type] || "?").join(" ");
         const powerupList = POWERUPS.filter((p) => p.stack > 0 && !p.id.startsWith("weapon_")).map((p) => `${p.icon}\xD7${p.stack}`).join(" ");
+        const thisRun = { wave: g.wave, kills: g.kills, time: g.time, level: g.player.level };
+        const prev = getBestRun();
+        let isNewBest = false;
+        if (!prev || thisRun.wave > prev.wave || thisRun.wave === prev.wave && thisRun.kills > prev.kills) {
+          isNewBest = true;
+          saveBestRun(thisRun);
+        }
+        const best = isNewBest ? thisRun : prev;
+        const newBestEl = document.getElementById("death-new-best");
+        newBestEl.innerHTML = isNewBest ? '<div class="new-best">\u2605 NEW BEST \u2605</div>' : "";
         document.getElementById("death-stats").innerHTML = `
-    Survived: ${mins}:${secs.toString().padStart(2, "0")}<br>
+    Survived: ${timeStr}<br>
     Level: ${g.player.level} \xB7 Wave: ${g.wave}<br>
     Kills: ${g.kills}<br>
     <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
     ${powerupList ? `<div style="font-size:0.65rem;color:#555">Powerups: ${powerupList}</div>` : ""}
+  `;
+        const bestMins = Math.floor(best.time / 60);
+        const bestSecs = Math.floor(best.time % 60);
+        document.getElementById("death-best-run").innerHTML = `
+    <div class="best-label">best run</div>
+    <div class="best-value">Wave ${best.wave} \xB7 ${best.kills} kills \xB7 ${bestMins}:${bestSecs.toString().padStart(2, "0")}</div>
   `;
         const loadoutEl = document.getElementById("death-loadout");
         const owned = POWERUPS.filter((p) => p.stack > 0);

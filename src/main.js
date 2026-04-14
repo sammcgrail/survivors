@@ -9,6 +9,7 @@ import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from './shared/enemyTypes.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT, emit } from './shared/sim/events.js';
+import { spawnGem, updateGems } from './shared/sim/gems.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -493,9 +494,7 @@ function spawnEnemy(g) {
 }
 
 // --- spawn gem ---
-function spawnGem(x, y, xp) {
-  game.gems.push({ x, y, xp, radius: XP_RADIUS, alpha: 1 });
-}
+// spawnGem now imported from shared/sim/gems.js — call as spawnGem(g, x, y, xp)
 
 // --- spawn particles ---
 function spawnParticles(x, y, color, count) {
@@ -892,42 +891,8 @@ function update(dt) {
     }
   }
 
-  // --- pick up gems ---
-  for (let i = g.gems.length - 1; i >= 0; i--) {
-    const gem = g.gems[i];
-    const gdx = p.x - gem.x;
-    const gdy = p.y - gem.y;
-    const dist = Math.sqrt(gdx * gdx + gdy * gdy);
-
-    // magnet pull
-    if (dist < p.magnetRange) {
-      const pull = XP_MAGNET_SPEED * dt;
-      gem.x += (gdx / dist) * Math.min(pull, dist);
-      gem.y += (gdy / dist) * Math.min(pull, dist);
-    }
-
-    // pick up
-    if (dist < p.radius + gem.radius) {
-      p.xp += gem.xp;
-      sfx('xp');
-      // floating xp text
-      g.floatingTexts.push({
-        x: gem.x, y: gem.y, text: '+' + gem.xp,
-        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
-      });
-      spawnParticles(gem.x, gem.y, '#3498db', 3);
-      g.gems.splice(i, 1);
-
-      // level up check
-      while (p.xp >= p.xpToLevel) {
-        p.xp -= p.xpToLevel;
-        p.level++;
-        p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
-        g.levelFlash = 0.15; // 150ms white flash
-        showLevelUp(g);
-      }
-    }
-  }
+  // --- pick up gems --- (sim logic in shared/sim/gems.js, side effects via events)
+  updateGems(g, dt);
 
   // --- update particles ---
   for (let i = g.particles.length - 1; i >= 0; i--) {
@@ -1021,12 +986,25 @@ function update(dt) {
 }
 
 // Handle a single event from the sim. Sim is forbidden from touching
-// DOM/canvas/audio directly — it emits events here, client side-effects
-// happen here. This stub is the seam the rest of the migration plugs
-// into; events for sfx/particles/screen-shake will be added in PR #12+.
+// DOM/canvas/audio directly — it emits events into g.events, client
+// side-effects happen here. New sim subsystems plug in by adding cases.
 function handleSimEvent(evt) {
-  // No-op for now — the event pipeline exists; sim modules don't emit yet.
-  void evt;
+  const g = game;
+  if (!g) return;
+  switch (evt.type) {
+    case EVT.GEM_PICKUP:
+      sfx('xp');
+      g.floatingTexts.push({
+        x: evt.x, y: evt.y, text: '+' + evt.xp,
+        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
+      });
+      spawnParticles(evt.x, evt.y, '#3498db', 3);
+      break;
+    case EVT.LEVEL_UP:
+      g.levelFlash = 0.15; // 150ms flash
+      showLevelUp(g);
+      break;
+  }
 }
 
 function fireWeapon(g, w) {
@@ -1191,7 +1169,7 @@ function damageEnemy(g, e, idx, dmg) {
   }
   if (e.hp <= 0 && !e.dying) {
     sfx('kill');
-    spawnGem(e.x, e.y, e.xp);
+    spawnGem(g, e.x, e.y, e.xp);
     spawnParticles(e.x, e.y, e.color, 6);
     e.dying = 0.2; // 200ms death animation
     g.kills++;
