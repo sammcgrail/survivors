@@ -208,6 +208,13 @@ wss.on('connection', (ws) => {
         ws.close();
         return;
       }
+      // Reset game state when first player joins an empty server so they
+      // don't spawn into a wave-18 death trap left over from prior sessions.
+      const aliveCount = [...players.values()].filter(p => p.alive).length;
+      if (aliveCount === 0) {
+        game = initGame();
+        console.log('[*] game reset (no alive players)');
+      }
       const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
       player = makePlayer(pid, name, weapon, game.rng);
