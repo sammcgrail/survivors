@@ -1,0 +1,6 @@
+/ /sp.html 200
+/v1a /sp.html 301
+/v1a.html /sp.html 301
+/v1b /mp.html 301
+/v1b.html /mp.html 301
+/index.html /sp.html 301
