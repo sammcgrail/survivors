@@ -346,6 +346,70 @@
     }
   });
 
+  // src/shared/sim/damage.js
+  function heartDropChance(name) {
+    if (name === "boss") return 1;
+    if (name === "elite" || name === "brute") return 0.2;
+    return 0.08;
+  }
+  function spawnHeart(g, x, y, heal) {
+    g.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: g.rng.range(0, Math.PI * 2) });
+  }
+  function damageEnemy(g, e, idx, dmg) {
+    if (e.dying) return;
+    e.hp -= dmg;
+    e.hitFlash = 1;
+    emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
+    if (e.hp <= 0 && !e.dying) {
+      spawnGem(g, e.x, e.y, e.xp);
+      if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
+        spawnHeart(g, e.x, e.y, 15);
+      }
+      emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name });
+      e.dying = 0.2;
+      g.kills++;
+    }
+  }
+  var init_damage = __esm({
+    "src/shared/sim/damage.js"() {
+      init_gems();
+      init_events();
+    }
+  });
+
+  // src/shared/sim/projectiles.js
+  function updateProjectiles(g, dt) {
+    const p = g.player;
+    for (let i = g.projectiles.length - 1; i >= 0; i--) {
+      const proj = g.projectiles[i];
+      proj.x += proj.vx * dt;
+      proj.y += proj.vy * dt;
+      proj.dist += proj.speed * dt;
+      if (proj.dist > proj.range) {
+        g.projectiles.splice(i, 1);
+        continue;
+      }
+      for (let j = g.enemies.length - 1; j >= 0; j--) {
+        const e = g.enemies[j];
+        const edx = proj.x - e.x;
+        const edy = proj.y - e.y;
+        if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
+          damageEnemy(g, e, j, proj.damage * p.damageMulti);
+          proj.pierce--;
+          if (proj.pierce <= 0) {
+            g.projectiles.splice(i, 1);
+            break;
+          }
+        }
+      }
+    }
+  }
+  var init_projectiles = __esm({
+    "src/shared/sim/projectiles.js"() {
+      init_damage();
+    }
+  });
+
   // src/main.js
   var require_main = __commonJS({
     "src/main.js"() {
@@ -356,6 +420,8 @@
       init_rng();
       init_events();
       init_gems();
+      init_damage();
+      init_projectiles();
       var canvas = document.getElementById("c");
       var ctx = canvas.getContext("2d");
       ctx.imageSmoothingEnabled = false;
@@ -617,6 +683,28 @@
               osc.stop(t + 0.12);
               break;
             }
+            case "heal": {
+              osc.type = "sine";
+              osc.frequency.setValueAtTime(523, t);
+              osc.frequency.linearRampToValueAtTime(784, t + 0.1);
+              gain.gain.setValueAtTime(0.1, t);
+              gain.gain.linearRampToValueAtTime(0.06, t + 0.08);
+              gain.gain.linearRampToValueAtTime(0, t + 0.15);
+              osc.start(t);
+              osc.stop(t + 0.15);
+              const ho2 = ac.createOscillator();
+              const hg2 = ac.createGain();
+              ho2.connect(hg2);
+              hg2.connect(ac.destination);
+              ho2.type = "sine";
+              ho2.frequency.setValueAtTime(659, t + 0.05);
+              ho2.frequency.linearRampToValueAtTime(1047, t + 0.15);
+              hg2.gain.setValueAtTime(0.06, t + 0.05);
+              hg2.gain.linearRampToValueAtTime(0, t + 0.2);
+              ho2.start(t + 0.05);
+              ho2.stop(t + 0.2);
+              break;
+            }
             case "zap": {
               osc.type = "sawtooth";
               osc.frequency.setValueAtTime(2e3, t);
@@ -859,6 +947,7 @@
           enemies: [],
           projectiles: [],
           gems: [],
+          heartDrops: [],
           particles: [],
           floatingTexts: [],
           time: 0,
@@ -1045,29 +1134,7 @@
             if (targets.length > 0) sfx("zap");
           }
         }
-        for (let i = g.projectiles.length - 1; i >= 0; i--) {
-          const proj = g.projectiles[i];
-          proj.x += proj.vx * dt;
-          proj.y += proj.vy * dt;
-          proj.dist += proj.speed * dt;
-          if (proj.dist > proj.range) {
-            g.projectiles.splice(i, 1);
-            continue;
-          }
-          for (let j = g.enemies.length - 1; j >= 0; j--) {
-            const e = g.enemies[j];
-            const edx = proj.x - e.x;
-            const edy = proj.y - e.y;
-            if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
-              damageEnemy(g, e, j, proj.damage * p.damageMulti);
-              proj.pierce--;
-              if (proj.pierce <= 0) {
-                g.projectiles.splice(i, 1);
-                break;
-              }
-            }
-          }
-        }
+        updateProjectiles(g, dt);
         for (const w of p.weapons) {
           if (w.type === "breath") {
             for (let j = g.enemies.length - 1; j >= 0; j--) {
@@ -1230,6 +1297,41 @@
           }
         }
         updateGems(g, dt);
+        for (let i = g.heartDrops.length - 1; i >= 0; i--) {
+          const h = g.heartDrops[i];
+          h.life -= dt;
+          h.bobPhase += dt * 3;
+          if (h.life <= 0) {
+            g.heartDrops.splice(i, 1);
+            continue;
+          }
+          const hdx = p.x - h.x;
+          const hdy = p.y - h.y;
+          const dist = Math.sqrt(hdx * hdx + hdy * hdy);
+          if (dist < p.magnetRange * 0.6) {
+            const pull = XP_MAGNET_SPEED * 0.7 * dt;
+            h.x += hdx / dist * Math.min(pull, dist);
+            h.y += hdy / dist * Math.min(pull, dist);
+          }
+          if (dist < p.radius + h.radius) {
+            const healed = Math.min(h.heal, p.maxHp - p.hp);
+            p.hp = Math.min(p.maxHp, p.hp + h.heal);
+            sfx("heal");
+            if (healed > 0) {
+              g.floatingTexts.push({
+                x: h.x,
+                y: h.y,
+                text: "+" + Math.floor(healed) + " HP",
+                color: "#2ecc71",
+                life: 0.8,
+                maxLife: 0.8,
+                vy: -50
+              });
+            }
+            spawnParticles(h.x, h.y, "#e74c3c", 4);
+            g.heartDrops.splice(i, 1);
+          }
+        }
         for (let i = g.particles.length - 1; i >= 0; i--) {
           const pt = g.particles[i];
           pt.x += pt.vx * dt;
@@ -1317,6 +1419,24 @@
           case EVT.LEVEL_UP:
             g.levelFlash = 0.15;
             showLevelUp(g);
+            break;
+          case EVT.ENEMY_HIT:
+            if (evt.dmg >= 5) {
+              sfx("hit");
+              g.floatingTexts.push({
+                x: evt.x + (Math.random() - 0.5) * 10,
+                y: evt.y - evt.radius - 4,
+                text: Math.floor(evt.dmg).toString(),
+                color: "#f1c40f",
+                life: 0.5,
+                maxLife: 0.5,
+                vy: -40
+              });
+            }
+            break;
+          case EVT.ENEMY_KILLED:
+            sfx("kill");
+            spawnParticles(evt.x, evt.y, evt.color, 6);
             break;
         }
       }
@@ -1471,30 +1591,6 @@
           }
         }
       }
-      function damageEnemy(g, e, idx, dmg) {
-        if (e.dying) return;
-        e.hp -= dmg;
-        e.hitFlash = 1;
-        if (dmg >= 5) {
-          sfx("hit");
-          g.floatingTexts.push({
-            x: e.x + (Math.random() - 0.5) * 10,
-            y: e.y - e.radius - 4,
-            text: Math.floor(dmg).toString(),
-            color: "#f1c40f",
-            life: 0.5,
-            maxLife: 0.5,
-            vy: -40
-          });
-        }
-        if (e.hp <= 0 && !e.dying) {
-          sfx("kill");
-          spawnGem(g, e.x, e.y, e.xp);
-          spawnParticles(e.x, e.y, e.color, 6);
-          e.dying = 0.2;
-          g.kills++;
-        }
-      }
       function showLevelUp(g) {
         sfx("levelup");
         paused = true;
@@ -1644,6 +1740,24 @@
             ctx.fill();
             ctx.globalAlpha = 1;
           }
+        }
+        for (const h of g.heartDrops) {
+          const bob = Math.sin(h.bobPhase) * 3;
+          const fadeAlpha = h.life < 3 ? h.life / 3 : 1;
+          ctx.globalAlpha = fadeAlpha;
+          if (!drawSprite("heart", h.x, h.y + bob, 0.8, fadeAlpha)) {
+            ctx.fillStyle = "#e74c3c";
+            ctx.beginPath();
+            ctx.arc(h.x - 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+            ctx.arc(h.x + 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.moveTo(h.x - 9, h.y + bob);
+            ctx.lineTo(h.x, h.y + bob + 8);
+            ctx.lineTo(h.x + 9, h.y + bob);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
         }
         const p = g.player;
         for (const w of p.weapons) {

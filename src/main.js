@@ -10,6 +10,8 @@ import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from '.
 import { createRng } from './shared/sim/rng.js';
 import { EVT, emit } from './shared/sim/events.js';
 import { spawnGem, updateGems } from './shared/sim/gems.js';
+import { damageEnemy, spawnHeart } from './shared/sim/damage.js';
+import { updateProjectiles } from './shared/sim/projectiles.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -517,10 +519,7 @@ function spawnEnemy(g) {
 // --- spawn gem ---
 // spawnGem now imported from shared/sim/gems.js — call as spawnGem(g, x, y, xp)
 
-// --- spawn heart pickup ---
-function spawnHeart(x, y, heal) {
-  game.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: Math.random() * Math.PI * 2 });
-}
+// spawnHeart now imported from shared/sim/damage.js — call as spawnHeart(g, x, y, heal)
 
 // --- spawn particles ---
 function spawnParticles(x, y, color, count) {
@@ -701,34 +700,8 @@ function update(dt) {
     }
   }
 
-  // --- update projectiles ---
-  for (let i = g.projectiles.length - 1; i >= 0; i--) {
-    const proj = g.projectiles[i];
-    proj.x += proj.vx * dt;
-    proj.y += proj.vy * dt;
-    proj.dist += proj.speed * dt;
-
-    // remove if out of range
-    if (proj.dist > proj.range) {
-      g.projectiles.splice(i, 1);
-      continue;
-    }
-
-    // hit enemies
-    for (let j = g.enemies.length - 1; j >= 0; j--) {
-      const e = g.enemies[j];
-      const edx = proj.x - e.x;
-      const edy = proj.y - e.y;
-      if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
-        damageEnemy(g, e, j, proj.damage * p.damageMulti);
-        proj.pierce--;
-        if (proj.pierce <= 0) {
-          g.projectiles.splice(i, 1);
-          break;
-        }
-      }
-    }
-  }
+  // --- update projectiles --- (sim logic in shared/sim/projectiles.js)
+  updateProjectiles(g, dt);
 
   // --- breath aura damage ---
   for (const w of p.weapons) {
@@ -1060,6 +1033,23 @@ function handleSimEvent(evt) {
       g.levelFlash = 0.15; // 150ms flash
       showLevelUp(g);
       break;
+    case EVT.ENEMY_HIT:
+      // Floating damage number gated to dmg >= 5 — keeps breath ticks
+      // from spamming text. Sfx gated the same way.
+      if (evt.dmg >= 5) {
+        sfx('hit');
+        g.floatingTexts.push({
+          x: evt.x + (Math.random() - 0.5) * 10,
+          y: evt.y - evt.radius - 4,
+          text: Math.floor(evt.dmg).toString(),
+          color: '#f1c40f', life: 0.5, maxLife: 0.5, vy: -40,
+        });
+      }
+      break;
+    case EVT.ENEMY_KILLED:
+      sfx('kill');
+      spawnParticles(evt.x, evt.y, evt.color, 6);
+      break;
   }
 }
 
@@ -1209,32 +1199,7 @@ function fireWeapon(g, w) {
   // breath and orbit don't fire — they're always-on
 }
 
-function damageEnemy(g, e, idx, dmg) {
-  if (e.dying) return; // already dead, skip
-  e.hp -= dmg;
-  e.hitFlash = 1;
-  // damage number (only show for hits > 5 to avoid spam from breath ticks)
-  if (dmg >= 5) {
-    sfx('hit');
-    g.floatingTexts.push({
-      x: e.x + (Math.random() - 0.5) * 10,
-      y: e.y - e.radius - 4,
-      text: Math.floor(dmg).toString(),
-      color: '#f1c40f', life: 0.5, maxLife: 0.5, vy: -40,
-    });
-  }
-  if (e.hp <= 0 && !e.dying) {
-    sfx('kill');
-    spawnGem(g, e.x, e.y, e.xp);
-    // heart drop — wave 6+, 8% chance, higher for tougher enemies
-    if (g.wave >= 6 && Math.random() < (e.name === 'boss' ? 1.0 : e.name === 'elite' || e.name === 'brute' ? 0.2 : 0.08)) {
-      spawnHeart(e.x, e.y, 15);
-    }
-    spawnParticles(e.x, e.y, e.color, 6);
-    e.dying = 0.2; // 200ms death animation
-    g.kills++;
-  }
-}
+// damageEnemy now imported from shared/sim/damage.js
 
 // --- level up UI ---
 function showLevelUp(g) {
