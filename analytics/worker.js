@@ -73,6 +73,40 @@ export default {
       });
     }
 
+    // --- leaderboard ---
+    if (request.method === 'POST' && url.pathname === '/leaderboard') {
+      const entry = await request.json();
+      if (!entry.name || !entry.wave || entry.kills === undefined) {
+        return new Response('missing fields', { status: 400, headers: CORS_HEADERS });
+      }
+      const score = {
+        name: String(entry.name).slice(0, 20),
+        wave: Math.max(1, Math.floor(entry.wave)),
+        kills: Math.max(0, Math.floor(entry.kills)),
+        time: Math.max(0, Math.floor(entry.time || 0)),
+        weapons: (entry.weapons || []).slice(0, 8),
+        date: new Date().toISOString().slice(0, 10),
+      };
+      // fetch current leaderboard, insert if qualifies, keep top 50
+      const lb = await env.SURVIVORS_ANALYTICS.get('leaderboard', 'json') || [];
+      lb.push(score);
+      lb.sort((a, b) => b.wave - a.wave || b.kills - a.kills || a.time - b.time);
+      const trimmed = lb.slice(0, 50);
+      await env.SURVIVORS_ANALYTICS.put('leaderboard', JSON.stringify(trimmed));
+      const rank = trimmed.findIndex(s => s === score) + 1;
+      return new Response(JSON.stringify({ rank, total: trimmed.length }), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+
+    if (request.method === 'GET' && url.pathname === '/leaderboard') {
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '10'), 50);
+      const lb = await env.SURVIVORS_ANALYTICS.get('leaderboard', 'json') || [];
+      return new Response(JSON.stringify(lb.slice(0, limit), null, 2), {
+        headers: { 'Content-Type': 'application/json', ...CORS_HEADERS },
+      });
+    }
+
     return new Response('not found', { status: 404, headers: CORS_HEADERS });
   },
 };
