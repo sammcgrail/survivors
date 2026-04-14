@@ -264,6 +264,7 @@ canvas {
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
 
 // --- sprite sheet ---
 const SPRITE_SIZE = 16;
@@ -297,17 +298,21 @@ const ENEMY_SPRITES = {
   brute: 'tank', ghost: 'skull',
 };
 
+// imageSmoothingEnabled is set once at canvas init.
 function drawSprite(name, x, y, scale, alpha) {
   if (!spritesReady || !SP[name]) return false;
-  const [col, row] = SP[name];
+  const sp = SP[name];
   const s = SPRITE_SIZE;
   const drawSize = s * (scale || 2);
-  const prevAlpha = ctx.globalAlpha;
-  if (alpha !== undefined) ctx.globalAlpha = alpha;
-  ctx.imageSmoothingEnabled = false;
-  ctx.drawImage(spriteSheet, col * s, row * s, s, s,
-    x - drawSize / 2, y - drawSize / 2, drawSize, drawSize);
-  ctx.globalAlpha = prevAlpha;
+  const half = drawSize * 0.5;
+  if (alpha !== undefined) {
+    const prev = ctx.globalAlpha;
+    ctx.globalAlpha = alpha;
+    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
+    ctx.globalAlpha = prev;
+  } else {
+    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
+  }
   return true;
 }
 
@@ -824,8 +829,9 @@ function render(dt) {
     }
   }
 
-  // Smooth camera
-  const camSmooth = 1 - Math.pow(0.001, dt);
+  // Smooth camera — proper exponential decay so smoothing doesn't drift
+  // between 30/60/120 fps (the old `Math.pow(0.001, dt)` was framerate-coupled).
+  const camSmooth = 1 - Math.exp(-12 * dt);
   camera.x += (camTarget.x - camera.x) * camSmooth;
   camera.y += (camTarget.y - camera.y) * camSmooth;
 
@@ -842,7 +848,8 @@ function render(dt) {
     cy += (Math.random() - 0.5) * 8;
   }
 
-  ctx.translate(-cx, -cy);
+  // Snap to integer pixels — sub-pixel translation causes shimmer on retina.
+  ctx.translate(-Math.round(cx), -Math.round(cy));
 
   // --- background grid ---
   const gridSize = 60;
