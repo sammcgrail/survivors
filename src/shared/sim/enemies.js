@@ -10,16 +10,41 @@ import { EVT, emit } from './events.js';
 // so 50u keeps any colliding pair within own cell + 1 neighbor.
 const HASH_CELL = 50;
 
+// Pick a random alive player as the spawn anchor. Falls back to the
+// world centre if everyone's dead (shouldn't happen — caller skips ticks
+// when alive-list is empty — but safer than indexing []).
+function spawnAnchor(g) {
+  const alive = g.players.filter(p => p.alive);
+  if (alive.length === 0) return { x: WORLD_W / 2, y: WORLD_H / 2 };
+  return alive[g.rng.int(alive.length)];
+}
+
 export function spawnEnemy(g) {
+  const anchor = spawnAnchor(g);
   const angle = g.rng.random() * Math.PI * 2;
   const dist = 500 + g.rng.random() * 200;
-  const ex = g.player.x + Math.cos(angle) * dist;
-  const ey = g.player.y + Math.sin(angle) * dist;
+  const ex = anchor.x + Math.cos(angle) * dist;
+  const ey = anchor.y + Math.sin(angle) * dist;
   const e = enemyType(g.wave, g.rng);
   e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
   e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
   e.hitFlash = 0;
   g.enemies.push(e);
+}
+
+// Returns the alive player with the smallest distance to (ex, ey), plus
+// the dx/dy/dist back to that player. Returns null when no one is alive.
+function nearestAlivePlayer(g, ex, ey) {
+  let nearest = null, nearestD2 = Infinity;
+  for (const p of g.players) {
+    if (!p.alive) continue;
+    const dx = p.x - ex, dy = p.y - ey;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < nearestD2) { nearest = p; nearestD2 = d2; }
+  }
+  if (!nearest) return null;
+  const dx = nearest.x - ex, dy = nearest.y - ey;
+  return { p: nearest, dx, dy, dist: Math.sqrt(nearestD2) };
 }
 
 // Boss steps + telegraph use g.rng for cadence so server replay stays
@@ -85,9 +110,10 @@ function updateSpawnerAi(g, e, dt) {
 }
 
 // Pass 1: per-enemy movement + AI + hit-flash decay + player contact.
-// Iterate backward because dying enemies splice from the array.
+// Iterate backward because dying enemies splice from the array. Movement
+// + AI target the nearest alive player; contact damage hits any player
+// the enemy actually overlaps.
 function updateEnemyTick(g, dt) {
-  const p = g.player;
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const e = g.enemies[i];
 
@@ -98,16 +124,13 @@ function updateEnemyTick(g, dt) {
       continue;
     }
 
-    const edx = p.x - e.x;
-    const edy = p.y - e.y;
-    const dist = Math.sqrt(edx * edx + edy * edy);
-
-    if (dist > 1) {
-      if (e.name === 'ghost')      updateGhostMovement(e, dt, edx, edy, dist);
-      else if (e.name === 'boss')  updateBossAi(g, e, dt, edx, edy, dist);
+    const target = nearestAlivePlayer(g, e.x, e.y);
+    if (target && target.dist > 1) {
+      if (e.name === 'ghost')      updateGhostMovement(e, dt, target.dx, target.dy, target.dist);
+      else if (e.name === 'boss')  updateBossAi(g, e, dt, target.dx, target.dy, target.dist);
       else {
-        e.x += (edx / dist) * e.speed * dt;
-        e.y += (edy / dist) * e.speed * dt;
+        e.x += (target.dx / target.dist) * e.speed * dt;
+        e.y += (target.dy / target.dist) * e.speed * dt;
       }
     }
 
@@ -115,15 +138,19 @@ function updateEnemyTick(g, dt) {
 
     if (e.hitFlash > 0) e.hitFlash -= dt * 5;
 
-    // damage player on contact
-    if (dist < p.radius + e.radius && p.iframes <= 0) {
-      p.hp -= e.damage;
-      p.iframes = 0.5;
-      emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg: e.damage, by: e.name });
-      if (p.hp <= 0) {
-        p.hp = 0;
-        p.alive = false;
-        emit(g, EVT.PLAYER_DEATH, { by: e.name });
+    // Contact damage — hit every overlapping alive player (not just nearest).
+    for (const p of g.players) {
+      if (!p.alive || p.iframes > 0) continue;
+      const dx = p.x - e.x, dy = p.y - e.y;
+      if (dx * dx + dy * dy < (p.radius + e.radius) ** 2) {
+        p.hp -= e.damage;
+        p.iframes = 0.5;
+        emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg: e.damage, by: e.name, pid: p.id });
+        if (p.hp <= 0) {
+          p.hp = 0;
+          p.alive = false;
+          emit(g, EVT.PLAYER_DEATH, { by: e.name, pid: p.id });
+        }
       }
     }
   }

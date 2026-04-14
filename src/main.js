@@ -423,6 +423,7 @@ function initGame() {
     alive: true,
     iframes: 0, // invincibility frames after hit
     facing: { x: 1, y: 0 },
+    id: 0, kills: 0, score: 0, // shared shape with MP — sim attributes kills via id
   };
 
   // mark starting weapon as owned
@@ -430,6 +431,7 @@ function initGame() {
 
   return {
     player: p,
+    players: [p], // sim modules iterate g.players; SP is just a 1-elem list
     enemies: [],
     projectiles: [],
     gems: [],
@@ -716,7 +718,7 @@ function showLevelUp(g) {
     `;
     const pick = () => {
       choice.stack++;
-      choice.apply(g);
+      choice.apply(g, g.player);
       document.getElementById('level-up').style.display = 'none';
       paused = false;
       window._levelChoices = [];

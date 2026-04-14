@@ -12,18 +12,20 @@ import {
 } from '../src/shared/constants.js';
 
 function makeGame(seed = 42) {
+  const player = {
+    id: 0, x: WORLD_W / 2, y: WORLD_H / 2, vx: 0, vy: 0,
+    hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP,
+    radius: PLAYER_RADIUS, speed: PLAYER_SPEED,
+    damageMulti: 1, attackSpeedMulti: 1, hpRegen: 0,
+    magnetRange: XP_MAGNET_RANGE,
+    xp: 0, xpToLevel: 45, level: 1, kills: 0, score: 0,
+    // give the smoke run two weapons so we exercise multiple sim paths
+    weapons: [createWeapon('spit'), createWeapon('orbit')],
+    alive: true, iframes: 0, facing: { x: 1, y: 0 },
+  };
   return {
-    player: {
-      x: WORLD_W / 2, y: WORLD_H / 2, vx: 0, vy: 0,
-      hp: PLAYER_MAX_HP, maxHp: PLAYER_MAX_HP,
-      radius: PLAYER_RADIUS, speed: PLAYER_SPEED,
-      damageMulti: 1, attackSpeedMulti: 1, hpRegen: 0,
-      magnetRange: XP_MAGNET_RANGE,
-      xp: 0, xpToLevel: 45, level: 1,
-      // give the smoke run two weapons so we exercise multiple sim paths
-      weapons: [createWeapon('spit'), createWeapon('orbit')],
-      alive: true, iframes: 0, facing: { x: 1, y: 0 },
-    },
+    player,
+    players: [player],
     enemies: [], projectiles: [], gems: [], heartDrops: [],
     particles: [], floatingTexts: [], deathFeed: [],
     chainEffects: [], meteorEffects: [],
