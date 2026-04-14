@@ -272,6 +272,26 @@ function sfx(type) {
         break;
       }
 
+      case 'heal': { // health pickup — warm ascending chime
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523, t);
+        osc.frequency.linearRampToValueAtTime(784, t + 0.1);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.linearRampToValueAtTime(0.06, t + 0.08);
+        gain.gain.linearRampToValueAtTime(0, t + 0.15);
+        osc.start(t); osc.stop(t + 0.15);
+        const ho2 = ac.createOscillator();
+        const hg2 = ac.createGain();
+        ho2.connect(hg2); hg2.connect(ac.destination);
+        ho2.type = 'sine';
+        ho2.frequency.setValueAtTime(659, t + 0.05);
+        ho2.frequency.linearRampToValueAtTime(1047, t + 0.15);
+        hg2.gain.setValueAtTime(0.06, t + 0.05);
+        hg2.gain.linearRampToValueAtTime(0, t + 0.2);
+        ho2.start(t + 0.05); ho2.stop(t + 0.2);
+        break;
+      }
+
       case 'zap': { // lightning field strike — sharp crackling zap
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(2000, t);
@@ -452,6 +472,7 @@ function initGame() {
     enemies: [],
     projectiles: [],
     gems: [],
+    heartDrops: [],
     particles: [],
     floatingTexts: [],
     time: 0,
@@ -488,6 +509,11 @@ function spawnEnemy(g) {
 // --- spawn gem ---
 function spawnGem(x, y, xp) {
   game.gems.push({ x, y, xp, radius: XP_RADIUS, alpha: 1 });
+}
+
+// --- spawn heart pickup ---
+function spawnHeart(x, y, heal) {
+  game.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: Math.random() * Math.PI * 2 });
 }
 
 // --- spawn particles ---
@@ -922,6 +948,36 @@ function update(dt) {
     }
   }
 
+  // --- pick up hearts ---
+  for (let i = g.heartDrops.length - 1; i >= 0; i--) {
+    const h = g.heartDrops[i];
+    h.life -= dt;
+    h.bobPhase += dt * 3;
+    if (h.life <= 0) { g.heartDrops.splice(i, 1); continue; }
+    const hdx = p.x - h.x;
+    const hdy = p.y - h.y;
+    const dist = Math.sqrt(hdx * hdx + hdy * hdy);
+    // gentle magnet pull when close
+    if (dist < p.magnetRange * 0.6) {
+      const pull = XP_MAGNET_SPEED * 0.7 * dt;
+      h.x += (hdx / dist) * Math.min(pull, dist);
+      h.y += (hdy / dist) * Math.min(pull, dist);
+    }
+    if (dist < p.radius + h.radius) {
+      const healed = Math.min(h.heal, p.maxHp - p.hp);
+      p.hp = Math.min(p.maxHp, p.hp + h.heal);
+      sfx('heal');
+      if (healed > 0) {
+        g.floatingTexts.push({
+          x: h.x, y: h.y, text: '+' + Math.floor(healed) + ' HP',
+          color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
+        });
+      }
+      spawnParticles(h.x, h.y, '#e74c3c', 4);
+      g.heartDrops.splice(i, 1);
+    }
+  }
+
   // --- update particles ---
   for (let i = g.particles.length - 1; i >= 0; i--) {
     const pt = g.particles[i];
@@ -1168,6 +1224,10 @@ function damageEnemy(g, e, idx, dmg) {
   if (e.hp <= 0 && !e.dying) {
     sfx('kill');
     spawnGem(e.x, e.y, e.xp);
+    // heart drop — wave 6+, 8% chance, higher for tougher enemies
+    if (g.wave >= 6 && Math.random() < (e.name === 'boss' ? 1.0 : e.name === 'elite' || e.name === 'brute' ? 0.2 : 0.08)) {
+      spawnHeart(e.x, e.y, 15);
+    }
     spawnParticles(e.x, e.y, e.color, 6);
     e.dying = 0.2; // 200ms death animation
     g.kills++;
@@ -1351,6 +1411,27 @@ function render() {
       ctx.fill();
       ctx.globalAlpha = 1;
     }
+  }
+
+  // --- heart pickups (sprites with bob) ---
+  for (const h of g.heartDrops) {
+    const bob = Math.sin(h.bobPhase) * 3;
+    const fadeAlpha = h.life < 3 ? h.life / 3 : 1; // fade out last 3 seconds
+    ctx.globalAlpha = fadeAlpha;
+    if (!drawSprite('heart', h.x, h.y + bob, 0.8, fadeAlpha)) {
+      // fallback — draw a simple heart shape
+      ctx.fillStyle = '#e74c3c';
+      ctx.beginPath();
+      ctx.arc(h.x - 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+      ctx.arc(h.x + 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(h.x - 9, h.y + bob);
+      ctx.lineTo(h.x, h.y + bob + 8);
+      ctx.lineTo(h.x + 9, h.y + bob);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   }
 
   // --- breath aura ---
