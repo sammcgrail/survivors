@@ -9,7 +9,7 @@ import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
-import { POWERUPS, resetPowerupStacks } from './shared/sim/powerups.js';
+import { POWERUPS, getAvailableChoices } from './shared/sim/powerups.js';
 import { tickSim } from './shared/sim/tick.js';
 
 const canvas = document.getElementById('c');
@@ -402,8 +402,6 @@ let gameStarted = false;
 
 // --- init game ---
 function initGame() {
-  resetPowerupStacks();
-
   const p = {
     x: WORLD_W / 2,
     y: WORLD_H / 2,
@@ -424,10 +422,10 @@ function initGame() {
     iframes: 0, // invincibility frames after hit
     facing: { x: 1, y: 0 },
     id: 0, kills: 0, score: 0, // shared shape with MP — sim attributes kills via id
+    // Per-player powerup stack counts. Starting weapon = stack 1 so its
+    // upgrade powerups (e.g. spit_up) unlock immediately.
+    powerupStacks: { ['weapon_' + selectedWeapon]: 1 },
   };
-
-  // mark starting weapon as owned
-  POWERUPS.find(p => p.id === 'weapon_' + selectedWeapon).stack = 1;
 
   return {
     player: p,
@@ -668,15 +666,8 @@ function handleSimEvent(evt) {
 function showLevelUp(g) {
   sfx('levelup');
   paused = true;
-  const available = POWERUPS.filter(p => {
-    if (p.stack >= p.max) return false;
-    if (p.hidden) return false;
-    if (p.requires) {
-      const req = POWERUPS.find(r => r.id === p.requires);
-      if (!req || req.stack === 0) return false;
-    }
-    return true;
-  });
+  const stacks = g.player.powerupStacks;
+  const available = getAvailableChoices(stacks);
 
   // pick 3 random
   const shuffled = available.sort(() => Math.random() - 0.5);
@@ -697,7 +688,7 @@ function showLevelUp(g) {
       <div class="desc">${choice.desc}</div>
     `;
     const pick = () => {
-      choice.stack++;
+      stacks[choice.id] = (stacks[choice.id] || 0) + 1;
       choice.apply(g, g.player);
       document.getElementById('level-up').style.display = 'none';
       paused = false;
@@ -733,8 +724,10 @@ function showDeathScreen(g) {
   const secs = Math.floor(g.time % 60);
   const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
   const weaponList = g.player.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
-  const powerupList = POWERUPS.filter(p => p.stack > 0 && !p.id.startsWith('weapon_'))
-    .map(p => `${p.icon}×${p.stack}`).join(' ');
+  const stacks = g.player.powerupStacks;
+  const powerupList = POWERUPS
+    .filter(p => (stacks[p.id] || 0) > 0 && !p.id.startsWith('weapon_'))
+    .map(p => `${p.icon}×${stacks[p.id]}`).join(' ');
 
   // current run stats
   const thisRun = { wave: g.wave, kills: g.kills, time: g.time, level: g.player.level };
@@ -771,10 +764,11 @@ function showDeathScreen(g) {
 
   // build loadout display from owned powerups
   const loadoutEl = document.getElementById('death-loadout');
-  const owned = POWERUPS.filter(p => p.stack > 0);
+  const owned = POWERUPS.filter(p => (stacks[p.id] || 0) > 0);
   if (owned.length > 0) {
     loadoutEl.innerHTML = owned.map(p => {
-      const stackStr = p.stack > 1 ? ` ×${p.stack}` : '';
+      const n = stacks[p.id];
+      const stackStr = n > 1 ? ` ×${n}` : '';
       return `<div class="loadout-item"><span class="li-icon">${p.icon}</span>${p.name}${stackStr}</div>`;
     }).join('');
   } else {
