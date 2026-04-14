@@ -461,6 +461,18 @@ function sfx(type) {
   } catch (e) { /* audio not available, that's fine */ }
 }
 
+// --- analytics (fire-and-forget, never blocks gameplay) ---
+const ANALYTICS_URL = 'https://survivors-analytics.sammcgrail.workers.dev';
+let sessionStart = Date.now();
+const track = (event) => fetch(`${ANALYTICS_URL}/event`, {
+  method: 'POST', headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(event),
+}).catch(() => {});
+track({ type: 'page_load' });
+window.addEventListener('beforeunload', () => {
+  track({ type: 'session_end', duration_ms: Date.now() - sessionStart });
+});
+
 // --- battle music ---
 let bgMusic = null;
 let bgMusicGain = null;
@@ -1355,6 +1367,7 @@ function showLevelUp(g) {
 
 function showDeathScreen(g) {
   fadeOutMusic();
+  track({ type: 'death', wave: g.wave, kills: g.kills, weapons: g.player.weapons.map(w => w.type) });
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
   const weaponList = g.player.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
@@ -1928,6 +1941,7 @@ function startGame() {
   const nameEl = document.getElementById('name-input');
   if (nameEl && nameEl.value.trim()) game.playerName = nameEl.value.trim();
   startMusic();
+  track({ type: 'game_start' });
   if (!gameStarted) {
     gameStarted = true;
     lastTime = 0; // reset so first frame gets zero dt

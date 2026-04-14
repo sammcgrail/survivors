@@ -1,0 +1,7 @@
+name = "survivors-analytics"
+main = "worker.js"
+compatibility_date = "2026-04-14"
+
+[[kv_namespaces]]
+binding = "SURVIVORS_ANALYTICS"
+id = "de3de3c0da244c89a802b6a51068e5be"
