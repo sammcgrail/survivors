@@ -399,7 +399,9 @@ function startLoop() {
   }, TICK_DT * 1000);
 }
 
-const wss = new WebSocketServer({ port: PORT, path: '/ws' });
+// 4 KB cap on inbound frames — protocol messages are tiny (< 200 B).
+// Anything larger is hostile or buggy; ws closes the socket with code 1009.
+const wss = new WebSocketServer({ port: PORT, path: '/ws', maxPayload: 4096 });
 wss.on('connection', (ws) => {
   const pid = nextId++;
   let player = null;
@@ -409,6 +411,13 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw.toString()); } catch { return; }
 
     if (msg.type === 'join') {
+      // Reject double-join on the same socket — first join wins.
+      if (player) return;
+      if (players.size >= MAX_PLAYERS) {
+        ws.send(JSON.stringify({ type: 'error', reason: 'server_full' }));
+        ws.close();
+        return;
+      }
       const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
       const weapon = ['spit', 'breath', 'charge'].includes(msg.weapon) ? msg.weapon : 'spit';
       player = makePlayer(pid, name, weapon);
