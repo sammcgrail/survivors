@@ -421,6 +421,45 @@ function sfx(type) {
         osc.start(t); osc.stop(t + 0.07);
         break;
 
+      case 'chain': // chain lightning — electric zap
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(1200, t);
+        osc.frequency.linearRampToValueAtTime(300, t + 0.05);
+        osc.frequency.linearRampToValueAtTime(900, t + 0.08);
+        osc.frequency.linearRampToValueAtTime(200, t + 0.12);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.12);
+        osc.start(t); osc.stop(t + 0.12);
+        break;
+
+      case 'meteor': // meteor drop — deep rumble whomp
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(60, t);
+        osc.frequency.linearRampToValueAtTime(40, t + 0.2);
+        gain.gain.setValueAtTime(0.18, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.25);
+        osc.start(t); osc.stop(t + 0.25);
+        break;
+
+      case 'dragonstorm': { // dragon storm — deep roar + high sizzle
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(100, t);
+        osc.frequency.linearRampToValueAtTime(200, t + 0.1);
+        gain.gain.setValueAtTime(0.1, t);
+        gain.gain.linearRampToValueAtTime(0, t + 0.15);
+        osc.start(t); osc.stop(t + 0.15);
+        const o2 = ac.createOscillator();
+        const g2 = ac.createGain();
+        o2.connect(g2); g2.connect(ac.destination);
+        o2.type = 'square';
+        o2.frequency.setValueAtTime(800, t + 0.03);
+        o2.frequency.linearRampToValueAtTime(400, t + 0.1);
+        g2.gain.setValueAtTime(0.06, t + 0.03);
+        g2.gain.linearRampToValueAtTime(0, t + 0.12);
+        o2.start(t + 0.03); o2.stop(t + 0.12);
+        break;
+      }
+
       default:
         gain.gain.setValueAtTime(0, t);
         osc.start(t); osc.stop(t + 0.01);
@@ -1090,6 +1129,7 @@ function fireWeapon(g, w) {
   } else if (w.type === 'chain') {
     // chain lightning — zap nearest, chain to N more
     if (g.enemies.length === 0) return;
+    sfx('chain');
     // find nearest
     let sorted = g.enemies.slice().sort((a, b) => {
       const da = (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
@@ -1129,6 +1169,7 @@ function fireWeapon(g, w) {
   } else if (w.type === 'meteor') {
     // meteor — drop AoE on densest cluster
     if (g.enemies.length === 0) return;
+    sfx('meteor');
     // pick random enemy as target center
     const target = g.enemies[Math.floor(Math.random() * g.enemies.length)];
     // create meteor effect
@@ -1144,6 +1185,8 @@ function fireWeapon(g, w) {
   } else if (w.type === 'dragon_storm') {
     // homing fireballs in spread pattern
     if (g.enemies.length === 0) return;
+    w._fireCount = (w._fireCount || 0) + 1;
+    if (w._fireCount % 3 === 1) sfx('dragonstorm');
     let nearest = null, nearestDist = w.range;
     for (const e of g.enemies) {
       const d = Math.sqrt((e.x - p.x) ** 2 + (e.y - p.y) ** 2);
