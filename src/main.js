@@ -520,36 +520,6 @@ function update(dt) {
   //     load-bearing; see src/shared/sim/tick.js for rationale.
   tickSim(g, dt);
 
-  // --- pick up hearts ---
-  for (let i = g.heartDrops.length - 1; i >= 0; i--) {
-    const h = g.heartDrops[i];
-    h.life -= dt;
-    h.bobPhase += dt * 3;
-    if (h.life <= 0) { g.heartDrops.splice(i, 1); continue; }
-    const hdx = p.x - h.x;
-    const hdy = p.y - h.y;
-    const dist = Math.sqrt(hdx * hdx + hdy * hdy);
-    // gentle magnet pull when close
-    if (dist < p.magnetRange * 0.6) {
-      const pull = XP_MAGNET_SPEED * 0.7 * dt;
-      h.x += (hdx / dist) * Math.min(pull, dist);
-      h.y += (hdy / dist) * Math.min(pull, dist);
-    }
-    if (dist < p.radius + h.radius) {
-      const healed = Math.min(h.heal, p.maxHp - p.hp);
-      p.hp = Math.min(p.maxHp, p.hp + h.heal);
-      sfx('heal');
-      if (healed > 0) {
-        g.floatingTexts.push({
-          x: h.x, y: h.y, text: '+' + Math.floor(healed) + ' HP',
-          color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
-        });
-      }
-      spawnParticles(h.x, h.y, '#e74c3c', 4);
-      g.heartDrops.splice(i, 1);
-    }
-  }
-
   // --- update particles ---
   for (let i = g.particles.length - 1; i >= 0; i--) {
     const pt = g.particles[i];
@@ -609,6 +579,16 @@ function handleSimEvent(evt) {
         color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
       });
       spawnParticles(evt.x, evt.y, '#3498db', 3);
+      break;
+    case EVT.HEART_PICKUP:
+      sfx('heal');
+      if (evt.healed > 0) {
+        g.floatingTexts.push({
+          x: evt.x, y: evt.y, text: '+' + Math.floor(evt.healed) + ' HP',
+          color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
+        });
+      }
+      spawnParticles(evt.x, evt.y, '#e74c3c', 4);
       break;
     case EVT.LEVEL_UP:
       g.levelFlash = 0.15; // 150ms flash

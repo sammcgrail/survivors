@@ -147,6 +147,7 @@ function gameSnapshot() {
       x: r2(p.x), y: r2(p.y),
       hp: r1(p.hp), maxHp: p.maxHp,
       alive: p.alive, level: p.level, kills: p.kills,
+      xp: p.xp, xpToLevel: p.xpToLevel,
       weapons: p.weapons.map(w => w.type),
     })),
     enemies: game.enemies.map(e => ({
@@ -168,6 +169,15 @@ function gameSnapshot() {
       x: r1(m.x), y: r1(m.y), radius: m.radius,
       life: r2(m.life), phase: m.phase, color: m.color,
     })),
+    heartDrops: game.heartDrops.map(h => ({
+      x: r1(h.x), y: r1(h.y), heal: h.heal, radius: h.radius,
+      life: r2(h.life), bobPhase: r2(h.bobPhase),
+    })),
+    deathFeed: game.deathFeed.slice(-5).map(d => ({ text: d.text, time: r1(d.time) })),
+    waveMsg:        game.waveMsgTimer        > 0 ? game.waveMsg        : null,
+    waveMsgTimer:   r2(game.waveMsgTimer),
+    specialWaveMsg: game.specialWaveMsgTimer > 0 ? game.specialWaveMsg : null,
+    specialWaveMsgTimer: r2(game.specialWaveMsgTimer),
     arena: { w: WORLD_W, h: WORLD_H },
   };
 }

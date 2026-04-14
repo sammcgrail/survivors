@@ -574,6 +574,21 @@ function render(dt) {
     }
   }
 
+  // --- heart drops ---
+  for (const h of (state.heartDrops || [])) {
+    if (h.x < cx - 20 || h.x > cx + W + 20 || h.y < cy - 20 || h.y > cy + H + 20) continue;
+    const bob = Math.sin(h.bobPhase) * 2;
+    const fadeAlpha = h.life < 2 ? Math.max(0.2, h.life / 2) : 1;
+    if (!drawSprite('heart', h.x, h.y + bob, 0.8, fadeAlpha)) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.globalAlpha = fadeAlpha;
+      ctx.beginPath();
+      ctx.arc(h.x, h.y + bob, h.radius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+  }
+
   // --- render weapon auras for ALL players ---
   const gameTime = state.time || 0;
   for (const pl of state.players) {
@@ -845,15 +860,44 @@ function render(dt) {
   if (me && !me.alive) {
     const alive = state.players.filter(p => p.alive);
     if (alive.length > 0) {
-      ctx.save();
-      ctx.fillStyle = '#aaa';
+      ctx.fillStyle = 'rgba(170, 170, 170, 0.7)';
       ctx.font = '12px "Chakra Petch", sans-serif';
       ctx.textAlign = 'center';
-      ctx.globalAlpha = 0.7;
       const specName = alive[spectateIdx % alive.length].name;
       ctx.fillText(`SPECTATING: ${specName} (click to switch)`, W / 2, H - 30);
-      ctx.restore();
     }
+  }
+
+  // --- wave banner (regular + special) ---
+  if (state.waveMsg && state.waveMsgTimer > 0) {
+    const alpha = Math.min(1, state.waveMsgTimer / 0.5);
+    ctx.fillStyle = `rgba(241, 196, 15, ${alpha})`;
+    ctx.font = 'bold 32px "Orbitron", "Chakra Petch", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = 'rgba(241, 196, 15, 0.6)';
+    ctx.shadowBlur = 16;
+    ctx.fillText(state.waveMsg, W / 2, H * 0.3);
+    ctx.shadowBlur = 0;
+  }
+  if (state.specialWaveMsg && state.specialWaveMsgTimer > 0) {
+    const alpha = Math.min(1, state.specialWaveMsgTimer / 0.5);
+    ctx.fillStyle = `rgba(231, 76, 60, ${alpha})`;
+    ctx.font = 'bold 18px "Chakra Petch", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`⚠ ${state.specialWaveMsg} ⚠`, W / 2, H * 0.3 + 44);
+  }
+
+  // --- death feed (bottom-left) ---
+  const recent = (state.deathFeed || []);
+  for (let i = 0; i < recent.length; i++) {
+    const entry = recent[i];
+    const age = state.time - entry.time;
+    if (age > 6) continue;
+    const alpha = age > 5 ? (6 - age) : 1;
+    ctx.fillStyle = `rgba(204, 204, 204, ${alpha * 0.7})`;
+    ctx.font = '10px "Chakra Petch", sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText(entry.text, 12, H - 20 - (recent.length - 1 - i) * 16);
   }
 
   // --- HUD ---
@@ -866,6 +910,9 @@ function render(dt) {
     document.getElementById('hud-wave').textContent = `Wave ${state.wave}`;
     if (me) {
       document.getElementById('hud-weapons').textContent = (me.weapons || []).map(w => WEAPON_ICONS[w] || '?').join(' ');
+      document.getElementById('hud-level').textContent = `Lv ${me.level}`;
+      const xpFill = document.getElementById('xp-fill');
+      if (xpFill) xpFill.style.width = `${Math.min(100, (me.xp / me.xpToLevel) * 100)}%`;
     }
   }
 }

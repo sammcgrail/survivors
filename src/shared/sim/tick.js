@@ -11,6 +11,7 @@ import { updateWeapons, updateAuras, updateChainEffects, updateMeteorEffects } f
 import { updateProjectiles } from './projectiles.js';
 import { updateEnemies } from './enemies.js';
 import { updateGems } from './gems.js';
+import { updateHearts } from './hearts.js';
 
 export function tickSim(g, dt) {
   updateWaves(g, dt);
@@ -19,6 +20,7 @@ export function tickSim(g, dt) {
   updateAuras(g, dt);
   updateEnemies(g, dt);
   updateGems(g, dt);
+  updateHearts(g, dt);
   updateChainEffects(g, dt);
   updateMeteorEffects(g, dt);
 }
