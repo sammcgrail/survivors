@@ -1225,21 +1225,60 @@ function showLevelUp(g) {
   }
 }
 
+function getBestRun() {
+  try {
+    const raw = localStorage.getItem('survivors_best');
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) { return null; }
+}
+
+function saveBestRun(run) {
+  try { localStorage.setItem('survivors_best', JSON.stringify(run)); } catch (e) { /* ok */ }
+}
+
 function showDeathScreen(g) {
   fadeOutMusic();
   track({ type: 'death', wave: g.wave, kills: g.kills, weapons: g.player.weapons.map(w => w.type) });
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
+  const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
   const weaponList = g.player.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' ');
   const powerupList = POWERUPS.filter(p => p.stack > 0 && !p.id.startsWith('weapon_'))
     .map(p => `${p.icon}×${p.stack}`).join(' ');
+
+  // current run stats
+  const thisRun = { wave: g.wave, kills: g.kills, time: g.time, level: g.player.level };
+
+  // check for new best (compare by wave first, then kills as tiebreaker)
+  const prev = getBestRun();
+  let isNewBest = false;
+  if (!prev || thisRun.wave > prev.wave || (thisRun.wave === prev.wave && thisRun.kills > prev.kills)) {
+    isNewBest = true;
+    saveBestRun(thisRun);
+  }
+  const best = isNewBest ? thisRun : prev;
+
+  // new best flash
+  const newBestEl = document.getElementById('death-new-best');
+  newBestEl.innerHTML = isNewBest ? '<div class="new-best">★ NEW BEST ★</div>' : '';
+
+  // stats
   document.getElementById('death-stats').innerHTML = `
-    Survived: ${mins}:${secs.toString().padStart(2, '0')}<br>
+    Survived: ${timeStr}<br>
     Level: ${g.player.level} · Wave: ${g.wave}<br>
     Kills: ${g.kills}<br>
     <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
     ${powerupList ? `<div style="font-size:0.65rem;color:#555">Powerups: ${powerupList}</div>` : ''}
   `;
+
+  // best run display
+  const bestMins = Math.floor(best.time / 60);
+  const bestSecs = Math.floor(best.time % 60);
+  document.getElementById('death-best-run').innerHTML = `
+    <div class="best-label">best run</div>
+    <div class="best-value">Wave ${best.wave} · ${best.kills} kills · ${bestMins}:${bestSecs.toString().padStart(2, '0')}</div>
+  `;
+
   // build loadout display from owned powerups
   const loadoutEl = document.getElementById('death-loadout');
   const owned = POWERUPS.filter(p => p.stack > 0);
