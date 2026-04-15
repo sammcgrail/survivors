@@ -86,7 +86,7 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
   };
   if (prestige) applyUnlocks(p, prestige.unlocks);
   // Headstart prestige bumps level; scale xp threshold to match.
-  for (let i = 1; i < p.level; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
+  for (let i = 1; i < p.level; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.30);
   return p;
 }
 
