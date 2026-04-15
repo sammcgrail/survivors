@@ -7,15 +7,31 @@
 // point of plumbing rng through the sim is to avoid a hidden Math.random
 // reintroducing nondeterminism.
 
+// Boids-style flocking weights per enemy type. Each enemy's movement is
+// the weighted blend of: chase nearest player, separate from same-type
+// neighbors, align with their headings, cohere toward their center of
+// mass. Ghost + boss skip flocking (have custom AI). Numbers are tuned
+// to give each type a distinct movement personality:
+//   swarm  — tight swirling packs (high align + cohesion)
+//   blob   — moderate horde
+//   fast   — scattered flankers (high separation, low cohesion)
+//   tank   — spread wall (very high separation)
+//   brute  — lone chargers (zero align/coh, max chase)
+//   elite  — small tactical squads
+//   spawner — keep distance from each other so children spread
+const F = (perceptionRadius, sepWeight, alignWeight, cohWeight, chaseWeight, sepRadius) => ({
+  perceptionRadius, sepWeight, alignWeight, cohWeight, chaseWeight, sepRadius,
+});
+
 export const ENEMY_TYPES = [
-  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10, sprite: 'blob' },
-  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8,  sprite: 'fast' },
-  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30, sprite: 'tank' },
-  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm' },
-  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'brute' },
+  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10, sprite: 'blob',    flock: F(120, 0.8, 0.5, 0.3, 1.0, 25) },
+  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8,  sprite: 'fast',    flock: F(150, 1.5, 0.3, 0.1, 1.2, 40) },
+  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30, sprite: 'tank',    flock: F(140, 1.8, 0.4, 0.2, 0.8, 50) },
+  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm',   flock: F(100, 0.5, 1.2, 1.0, 0.8, 15) },
+  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'brute',   flock: F( 80, 2.0, 0.0, 0.0, 1.5, 60) },
   { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12, sprite: 'skull' },
-  { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite' },
-  { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner' },
+  { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite',   flock: F(130, 1.0, 0.8, 0.6, 1.0, 35) },
+  { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner', flock: F(100, 2.0, 0.1, 0.0, 0.6, 50) },
   { name: 'boss',   hp: 2000,speed: 35,  radius: 40, color: '#d63031', damage: 50, xp: 500,sprite: 'boss' },
 ];
 
@@ -87,5 +103,8 @@ export function scaleEnemy(base, wave, rng) {
     chargeTimer: base.name === 'boss' ? 3 + rng.random() * 2 : 0,
     charging: 0,
     stepTimer: base.name === 'boss' ? 0.8 : 0,
+    // Velocity tracked for flock alignment (neighbors look at vx/vy).
+    // Initialized to zero — first tick computes from chase + flock blend.
+    vx: 0, vy: 0,
   };
 }
