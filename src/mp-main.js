@@ -12,6 +12,7 @@ import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem } from './shared/render.js';
+import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -842,6 +843,7 @@ function render(dt) {
   // --- enemies ---
   for (const e of state.enemies) {
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
+    markSeen(e.name, state.wave); // bestiary discovery
 
     const spriteScale = e.radius / 8;
     const spriteName = ENEMY_SPRITES[e.name] || e.name;
@@ -1207,3 +1209,36 @@ window.addEventListener('load', () => {
 // to joinGame on first press, respawnGame after death.
 window.startGame = () => (renderStarted && prevMyAlive === false ? respawnGame() : joinGame());
 window.selectWeapon = selectWeapon;
+window.showBestiary = showBestiary;
+window.hideBestiary = hideBestiary;
+
+function showBestiary() {
+  const overlay = document.getElementById('bestiary');
+  const grid = document.getElementById('bestiary-grid');
+  const progress = document.getElementById('bestiary-progress');
+  const entries = getBestiaryEntries();
+  const seen = entries.filter(e => e.firstWave !== null).length;
+  if (progress) progress.textContent = `${seen} / ${entries.length} discovered`;
+  grid.innerHTML = entries.map(e => {
+    if (e.firstWave === null) {
+      return `<div class="beast-card unseen">
+        <div class="beast-swatch unseen"></div>
+        <div class="beast-name">???</div>
+        <div class="beast-wave">undiscovered</div>
+        <div class="beast-stats">hp - · spd - · dmg -</div>
+        <div class="beast-desc">Keep playing to unlock.</div>
+      </div>`;
+    }
+    return `<div class="beast-card">
+      <div class="beast-swatch" style="background:${e.color}; color:${e.color};"></div>
+      <div class="beast-name">${escapeHTML(e.info.display)}</div>
+      <div class="beast-wave">first seen: wave ${e.firstWave}</div>
+      <div class="beast-stats">hp ${e.baseStats.hp} · spd ${e.baseStats.speed} · dmg ${e.baseStats.damage}</div>
+      <div class="beast-desc">${escapeHTML(e.info.desc)}</div>
+    </div>`;
+  }).join('');
+  overlay.style.display = 'flex';
+}
+function hideBestiary() {
+  document.getElementById('bestiary').style.display = 'none';
+}
