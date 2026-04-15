@@ -686,18 +686,35 @@ function handleSimEvent(evt) {
       // from spamming text. Sfx gated the same way.
       if (evt.dmg >= 5) {
         sfx('hit');
+        // Big hits read as crits — bigger gold text + spark burst.
+        const isCrit = evt.dmg >= 50;
         g.floatingTexts.push({
           x: evt.x + (Math.random() - 0.5) * 10,
           y: evt.y - evt.radius - 4,
-          text: Math.floor(evt.dmg).toString(),
-          color: '#f1c40f', life: 0.5, maxLife: 0.5, vy: -40,
+          text: isCrit ? Math.floor(evt.dmg).toString() + '!' : Math.floor(evt.dmg).toString(),
+          color: isCrit ? '#f39c12' : '#f1c40f',
+          life: isCrit ? 0.7 : 0.5, maxLife: isCrit ? 0.7 : 0.5, vy: -40,
         });
+        if (isCrit) spawnParticles(evt.x, evt.y, '#f39c12', 6);
       }
       break;
-    case EVT.ENEMY_KILLED:
+    case EVT.ENEMY_KILLED: {
       sfx('kill');
-      spawnParticles(evt.x, evt.y, evt.color, 6);
+      // Particle count + screenshake scale with enemy size — a swarm
+      // pop is a small blip, a boss death is a screen-shaking
+      // detonation. radius is shipped on ENEMY_KILLED.
+      const r = evt.radius || 10;
+      const big = r >= 18;
+      const huge = r >= 30;
+      const count = huge ? 40 : big ? 20 : Math.max(8, Math.round(r * 1.2));
+      spawnParticles(evt.x, evt.y, evt.color, count);
+      // White hot-flash sparks for the bigger kills.
+      if (big) spawnParticles(evt.x, evt.y, '#ffffff', huge ? 15 : 6);
+      if (huge)      g.screenShake = Math.max(g.screenShake, 0.4);
+      else if (big)  g.screenShake = Math.max(g.screenShake, 0.15);
+      if (huge)      g.levelFlash = Math.max(g.levelFlash || 0, 0.12);
       break;
+    }
     case EVT.PLAYER_HIT:
       g.screenShake = 0.15;
       spawnParticles(evt.x, evt.y, '#e74c3c', 5);
