@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -258,30 +258,9 @@ const TICK_DT = 1 / 20;  // server sends at 20Hz
 // Client-side particles (decorative only)
 let particles = [];
 let screenShake = 0;
-// Per-player fire-trail throttle keyed by id. Last position is used to
-// detect movement so stationary trail-wearers don't pile particles.
+// Per-player fire-trail throttle, shared helper owns the write — we
+// just own the Map so state survives between render frames.
 const trailState = new Map();
-
-function spawnFireTrail(pl, dt) {
-  let st = trailState.get(pl.id);
-  if (!st) { st = { timer: 0, lastX: pl.x, lastY: pl.y }; trailState.set(pl.id, st); }
-  const dx = pl.x - st.lastX, dy = pl.y - st.lastY;
-  const moved = dx * dx + dy * dy > 0.5;
-  st.lastX = pl.x; st.lastY = pl.y;
-  st.timer -= dt;
-  if (st.timer > 0 || !moved) return;
-  st.timer = 0.03; // ~33 particles/sec while moving
-  particles.push({
-    x: pl.x + (Math.random() - 0.5) * 4,
-    y: pl.y + (Math.random() - 0.5) * 4,
-    vx: (Math.random() - 0.5) * 30,
-    vy: -40 - Math.random() * 60,
-    life: 0.3 + Math.random() * 0.3,
-    maxLife: 0.6,
-    radius: 2 + Math.random() * 2,
-    color: Math.random() > 0.4 ? '#f39c12' : '#e74c3c',
-  });
-}
 
 // Track previous state for change detection (sounds, death, etc.)
 let prevMyHp = null;
@@ -765,7 +744,7 @@ function render(dt) {
     // a particle channel to the WS protocol — visible to whoever's
     // watching the wearer. Keyed by player id so each wearer has its
     // own throttle bucket.
-    if (pl.activeTrail === 'trail_fire') spawnFireTrail(pl, dt);
+    if (pl.activeTrail === 'trail_fire') spawnFireTrail(pl, dt, particles, trailState);
 
     // "YOU" indicator - arrow above self
     if (isMe) {

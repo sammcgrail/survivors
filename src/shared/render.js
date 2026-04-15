@@ -732,3 +732,34 @@ export function drawChargeTrail(ctx, players) {
     }
   }
 }
+
+// Fire-trail cosmetic spawner — pushes ember particles behind a
+// player while they're moving, throttled so trails don't clot. Runs
+// during the client update step (not render) since it advances a
+// timer that depends on dt.
+//
+// Per-player throttle state lives in `trailState` — a Map keyed by
+// player id that the caller owns. SP keeps one map with one entry;
+// MP keeps one map with N entries. Position delta is the movement
+// check — avoids spawning particles on a stationary peer whose
+// p.facing is stale from the last move.
+export function spawnFireTrail(p, dt, particles, trailState) {
+  let st = trailState.get(p.id);
+  if (!st) { st = { timer: 0, lastX: p.x, lastY: p.y }; trailState.set(p.id, st); }
+  const dx = p.x - st.lastX, dy = p.y - st.lastY;
+  const moved = dx * dx + dy * dy > 0.5;
+  st.lastX = p.x; st.lastY = p.y;
+  st.timer -= dt;
+  if (st.timer > 0 || !moved) return;
+  st.timer = 0.03; // ~33 particles/sec while moving
+  particles.push({
+    x: p.x + (Math.random() - 0.5) * 4,
+    y: p.y + (Math.random() - 0.5) * 4,
+    vx: (Math.random() - 0.5) * 30,
+    vy: -40 - Math.random() * 60,
+    life: 0.3 + Math.random() * 0.3,
+    maxLife: 0.6,
+    radius: 2 + Math.random() * 2,
+    color: Math.random() > 0.4 ? '#f39c12' : '#e74c3c',
+  });
+}
