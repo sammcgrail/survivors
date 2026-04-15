@@ -3,7 +3,6 @@
 // Bundled by scripts/build.cjs → bundle.js (loaded by v1a.html)
 // ============================================================
 
-import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { createRng } from './shared/sim/rng.js';
@@ -756,8 +755,15 @@ function showLevelUp(g) {
   sfx('levelup');
   paused = true;
   const stacks = g.player.powerupStacks;
-  // pick 3 random valid options
-  const choices = getAvailableChoices(stacks).sort(() => Math.random() - 0.5).slice(0, 3);
+  // pick 3 random valid options — Fisher-Yates shuffle (the
+  // sort(() => Math.random()-0.5) one-liner is biased, doesn't even
+  // produce a uniform distribution). Matches server.mjs:175.
+  const available = getAvailableChoices(stacks);
+  for (let i = available.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [available[i], available[j]] = [available[j], available[i]];
+  }
+  const choices = available.slice(0, 3);
 
   const container = document.getElementById('level-choices');
   container.innerHTML = '';

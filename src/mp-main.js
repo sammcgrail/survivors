@@ -4,7 +4,6 @@
 // Bundled by scripts/build.cjs → bundle-mp.js (loaded by mp.html).
 // ============================================================
 
-import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';

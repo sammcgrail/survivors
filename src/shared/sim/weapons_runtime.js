@@ -123,8 +123,8 @@ function fireMeteor(g, w, p) {
 
 function fireDragonStorm(g, w, p) {
   if (g.enemies.length === 0) return;
-  w._fireCount = (w._fireCount || 0) + 1;
-  if (w._fireCount % 3 === 1) emit(g, EVT.WEAPON_FIRE, { weapon: 'dragon_storm', pid: p.id });
+  w.fireCount = (w.fireCount || 0) + 1;
+  if (w.fireCount % 3 === 1) emit(g, EVT.WEAPON_FIRE, { weapon: 'dragon_storm', pid: p.id });
   let nearest = null, nearestDist = w.range;
   for (const e of g.enemies) {
     const d = Math.hypot(e.x - p.x, e.y - p.y);
