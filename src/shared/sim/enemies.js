@@ -222,10 +222,19 @@ function updateSpawnerAi(g, e, dt) {
   if (e.spawnTimer > 0) return;
   e.spawnTimer = 3 + g.rng.random() * 2;
   const count = 3 + Math.floor(g.rng.random() * 3); // 3-5 swarmlings
+  // Wave 12+ a third of each brood comes out as poisoners instead of
+  // swarm. Same per-minion roll so a single brood can be mixed; the
+  // visual still reads as a swarm because most of the brood are still
+  // swarm sprites, but kiting becomes mandatory because contact with
+  // any of the teal ones stacks a 4s burn.
+  const poisonerChance = g.wave >= 12 ? 0.33 : 0;
+  const swarmBase = ENEMY_TYPES.find(t => t.name === 'swarm');
+  const poisonBase = ENEMY_TYPES.find(t => t.name === 'poisoner');
   for (let s = 0; s < count; s++) {
     const sa = g.rng.random() * Math.PI * 2;
     const sr = 20 + g.rng.random() * 20;
-    const base = ENEMY_TYPES.find(t => t.name === 'swarm');
+    const usePoisoner = poisonerChance > 0 && g.rng.random() < poisonerChance;
+    const base = usePoisoner && poisonBase ? poisonBase : swarmBase;
     const minion = scaleEnemy(base, g.wave, g.rng);
     minion.x = e.x + Math.cos(sa) * sr;
     minion.y = e.y + Math.sin(sa) * sr;

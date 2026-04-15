@@ -422,6 +422,38 @@ suite('Cross-pair Evolutions', () => {
       `bomber blast should hurt player (hp ${startHp} → ${g.player.hp})`);
   });
 
+  test('spawner mixes poisoners into broods at wave 12+', () => {
+    // Run a wave-12 sim long enough that spawner has fired several
+    // broods. Statistical: with ~33% poisoner chance and 3-5 minions
+    // per brood, 4 broods give ~5-6 poisoners on average. Asserting
+    // ">= 1" gives a very wide margin that's robust to rng draws.
+    const g = makeGame({ wave: 12, seed: 7 });
+    const rng = createRng(7);
+    const spawner = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'spawner'), 12, rng);
+    spawner.x = g.player.x + 400;
+    spawner.y = g.player.y;
+    spawner.spawnTimer = 0; // fire immediately
+    g.enemies.push(spawner);
+    tickN(g, 60 * 20); // 20 sim seconds, ~4-5 broods
+    const poisoners = g.enemies.filter(e => e.name === 'poisoner');
+    assert(poisoners.length >= 1,
+      `wave 12 spawner should birth at least one poisoner, got ${poisoners.length}`);
+  });
+
+  test('spawner stays swarm-only before wave 12', () => {
+    const g = makeGame({ wave: 6, seed: 7 });
+    const rng = createRng(7);
+    const spawner = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'spawner'), 6, rng);
+    spawner.x = g.player.x + 400;
+    spawner.y = g.player.y;
+    spawner.spawnTimer = 0;
+    g.enemies.push(spawner);
+    tickN(g, 60 * 20);
+    const poisoners = g.enemies.filter(e => e.name === 'poisoner');
+    assert(poisoners.length === 0,
+      `wave 6 spawner should never birth poisoners, got ${poisoners.length}`);
+  });
+
   test('healer pulses hp back into nearby damaged enemies', () => {
     const g = makeGame();
     const rng = createRng(1);
