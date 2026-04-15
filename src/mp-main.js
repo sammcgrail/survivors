@@ -7,6 +7,7 @@
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
+import { makeBgmPlayer } from './shared/bgm.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
@@ -178,10 +179,7 @@ const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
 // SFX vol lives in the shared module now — only BGM stays local.
 let mpBgmVol = 0.45;
 try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) mpBgmVol = +v; } catch (_) {}
-let mpBgMusic = null;
-let mpBgMusicGain = null;
-let mpMusicFading = false;
-let mpCurrentTrack = null;
+const mpBattlePlayer = makeBgmPlayer();
 let mpMusicMuted = false;
 try { mpMusicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
 function updateMpMuteBtn() {
@@ -200,13 +198,7 @@ initMpVolSliders();
 function setBgmVol(v) {
   mpBgmVol = Math.max(0, Math.min(1, v / 100));
   try { localStorage.setItem('survivors_bgm_vol', mpBgmVol.toFixed(2)); } catch (_) {}
-  if (!mpMusicMuted && mpBgMusicGain) {
-    try {
-      const ac = getAudio();
-      mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      mpBgMusicGain.gain.linearRampToValueAtTime(mpBgmVol, ac.currentTime + 0.1);
-    } catch (_) {}
-  }
+  if (!mpMusicMuted) mpBattlePlayer.setVol(mpBgmVol);
 }
 function setSfxVol(v) {
   // Slider is 0..100; shared module owns persistence + gain wiring.
@@ -218,46 +210,15 @@ function toggleVolPanel() {
 }
 
 function startMpMusic(mapId) {
-  try {
-    const ac = getAudio();
-    if (ac.state === 'suspended') ac.resume();
-    const src = MP_MAP_TRACKS[mapId] || MP_DEFAULT_TRACK;
-    if (mpBgMusic && mpCurrentTrack !== src) {
-      mpBgMusic.pause(); mpBgMusic = null; mpBgMusicGain = null;
-    }
-    if (!mpBgMusic) {
-      mpBgMusic = new Audio();
-      mpBgMusic.loop = true;
-      mpBgMusic.volume = 1;
-      mpBgMusic.src = src;
-      mpCurrentTrack = src;
-      const mediaSrc = ac.createMediaElementSource(mpBgMusic);
-      mpBgMusicGain = ac.createGain();
-      mpBgMusicGain.gain.value = 0;
-      mediaSrc.connect(mpBgMusicGain);
-      mpBgMusicGain.connect(ac.destination);
-    }
-    mpBgMusic.currentTime = 0;
-    mpBgMusic.play().catch(() => {});
-    const target = mpMusicMuted ? 0 : mpBgmVol;
-    mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-    mpBgMusicGain.gain.setValueAtTime(0, ac.currentTime);
-    mpBgMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
-    mpMusicFading = false;
-  } catch (_) {}
+  const src = MP_MAP_TRACKS[mapId] || MP_DEFAULT_TRACK;
+  mpBattlePlayer.play(src, mpMusicMuted ? 0 : mpBgmVol);
 }
 
 function toggleMpMute() {
   mpMusicMuted = !mpMusicMuted;
   try { localStorage.setItem('survivors_mute', mpMusicMuted ? '1' : '0'); } catch (_) {}
   updateMpMuteBtn();
-  if (mpBgMusicGain) {
-    try {
-      const ac = getAudio();
-      mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      mpBgMusicGain.gain.linearRampToValueAtTime(mpMusicMuted ? 0 : mpBgmVol, ac.currentTime + 0.3);
-    } catch (_) {}
-  }
+  mpBattlePlayer.setVol(mpMusicMuted ? 0 : mpBgmVol, 0.3);
 }
 
 // --- resize ---
