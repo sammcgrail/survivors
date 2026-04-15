@@ -3,10 +3,9 @@
 // need to share state; no module-level canvas / state references.
 //
 // The SP/MP unification roadmap is complete — everything that's
-// shareable between the two entry points lives here. Remaining SP-only
-// visuals: the charge-weapon dash trail (needs additional snapshot
-// fields) and SP's facing indicator (MP doesn't ship facing). Remaining
-// MP-only: the "YOU" arrow, level badge, per-player name coloring.
+// shareable between the two entry points lives here. Remaining MP-only
+// by design: the "YOU" arrow, level badge, per-player name coloring
+// (Tier A in the disparity plan — intentional divergence).
 //
 // `renderWorld(ctx, view, drawSprite, particles, viewport, opts)` is
 // the single entry point for the shared middle of both pipelines —
@@ -285,9 +284,9 @@ export function drawMeteorEffects(ctx, meteorEffects) {
 // w.radius) and MP (snapshot w.radius) both end up at the actual
 // effective damage-zone size under Amplify/Volley upgrades.
 //
-// Charge effect is NOT handled here — it's SP-only until the server
-// starts shipping speed/duration/chargeTimer/width for the charge
-// weapon. Callers add charge render inline after this.
+// Charge-weapon dash trail lives in drawChargeTrail (runs after
+// projectiles so the streak sits on top); this helper handles the
+// 8 persistent weapon auras only.
 //
 // `viewport` is optional — {cx, cy, W, H}; when provided, cull
 // players whose entire largest possible aura can't hit the viewport.
@@ -669,7 +668,67 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
     drawGem(ctx, gem, drawSprite);
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
-  drawWeaponAuras(ctx, view.players, view.time || 0);
+  drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
   drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
+}
+
+// Charge weapon dash trail — tapered streak + speed lines + slash arc
+// for players whose charge weapon is currently mid-dash. Reads
+// w.speed / w.duration / w.chargeTimer / w.width / w.chargeDx,Dy /
+// w.color from each active charge. Caller slots this between
+// drawProjectiles and drawChainEffects so the trail reads on top of
+// hits but under chain/meteor FX (matches SP's pre-unification
+// order).
+export function drawChargeTrail(ctx, players) {
+  for (const p of players) {
+    if (!p.alive) continue;
+    for (const w of (p.weapons || [])) {
+      if (w.type !== 'charge' || !w.active) continue;
+      const trailDist = w.speed * w.duration;
+      const progress = 1 - (w.chargeTimer / w.duration);
+      const perpX = -w.chargeDy;
+      const perpY = w.chargeDx;
+
+      ctx.save();
+      ctx.fillStyle = w.color;
+      const steps = 10;
+      for (let t = steps; t >= 0; t--) {
+        const frac = t / steps;
+        ctx.globalAlpha = 0.35 * (1 - frac);
+        ctx.beginPath();
+        ctx.arc(
+          p.x - w.chargeDx * trailDist * frac,
+          p.y - w.chargeDy * trailDist * frac,
+          w.width * (1 - frac * 0.6),
+          0, Math.PI * 2,
+        );
+        ctx.fill();
+      }
+
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 2;
+      for (let i = 0; i < 4; i++) {
+        const offset = (i + 1) * 0.2;
+        const spread = (i % 2 === 0 ? 1 : -1) * (8 + i * 6);
+        const sx = p.x - w.chargeDx * trailDist * offset + perpX * spread;
+        const sy = p.y - w.chargeDy * trailDist * offset + perpY * spread;
+        const lineLen = 12 + i * 4;
+        ctx.globalAlpha = 0.4 * (1 - offset);
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx - w.chargeDx * lineLen, sy - w.chargeDy * lineLen);
+        ctx.stroke();
+      }
+
+      ctx.globalAlpha = 0.5 * (1 - progress);
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      const slashAngle = Math.atan2(w.chargeDy, w.chargeDx);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, w.width * 1.5, slashAngle - 0.8, slashAngle + 0.8);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
 }

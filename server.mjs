@@ -222,6 +222,16 @@ function snapshotWeapon(w) {
     o.chargeDx = r2(w.chargeDx);
     o.chargeDy = r2(w.chargeDy);
   }
+  // Charge weapon dash trail — only meaningful while active. Ships
+  // enough fields for drawChargeTrail to reconstruct the tapered
+  // streak + speed lines + slash arc (speed/duration static per run,
+  // chargeTimer is the animated one).
+  if (w.type === 'charge' && w.active) {
+    o.speed = w.speed;
+    o.duration = w.duration;
+    o.chargeTimer = r2(w.chargeTimer);
+    o.width = w.width;
+  }
   return o;
 }
 

@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -734,6 +734,7 @@ function render(dt) {
   // same trail + ember treatment SP has had — no more flat circles.
   drawProjectiles(ctx, state.projectiles, drawSprite, particles, cx, cy, W, H);
 
+  drawChargeTrail(ctx, state.players);
   drawChainEffects(ctx, state.chainEffects || []);
   drawMeteorEffects(ctx, state.meteorEffects || []);
 
