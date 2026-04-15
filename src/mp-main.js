@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -255,19 +255,119 @@ let stateTime = 0;      // time we received currState
 let interpAlpha = 1;     // 0..1 blend between prev and curr
 const TICK_DT = 1 / 20;  // server sends at 20Hz
 
-// Client-side particles (decorative only)
+// Client-side particles + floating text (decorative only).
 let particles = [];
+let floatingTexts = [];
 let screenShake = 0;
 // Per-player fire-trail throttle, shared helper owns the write — we
 // just own the Map so state survives between render frames.
 const trailState = new Map();
 
-// Track previous state for change detection (sounds, death, etc.)
-let prevMyHp = null;
+// Drain a batch of sim events shipped on the state snapshot. Mirrors
+// SP's handleSimEvent but scoped to what makes sense as a peer
+// observer — shake + death screen only fire when the event pid
+// matches mine; level-up menu stays server-routed via the separate
+// 'levelup' message.
+function handleServerEvent(evt) {
+  const isMe = evt.pid === myId;
+  switch (evt.type) {
+    case 'enemyHit':
+      if (evt.dmg >= 5) {
+        sfx('hit');
+        const crit = evt.dmg >= 50;
+        floatingTexts.push({
+          x: evt.x + (Math.random() - 0.5) * 10,
+          y: evt.y - (evt.radius || 10) - 4,
+          text: crit ? Math.floor(evt.dmg) + '!' : String(Math.floor(evt.dmg)),
+          color: crit ? '#f39c12' : '#f1c40f',
+          life: crit ? 0.7 : 0.5, maxLife: crit ? 0.7 : 0.5, vy: -40,
+        });
+        if (crit) spawnParticles(evt.x, evt.y, '#f39c12', 6);
+      }
+      break;
+    case 'enemyKilled': {
+      sfx('kill');
+      const r = evt.radius || 10;
+      const big = r >= 18, huge = r >= 30;
+      spawnParticles(evt.x, evt.y, evt.color, huge ? 40 : big ? 20 : Math.max(8, Math.round(r * 1.2)));
+      if (big) spawnParticles(evt.x, evt.y, '#ffffff', huge ? 15 : 6);
+      if (huge) screenShake = Math.max(screenShake, 0.4);
+      else if (big) screenShake = Math.max(screenShake, 0.15);
+      break;
+    }
+    case 'playerHit':
+      if (isMe) {
+        screenShake = Math.max(screenShake, 0.15);
+        sfx('playerhit');
+      }
+      spawnParticles(evt.x, evt.y, '#e74c3c', 5);
+      break;
+    case 'playerDeath':
+      if (isMe) sfx('death');
+      break;
+    case 'gemPickup':
+      if (isMe) sfx('xp');
+      floatingTexts.push({
+        x: evt.x, y: evt.y, text: '+' + evt.xp,
+        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
+      });
+      spawnParticles(evt.x, evt.y, '#3498db', 3);
+      break;
+    case 'heartPickup':
+      if (isMe) sfx('heal');
+      if (evt.healed > 0) {
+        floatingTexts.push({
+          x: evt.x, y: evt.y, text: '+' + Math.floor(evt.healed) + ' HP',
+          color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
+        });
+      }
+      spawnParticles(evt.x, evt.y, '#e74c3c', 4);
+      break;
+    case 'levelUp':
+      if (isMe) sfx('levelup');
+      break;
+    case 'weaponFire':
+      if (!isMe) return;
+      if (evt.weapon === 'spit')              sfx('spit');
+      else if (evt.weapon === 'chain')        sfx('chain');
+      else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
+      else if (evt.weapon === 'thunder_god')  sfx('chain');
+      break;
+    case 'chargeBurst':
+      if (isMe) { screenShake = Math.max(screenShake, 0.1); sfx('charge'); }
+      spawnParticles(evt.x, evt.y, evt.color, 8);
+      break;
+    case 'shieldHum':
+      if (isMe) sfx('shield_hum');
+      break;
+    case 'chainZap':
+      if (isMe) sfx('zap');
+      break;
+    case 'meteorExplode':
+      if (isMe) { screenShake = Math.max(screenShake, 0.1); sfx('meteor'); }
+      spawnParticles(evt.x, evt.y, evt.color, 12);
+      break;
+    case 'bossStep':
+      sfx('boss_step');
+      break;
+    case 'bossTelegraph':
+      spawnParticles(evt.x, evt.y, '#d63031', 12);
+      sfx('boss_telegraph');
+      break;
+    case 'hiveBurst':
+      spawnParticles(evt.x, evt.y, '#fdcb6e', 8);
+      sfx('hive_burst');
+      break;
+    case 'evolution':
+      if (isMe) screenShake = Math.max(screenShake, 0.5);
+      spawnParticles(evt.x, evt.y, '#f39c12', 20);
+      break;
+  }
+}
+
+// Only tracked for the death-screen DOM flip — every other change
+// signal comes through the event channel now.
 let prevMyAlive = null;
-let prevMyLevel = null;
-let prevEnemyCount = 0;
-let prevGemCount = 0;
 
 // Camera
 let camera = { x: 1500, y: 1500 };
@@ -343,7 +443,14 @@ function connectWS() {
       interpAlpha = 0;
       arena = msg.arena || arena;
 
-      // Detect changes for sound effects
+      // Drain sim events shipped with the snapshot. These fire once
+      // per event per client and drive sfx, particles, floating text,
+      // screen shake — same channel SP consumes via handleSimEvent.
+      if (msg.events) for (const evt of msg.events) handleServerEvent(evt);
+
+      // Death screen trigger still lives here since it's a DOM flip,
+      // not a transient effect. Level-up menu also stays — server
+      // sends separate `levelup` with choices.
       processStateChanges(msg);
       return;
     }
@@ -396,40 +503,12 @@ function processStateChanges(state) {
   const me = state.players.find(p => p.id === myId);
   if (!me) return;
 
-  // HP change -> hit sound
-  if (prevMyHp !== null && me.hp < prevMyHp && me.alive) {
-    sfx('playerhit');
-    screenShake = 0.15;
-    spawnParticles(me.x, me.y, '#e74c3c', 5);
-  }
+  // Death-screen DOM flip — stays here because event drain happens
+  // before DOM work and we need the latest state object for the
+  // showDeathScreen call.
+  if (prevMyAlive === true && !me.alive) showDeathScreen(state, me);
 
-  // Death
-  if (prevMyAlive === true && !me.alive) {
-    sfx('death');
-    showDeathScreen(state, me);
-  }
-
-  // Level up
-  if (prevMyLevel !== null && me.level > prevMyLevel) {
-    sfx('levelup');
-  }
-
-  // Gem count decreased -> pickup sound (rough heuristic)
-  if (state.gems.length < prevGemCount && prevGemCount - state.gems.length <= 3) {
-    sfx('xp');
-  }
-
-  // Enemy count decreased -> kill sounds (limit to avoid spam)
-  const enemyDelta = prevEnemyCount - state.enemies.length;
-  if (enemyDelta > 0 && enemyDelta <= 5) {
-    sfx('kill');
-  }
-
-  prevMyHp = me.hp;
   prevMyAlive = me.alive;
-  prevMyLevel = me.level;
-  prevEnemyCount = state.enemies.length;
-  prevGemCount = state.gems.length;
 }
 
 function sendInput() {
@@ -489,8 +568,6 @@ function respawnGame() {
     ws.send(JSON.stringify({ type: 'respawn', weapon: selectedWeapon, prestige: prestigePayload() }));
   }
   prevMyAlive = null;
-  prevMyHp = null;
-  prevMyLevel = null;
 }
 
 function showDeathScreen(state, me) {
@@ -533,6 +610,12 @@ function updateParticles(dt) {
     pt.y += pt.vy * dt;
     pt.life -= dt;
     if (pt.life <= 0) particles.splice(i, 1);
+  }
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.y += ft.vy * dt;
+    ft.life -= dt;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
   }
   if (screenShake > 0) screenShake -= dt;
 }
@@ -779,6 +862,7 @@ function render(dt) {
   }
 
   drawParticles(ctx, particles);
+  drawFloatingTexts(ctx, floatingTexts);
 
   ctx.restore();
 

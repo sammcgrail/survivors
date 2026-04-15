@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1066,15 +1066,7 @@ function render() {
 
   drawParticles(ctx, g.particles);
 
-  // --- floating texts ---
-  for (const ft of g.floatingTexts) {
-    ctx.globalAlpha = ft.life / ft.maxLife;
-    ctx.fillStyle = ft.color;
-    ctx.font = 'bold 12px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(ft.text, ft.x, ft.y);
-    ctx.globalAlpha = 1;
-  }
+  drawFloatingTexts(ctx, g.floatingTexts);
 
   ctx.restore();
 

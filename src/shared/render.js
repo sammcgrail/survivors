@@ -79,6 +79,20 @@ export function drawHpBar(ctx, x, yTop, w, hpFrac, height = 4, bg = '#222') {
   ctx.fillRect(x - w / 2, yTop, w * Math.max(0, hpFrac), height);
 }
 
+// Decorative-only floating text — fade alpha with remaining life.
+// Sim events push these (damage numbers, pickup labels); ticker
+// advances y via ft.vy in the update loop.
+export function drawFloatingTexts(ctx, floatingTexts) {
+  ctx.font = 'bold 12px "Chakra Petch", sans-serif';
+  ctx.textAlign = 'center';
+  for (const ft of floatingTexts) {
+    ctx.globalAlpha = ft.life / ft.maxLife;
+    ctx.fillStyle = ft.color;
+    ctx.fillText(ft.text, ft.x, ft.y);
+  }
+  ctx.globalAlpha = 1;
+}
+
 // Decorative-only fading particles: alpha + radius shrink with life.
 export function drawParticles(ctx, particles) {
   for (const pt of particles) {
