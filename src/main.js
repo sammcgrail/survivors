@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1052,59 +1052,7 @@ function render() {
   drawEnemies(ctx, g.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, g.wave));
   drawProjectiles(ctx, g.projectiles, drawSprite, g.particles, cx, cy, W, H);
 
-  // --- charge effect (streak along charge vector) ---
-  for (const w of p.weapons) {
-    if (w.type === 'charge' && w.active) {
-      const trailDist = w.speed * w.duration;
-      const progress = 1 - (w.chargeTimer / w.duration); // 0→1 over charge
-      // perpendicular vector for slash width
-      const perpX = -w.chargeDy;
-      const perpY = w.chargeDx;
-
-      // main dash trail — tapered streak
-      ctx.save();
-      const steps = 10;
-      for (let t = steps; t >= 0; t--) {
-        const frac = t / steps;
-        const tx = p.x - w.chargeDx * trailDist * frac;
-        const ty = p.y - w.chargeDy * trailDist * frac;
-        const alpha = 0.35 * (1 - frac);
-        const size = w.width * (1 - frac * 0.6);
-        ctx.globalAlpha = alpha;
-        ctx.fillStyle = w.color;
-        ctx.beginPath();
-        ctx.arc(tx, ty, size, 0, Math.PI * 2);
-        ctx.fill();
-      }
-
-      // speed lines — short streaks along the charge path
-      ctx.strokeStyle = w.color;
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 4; i++) {
-        const offset = (i + 1) * 0.2;
-        const spread = (i % 2 === 0 ? 1 : -1) * (8 + i * 6);
-        const sx = p.x - w.chargeDx * trailDist * offset + perpX * spread;
-        const sy = p.y - w.chargeDy * trailDist * offset + perpY * spread;
-        const lineLen = 12 + i * 4;
-        ctx.globalAlpha = 0.4 * (1 - offset);
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.lineTo(sx - w.chargeDx * lineLen, sy - w.chargeDy * lineLen);
-        ctx.stroke();
-      }
-
-      // impact slash arc at player position
-      ctx.globalAlpha = 0.5 * (1 - progress);
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 3;
-      const slashAngle = Math.atan2(w.chargeDy, w.chargeDx);
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, w.width * 1.5, slashAngle - 0.8, slashAngle + 0.8);
-      ctx.stroke();
-
-      ctx.restore();
-    }
-  }
+  drawChargeTrail(ctx, g.players);
 
   // --- player ---
   if (p.alive) {
