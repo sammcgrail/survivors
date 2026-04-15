@@ -74,22 +74,56 @@ function drawMinimap() {
   }
 
   // Enemies — gray dots for trash mobs, scaled colored dots for
-  // named threats (brute/elite/spawner/boss) so players can locate
-  // bigger enemies at a glance. Boss adds a pulsing halo since
-  // bosses fire ranged spreads now and you want to know where it
-  // is without panning.
+  // named threats (brute/elite/spawner/boss/healer/bomber) so players
+  // can locate bigger enemies at a glance. Boss + healer + bomber
+  // each get a pulsing halo since they're priority targets:
+  //   boss   — fires ranged spreads, drives the fight
+  //   healer — restores 8 HP/1.5s to the pack, MUST die first
+  //   bomber — death blast hits the player, plan disengage
+  const now = performance.now();
+  const bossPulse   = 0.4 + Math.sin(now / 180) * 0.3;
+  const healerPulse = 0.35 + Math.sin(now / 280) * 0.25;
+  const bomberPulse = 0.45 + Math.sin(now / 140) * 0.3;
   for (const e of enemies) {
     if (e.name === 'boss') {
       mmCtx.fillStyle = e.color || '#d63031';
       mmCtx.beginPath();
       mmCtx.arc(e.x * sx, e.y * sy, 4, 0, Math.PI * 2);
       mmCtx.fill();
-      const bossPulse = 0.4 + Math.sin(performance.now() / 180) * 0.3;
       mmCtx.strokeStyle = e.color || '#d63031';
       mmCtx.globalAlpha = bossPulse;
       mmCtx.lineWidth = 1;
       mmCtx.beginPath();
       mmCtx.arc(e.x * sx, e.y * sy, 7, 0, Math.PI * 2);
+      mmCtx.stroke();
+      mmCtx.globalAlpha = 1;
+    } else if (e.name === 'healer') {
+      // Calm slow pulse — the visual signals "support", different
+      // cadence from boss/bomber so the eye can sort priorities.
+      mmCtx.fillStyle = e.color || '#00b894';
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 3, 0, Math.PI * 2);
+      mmCtx.fill();
+      mmCtx.strokeStyle = e.color || '#00b894';
+      mmCtx.globalAlpha = healerPulse;
+      mmCtx.lineWidth = 1;
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 6, 0, Math.PI * 2);
+      mmCtx.stroke();
+      mmCtx.globalAlpha = 1;
+    } else if (e.name === 'bomber') {
+      // Faster pulse — danger cue. Outer ring approximates the death
+      // blast radius (55u world → scaled to minimap) so players know
+      // how far to back off before finishing one.
+      mmCtx.fillStyle = e.color || '#e17055';
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 3, 0, Math.PI * 2);
+      mmCtx.fill();
+      mmCtx.strokeStyle = e.color || '#e17055';
+      mmCtx.globalAlpha = bomberPulse;
+      mmCtx.lineWidth = 1;
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, Math.max(5, 55 * sx), 0, Math.PI * 2);
       mmCtx.stroke();
       mmCtx.globalAlpha = 1;
     } else if (e.name === 'elite' || e.name === 'spawner' || e.name === 'brute') {
@@ -155,7 +189,7 @@ function drawMinimap() {
 
   // Minimap border — flashes red on boss phase-3 transition, then
   // fades back to the standard dim white over the flash duration.
-  const now = performance.now();
+  // `now` already declared above for the threat-pulse cadences.
   const borderFlashAlpha = mmBorderUntil > now
     ? Math.min(0.9, (mmBorderUntil - now) / 600) // fade out over 600 ms
     : 0;
