@@ -38,7 +38,31 @@
 - 91%+ game start rate from page loads
 - Spit picked 8/8 times (first-card bias) — fixed with shuffle
 
+### PRs #102–107 (session: seb lead, tiny, calne)
+
+- **#102** — Procedural maps: wilderness (cluster-scatter) + catacombs (corridor), `mapGen.js`, `resolveMapObstacles()` helper (tiny)
+- **#103** — Weapon balance pass: spit 15→20 dmg, chain 20→28 + cd 0.9 + 3 chains, lightning_field 22 dmg + 4 zaps, inferno_wheel 20→16 blade. New `weapon_bench.mjs` harness (tiny)
+- **#104** — Enemy variety: poisoner (contact DoT), splitter (swarmlings on death), bomber (explosion on death), healer (AoE pulse). Declarative `splitOn`/`explodeOn` config, `playerStatus.js` DoT system (tiny)
+- **#105** — Boss phase 4: 25% HP enrage, summon 2 healers, faster shooting, compressed charge without telegraph, `phase >= 3` homing fix (tiny)
+- **#106** — Phase 4 VFX: crimson particle burst, white sparks, "ENRAGED" banner, screen shake + flash, minimap border pulse (tiny)
+- **#107** — Spawner poisoner broods: wave 12+ spawners roll ~33% poisoner minions (tiny)
+
+### Calne fork PRs #5–11
+
+- **fork #5** — Level-up card polish: evo gold border, `✦ EVOLUTION` badge, stat delta strings on all 17 upgrades (calne)
+- **fork #6** — MP parity fix: weapon icons, wave counter `/20`, boss warning (calne)
+- **fork #7** — Kill feed (top-left) + scoreboard (above minimap) for MP (calne)
+- **fork #8** — Achievement system: 10 milestones, localStorage-backed, toast notifications, death screen badge row (calne)
+- **fork #9** — MP lobby: server-side queue, 10s countdown, map vote with majority tally, late-join skip (calne)
+- **fork #10** — MP achievement badges: read-only localStorage badges on MP death screen (calne)
+- **fork #11** — Run history: last 5 runs on death screen (wave, kills, time survived), localStorage persistence (calne)
+
+### Other (session 2)
+- **68-test sim suite**: +11 tests (poisoner contact, splitter death, bomber blast, healer pulse, spawner poisoner broods wave 12+/pre-12, boss phase 4 transition, phase 4 homing, procedural map determinism)
+- **Weapon bench**: `tests/weapon_bench.mjs` — 14 weapons × 5 waves × 30s DPS, `--weapon`/`--wave`/`--csv` flags
+- **Inferno Wheel tops DPS chart**: 4800 DPS at wave 18, followed by fortress (3977) and tesla_aegis (4457)
+
 ### Up next
-- **Level-up system polish** (calne claiming)
-- **Map variety / procedural obstacles** (unclaimed)
+- **Map variety polish / more procedural modes** (unclaimed)
 - **VFX + netcode + SP-MP parity** (tiny, per vox directive)
+- **Barn deliverables** (absent all session)
