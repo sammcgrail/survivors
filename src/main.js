@@ -16,6 +16,7 @@ import { MAPS } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
+import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks } from './shared/prestige.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -450,6 +451,8 @@ function initGame() {
     powerupStacks: { ['weapon_' + selectedWeapon]: 1 },
   };
 
+  applyPrestigeUnlocks(p);
+
   return {
     player: p,
     players: [p], // sim modules iterate g.players; SP is just a 1-elem list
@@ -857,6 +860,32 @@ function showDeathScreen(g) {
     .catch(() => {
       lbEl.innerHTML = '<div class="lb-title">leaderboard</div><div style="color:#555;font-size:0.7rem;text-align:center">offline</div>';
     });
+
+  // --- dragon scales prestige ---
+  const scalesRun = {
+    wave: g.wave,
+    kills: g.kills,
+    powerupStacks: g.player.powerupStacks,
+  };
+  const earned = calculateScales(scalesRun);
+  const prestige = loadPrestige();
+  prestige.scales += earned;
+  prestige.totalEarned += earned;
+  savePrestige(prestige);
+
+  // breakdown
+  const waveScales = Math.floor(g.wave / 2);
+  const killScales = Math.floor(g.kills / 50);
+  let evoScales = 0;
+  for (const k in g.player.powerupStacks) {
+    if (k.startsWith('evo_') && g.player.powerupStacks[k] > 0) evoScales += g.player.powerupStacks[k];
+  }
+  const scalesEl = document.getElementById('death-scales');
+  scalesEl.innerHTML = `
+    <div class="scales-earned">+${earned} DRAGON SCALES</div>
+    <div class="scales-breakdown">wave: ${waveScales} | kills: ${killScales} | evolutions: ${evoScales}</div>
+    <div class="scales-total">Total: ${prestige.scales} scales</div>
+  `;
 
   document.getElementById('death-screen').style.display = 'flex';
 }
@@ -1636,9 +1665,46 @@ function gameLoop(ts) {
   requestAnimationFrame(gameLoop);
 }
 
+// --- prestige shop ---
+function showPrestigeShop() {
+  const prestige = loadPrestige();
+  document.getElementById('scale-count').textContent = prestige.scales;
+  const grid = document.getElementById('unlock-grid');
+  grid.innerHTML = UNLOCKS.map(u => {
+    const owned = prestige.unlocks[u.id] || 0;
+    const maxed = owned >= u.max;
+    const canBuy = !maxed && prestige.scales >= u.cost;
+    const stackStr = u.max > 1 ? ` (${owned}/${u.max})` : (maxed ? ' (owned)' : '');
+    return `<div class="unlock-card${maxed ? ' unlock-maxed' : ''}${canBuy ? ' unlock-available' : ''}" onclick="${canBuy ? `purchaseUnlock('${u.id}')` : ''}">
+      <div class="unlock-icon">${u.icon}</div>
+      <div class="unlock-name">${u.name}${stackStr}</div>
+      <div class="unlock-desc">${u.desc}</div>
+      <div class="unlock-cost">${maxed ? 'MAXED' : u.cost + ' scales'}</div>
+    </div>`;
+  }).join('');
+  document.getElementById('prestige-shop').style.display = 'flex';
+}
+
+function hidePrestigeShop() {
+  document.getElementById('prestige-shop').style.display = 'none';
+}
+
+function purchaseUnlock(id) {
+  const u = UNLOCKS.find(x => x.id === id);
+  if (!u) return;
+  const prestige = loadPrestige();
+  const owned = prestige.unlocks[u.id] || 0;
+  if (owned >= u.max || prestige.scales < u.cost) return;
+  prestige.scales -= u.cost;
+  prestige.unlocks[u.id] = owned + 1;
+  savePrestige(prestige);
+  showPrestigeShop(); // refresh display
+}
+
 function startGame() {
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('death-screen').style.display = 'none';
+  hidePrestigeShop();
   document.getElementById('level-up').style.display = 'none';
   paused = false;
   game = initGame();
@@ -1688,3 +1754,6 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
 window.startGame = startGame;
 window.selectWeapon = selectWeapon;
 window.selectMap = selectMap;
+window.showPrestigeShop = showPrestigeShop;
+window.hidePrestigeShop = hidePrestigeShop;
+window.purchaseUnlock = purchaseUnlock;

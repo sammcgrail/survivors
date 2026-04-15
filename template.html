@@ -88,7 +88,29 @@ canvas { touch-action: none; }
   #touch-hint { display: block; }
   #level-up .choices { flex-direction: column; gap: 10px; }
   #level-up .choice { width: 260px; padding: 14px; }
+  .unlock-grid { flex-direction: column; align-items: center; }
+  .unlock-card { width: 260px; }
 }
+
+#prestige-shop { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.92); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 35; overflow-y: auto; padding: 24px 0; }
+#prestige-shop h2 { color: #f39c12; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 4px; margin-bottom: 20px; font-size: 1.5rem; text-shadow: 0 0 20px rgba(243,156,18,0.5); }
+.unlock-grid { display: flex; gap: 12px; flex-wrap: wrap; justify-content: center; max-width: 700px; margin-bottom: 20px; }
+.unlock-card { background: #181825; border: 2px solid #333; border-radius: 8px; padding: 14px 16px; width: 200px; text-align: center; cursor: default; transition: border-color 0.15s, transform 0.1s; }
+.unlock-card.unlock-available { cursor: pointer; border-color: #555; }
+.unlock-card.unlock-available:hover { border-color: #f39c12; transform: translateY(-2px); }
+.unlock-card.unlock-maxed { opacity: 0.5; }
+.unlock-icon { font-size: 1.6rem; margin-bottom: 4px; }
+.unlock-name { color: #f39c12; font-size: 0.85rem; font-weight: 700; margin-bottom: 4px; }
+.unlock-desc { color: #888; font-size: 0.7rem; line-height: 1.4; margin-bottom: 6px; }
+.unlock-cost { color: #f1c40f; font-size: 0.75rem; font-weight: 600; }
+#prestige-shop button { background: #e74c3c; border: none; color: #fff; padding: 10px 32px; font-family: inherit; font-size: 0.9rem; border-radius: 6px; cursor: pointer; }
+#prestige-shop button:hover { background: #c0392b; }
+
+.scales-earned { color: #f39c12; font-size: 1.1rem; font-weight: 700; letter-spacing: 2px; margin-bottom: 4px; text-shadow: 0 0 12px rgba(243,156,18,0.5); }
+.scales-breakdown { color: #666; font-size: 0.65rem; margin-bottom: 2px; }
+.scales-total { color: #888; font-size: 0.7rem; }
+.shop-btn { background: #2c2c3e; border: 1px solid #f39c12; color: #f39c12; padding: 8px 20px; font-family: inherit; font-size: 0.8rem; border-radius: 6px; cursor: pointer; margin: 6px 4px; }
+.shop-btn:hover { background: #3a3a50; }
 </style>
 </head>
 <body data-mode="{{MODE}}">
@@ -176,7 +198,10 @@ canvas { touch-action: none; }
     <option value="ruins">Ancient Ruins (pillars + walls)</option>
     <option value="graveyard">Forsaken Graveyard (tombs)</option>
   </select>
-  <button onclick="startGame()" style="margin-top:16px;">PLAY</button>
+  <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
+    <button class="shop-btn sp-only" onclick="showPrestigeShop()">SHOP</button>
+    <button onclick="startGame()">PLAY</button>
+  </div>
   <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
 </div>
 
@@ -237,7 +262,17 @@ canvas { touch-action: none; }
       <div class="wc-desc">Passive — zaps random nearby enemies</div>
     </div>
   </div>
-  <button onclick="startGame()">RETRY</button>
+  <div id="death-scales" class="sp-only" style="margin-bottom:12px; text-align:center;"></div>
+  <div style="display:flex; gap:8px; align-items:center;">
+    <button class="shop-btn sp-only" onclick="showPrestigeShop()">SHOP</button>
+    <button onclick="startGame()">RETRY</button>
+  </div>
+</div>
+
+<div id="prestige-shop" style="display:none">
+  <h2>DRAGON SCALES: <span id="scale-count">0</span></h2>
+  <div id="unlock-grid" class="unlock-grid"></div>
+  <button onclick="hidePrestigeShop()">CLOSE</button>
 </div>
 
 <script src="{{BUNDLE}}"></script>
