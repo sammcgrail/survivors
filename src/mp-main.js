@@ -53,11 +53,36 @@ function drawMinimap() {
   mmCtx.fillStyle = '#f1c40f';
   for (const g of gems) mmCtx.fillRect(g.x * sx - 0.5, g.y * sy - 0.5, 1, 1);
 
-  mmCtx.fillStyle = '#888';
+  // Enemies — gray dots for trash mobs, scaled colored dots for
+  // named threats (brute/elite/spawner/boss) so players can locate
+  // bigger enemies at a glance. Boss adds a pulsing halo since
+  // bosses fire ranged spreads now and you want to know where it
+  // is without panning.
   for (const e of enemies) {
-    mmCtx.beginPath();
-    mmCtx.arc(e.x * sx, e.y * sy, 1.5, 0, Math.PI * 2);
-    mmCtx.fill();
+    if (e.name === 'boss') {
+      mmCtx.fillStyle = e.color || '#d63031';
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 4, 0, Math.PI * 2);
+      mmCtx.fill();
+      const bossPulse = 0.4 + Math.sin(performance.now() / 180) * 0.3;
+      mmCtx.strokeStyle = e.color || '#d63031';
+      mmCtx.globalAlpha = bossPulse;
+      mmCtx.lineWidth = 1;
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 7, 0, Math.PI * 2);
+      mmCtx.stroke();
+      mmCtx.globalAlpha = 1;
+    } else if (e.name === 'elite' || e.name === 'spawner' || e.name === 'brute') {
+      mmCtx.fillStyle = e.color || '#888';
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 2.5, 0, Math.PI * 2);
+      mmCtx.fill();
+    } else {
+      mmCtx.fillStyle = '#888';
+      mmCtx.beginPath();
+      mmCtx.arc(e.x * sx, e.y * sy, 1.5, 0, Math.PI * 2);
+      mmCtx.fill();
+    }
   }
 
   // Consumables — rare drops (boss 50%, elite 6%, brute 4%). Pulse
