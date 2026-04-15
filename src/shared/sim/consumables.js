@@ -14,12 +14,15 @@ export const CONSUMABLE_TYPES = {
 
 // Drop table — called from damage.js on kill. Returns a type string
 // or null. Tougher enemies drop more often; bosses always drop.
+// Consumables are rare and valuable — players should spot one on the
+// ground and think "I need to grab that". Drop rates tuned low so
+// getting one feels like an event, not background noise.
 export function consumableDrop(enemyName, rng) {
   let chance;
-  if (enemyName === 'boss')   chance = 1.0;
-  else if (enemyName === 'elite')  chance = 0.20;
-  else if (enemyName === 'brute')  chance = 0.15;
-  else if (enemyName === 'spawner') chance = 0.10;
+  if (enemyName === 'boss')   chance = 0.5;
+  else if (enemyName === 'elite')  chance = 0.06;
+  else if (enemyName === 'brute')  chance = 0.04;
+  else if (enemyName === 'spawner') chance = 0.03;
   else return null; // common enemies don't drop consumables
 
   if (rng.random() >= chance) return null;
@@ -37,7 +40,7 @@ export function spawnConsumable(g, x, y, type) {
     x, y, type,
     radius: def.radius,
     color: def.color,
-    life: 15,         // despawn after 15s
+    life: Infinity,   // never despawn — rare + valuable
     bobPhase: g.rng.range(0, Math.PI * 2),
   });
   emit(g, EVT.CONSUMABLE_SPAWN, { x, y, ctype: type });
