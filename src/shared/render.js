@@ -153,8 +153,53 @@ export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
       ctx.fill();
     }
 
+    // Status tint — persistent overlay while a status is active.
+    // STATUS_APPLIED particle pop fires once on apply (in the event
+    // channel); this layer keeps the visual up so players reading
+    // the battlefield can tell which enemies are slowed/burning/
+    // frozen at a glance instead of having to remember.
+    if (e.statusEffects && e.statusEffects.length > 0) {
+      drawStatusTint(ctx, e);
+    }
+
     if (e.hp < e.maxHp) {
       drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
+    }
+  }
+}
+
+// Per-status overlay drawn on top of the enemy sprite. Burn flickers
+// orange (sin-driven so it reads as flames), slow gets a steady blue
+// glow, freeze gets a cyan-white frost shell + 4 ice shards on the
+// rim. Multiple statuses stack — burn over slow over freeze.
+function drawStatusTint(ctx, e) {
+  for (const s of e.statusEffects) {
+    if (s.type === 'burn') {
+      const flick = 0.3 + Math.sin(performance.now() / 80 + e.x * 0.05) * 0.15;
+      ctx.fillStyle = `rgba(243, 156, 18, ${flick})`;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (s.type === 'slow') {
+      ctx.fillStyle = 'rgba(52, 152, 219, 0.25)';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * 0.95, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (s.type === 'freeze') {
+      ctx.fillStyle = 'rgba(173, 216, 230, 0.45)';
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * 1.05, 0, Math.PI * 2);
+      ctx.fill();
+      // Ice shards on the rim — 4 evenly spaced little spikes.
+      ctx.fillStyle = '#e6f5fb';
+      for (let i = 0; i < 4; i++) {
+        const a = (Math.PI * 2 * i) / 4 + e.x * 0.02;
+        const sx = e.x + Math.cos(a) * e.radius * 0.95;
+        const sy = e.y + Math.sin(a) * e.radius * 0.95;
+        ctx.beginPath();
+        ctx.arc(sx, sy, 2, 0, Math.PI * 2);
+        ctx.fill();
+      }
     }
   }
 }

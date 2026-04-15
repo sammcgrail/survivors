@@ -288,6 +288,14 @@ function gameSnapshot() {
       // is fine.
       ...(e.hitFlash > 0 ? { hitFlash: r2(e.hitFlash) } : {}),
       ...(e.dying !== undefined ? { dying: r2(e.dying) } : {}),
+      // Active statuses ride the snapshot so the renderer can keep a
+      // sprite tint up while the effect is in flight (vs. only the
+      // STATUS_APPLIED particle pop that fires once on apply). Ships
+      // just type + remaining — magnitude/tickRate/tickAccum stay
+      // sim-only since the renderer doesn't need them.
+      ...(e.statusEffects && e.statusEffects.length > 0
+        ? { statusEffects: e.statusEffects.map(s => ({ type: s.type, remaining: r2(s.remaining) })) }
+        : {}),
     })),
     // Tier ride-along — 0 (default) for small/medium, 1 for >=30 xp,
     // 2 for >=80 xp. Lets drawGem render boss/elite drops larger so

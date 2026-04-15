@@ -14,20 +14,28 @@ import { damageEnemy } from './damage.js';
 const ZERO_VEC = { x: 0, y: 0 };
 
 // Apply a status effect to an enemy. Same-type effects refresh duration
-// (no stacking) — caller can safely re-apply on every hit. Boss is
-// immune; callers should check before calling if they want to skip the
-// emit, but this guard makes double-sure.
+// (no stacking) — caller can safely re-apply on every hit.
+//
+// `enemy.statusResist` (0..1) shortens incoming durations: boss/elite
+// get 0.5 (half duration), spawner 0.3, trash 0 (full). Replaces the
+// hard "boss immune" behavior — bosses can be slowed/burned briefly,
+// just not locked down. Phase 3 dodging stays a real skill check
+// (boss freeze ≈ 0.4s with the 0.5 resist) without trivializing it.
+//
 // effect shape: { type, remaining, magnitude, tickRate? }
 export function applyStatus(g, enemy, effect) {
-  if (enemy.name === 'boss' || enemy.dying !== undefined) return;
+  if (enemy.dying !== undefined) return;
+  const resist = enemy.statusResist || 0;
+  const dur = effect.remaining * (1 - resist);
+  if (dur <= 0) return; // resist 1.0 = full immunity
   enemy.statusEffects ??= [];
   const existing = enemy.statusEffects.find(s => s.type === effect.type);
   if (existing) {
     // Refresh — don't reset tickAccum so in-progress burn ticks aren't lost.
-    existing.remaining = Math.max(existing.remaining, effect.remaining);
+    existing.remaining = Math.max(existing.remaining, dur);
     return;
   }
-  enemy.statusEffects.push({ ...effect, tickAccum: 0 });
+  enemy.statusEffects.push({ ...effect, remaining: dur, tickAccum: 0 });
   emit(g, EVT.STATUS_APPLIED, { statusType: effect.type, x: enemy.x, y: enemy.y });
 }
 
@@ -259,11 +267,12 @@ function updateEnemyTick(g, dt, hash) {
     if (e.dying !== undefined) continue; // animating but not interacting
 
     // Status effects: drain durations, apply burn DoT, compute speed
-    // multiplier. Boss is immune — its phase system owns its speed.
-    // Freeze reuses the stunTimer gate so spawner-birth and shooting
-    // are also suppressed (matches thunder_god overcharge behavior).
+    // multiplier. Resist (boss 0.5 / elite 0.5 / spawner 0.3) shortens
+    // incoming durations at apply-time, not here. Freeze reuses the
+    // stunTimer gate so spawner-birth and shooting are also suppressed
+    // (matches thunder_god overcharge behavior).
     let speedMod = 1;
-    if (e.statusEffects?.length && e.name !== 'boss') {
+    if (e.statusEffects?.length) {
       e.statusEffects = e.statusEffects.filter(s => {
         s.remaining -= dt;
         if (s.type === 'burn') {

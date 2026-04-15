@@ -35,9 +35,9 @@ export const ENEMY_TYPES = [
   { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm',   flock: F(100, 1.2, 0.6, 0.3, 1.4, 20) },
   { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'brute',   flock: F( 80, 3.0, 0.0, 0.0, 2.0, 70) },
   { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12, sprite: 'skull' },
-  { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite',   flock: F(130, 2.0, 0.4, 0.2, 1.5, 45), shootCooldown: 2.0, shootDamage: 12, shootSpeed: 180, shootRange: 350 },
-  { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner', flock: F(100, 2.5, 0.1, 0.0, 0.8, 60) },
-  { name: 'boss',   hp: 2000,speed: 35,  radius: 40, color: '#d63031', damage: 50, xp: 500,sprite: 'boss', shootCooldown: 3.0, shootDamage: 20, shootSpeed: 160, shootRange: 450 },
+  { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite',   flock: F(130, 2.0, 0.4, 0.2, 1.5, 45), shootCooldown: 2.0, shootDamage: 12, shootSpeed: 180, shootRange: 350, statusResist: 0.5 },
+  { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner', flock: F(100, 2.5, 0.1, 0.0, 0.8, 60), statusResist: 0.3 },
+  { name: 'boss',   hp: 2000,speed: 35,  radius: 40, color: '#d63031', damage: 50, xp: 500,sprite: 'boss', shootCooldown: 3.0, shootDamage: 20, shootSpeed: 160, shootRange: 450, statusResist: 0.5 },
 ];
 
 // Wave composition tables — weights for each enemy type per wave bracket
