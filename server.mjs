@@ -366,6 +366,7 @@ function gameSnapshot() {
       if (e.tx !== undefined) o.tx = r1(e.tx);
       if (e.ty !== undefined) o.ty = r1(e.ty);
       if (e.duration !== undefined) o.duration = r2(e.duration);
+      if (e.phase !== undefined) o.phase = e.phase;
       return o;
     }),
     waveMsg:        game.waveMsgTimer        > 0 ? game.waveMsg        : null,

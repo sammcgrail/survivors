@@ -80,6 +80,50 @@ function nearestAlivePlayer(g, ex, ey) {
 // Boss steps + telegraph use g.rng for cadence so server replay stays
 // in sync. Ghost orbit and movement are deterministic given current pos.
 function updateBossAi(g, e, dt, edx, edy, dist) {
+  // --- Phase transitions ---
+  // baseSpeed captured once so phase multipliers stack cleanly off
+  // the wave-scaled value set by scaleEnemy, not the base type speed.
+  if (!e.phase) {
+    e.phase = 1;
+    e.baseSpeed = e.speed;
+  }
+
+  const hpPct = e.hp / e.maxHp;
+  if (hpPct <= 1 / 3 && e.phase < 3) {
+    e.phase = 3;
+    // +30% from phase 2, then another +20% = ×1.56 total vs baseSpeed
+    e.speed = e.baseSpeed * 1.56;
+    e.homing = true;
+    e.summonTimer = 0; // fire first pulse immediately
+    // Drop shoot cooldown in case boss enters phase 3 directly
+    if (e.shootCooldown) e.shootCooldown = 2.0;
+    emit(g, EVT.BOSS_PHASE, { phase: 3, x: e.x, y: e.y });
+  } else if (hpPct <= 2 / 3 && e.phase < 2) {
+    e.phase = 2;
+    e.speed = e.baseSpeed * 1.30;
+    if (e.shootCooldown) e.shootCooldown = 2.0;
+    emit(g, EVT.BOSS_PHASE, { phase: 2, x: e.x, y: e.y });
+  }
+
+  // Phase 3 summon pulse — 3 swarm minions every 8 s, runs during
+  // both stalk and charge so the pressure never lets up.
+  if (e.phase === 3) {
+    e.summonTimer -= dt;
+    if (e.summonTimer <= 0) {
+      e.summonTimer = 8;
+      const base = ENEMY_TYPES.find(t => t.name === 'swarm');
+      for (let s = 0; s < 3; s++) {
+        const sa = g.rng.random() * Math.PI * 2;
+        const sr = 20 + g.rng.random() * 25;
+        const minion = scaleEnemy(base, g.wave, g.rng);
+        minion.x = e.x + Math.cos(sa) * sr;
+        minion.y = e.y + Math.sin(sa) * sr;
+        g.enemies.push(minion);
+      }
+    }
+  }
+
+  // --- Charge movement ---
   if (e.charging > 0) {
     e.x += e.chargeDx * e.speed * 3 * dt;
     e.y += e.chargeDy * e.speed * 3 * dt;

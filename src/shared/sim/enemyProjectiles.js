@@ -23,6 +23,8 @@ export function fireEnemyProjectile(g, ox, oy, tx, ty, opts) {
     range: opts.range || 400,
     dist: 0,
     source: opts.source || 'enemy',
+    homing: opts.homing || false,
+    turnRate: opts.turnRate || 0,
   });
 }
 
@@ -79,19 +81,56 @@ function releaseShot(g, e, tx, ty) {
   } else if (e.name === 'boss') {
     const dx = tx - e.x, dy = ty - e.y;
     const baseAngle = Math.atan2(dy, dx);
-    const spread = 0.25;
-    for (let s = -1; s <= 1; s++) {
-      const a = baseAngle + s * spread;
-      const sx = e.x + Math.cos(a) * 500;
-      const sy = e.y + Math.sin(a) * 500;
-      fireEnemyProjectile(g, e.x, e.y, sx, sy, {
-        speed: e.shootSpeed || 160,
-        damage: e.shootDamage || 20,
-        radius: 7,
-        color: '#d63031',
-        range: e.shootRange,
-        source: e.name,
-      });
+    const phase = e.phase || 1;
+
+    if (phase === 3) {
+      // 3 homing projectiles — curve toward nearest player at up to
+      // 1.5 rad/s so they're threatening but still jukeable.
+      for (let s = -1; s <= 1; s++) {
+        const a = baseAngle + s * 0.25;
+        const sx = e.x + Math.cos(a) * 500;
+        const sy = e.y + Math.sin(a) * 500;
+        fireEnemyProjectile(g, e.x, e.y, sx, sy, {
+          speed: e.shootSpeed || 160,
+          damage: e.shootDamage || 20,
+          radius: 7,
+          color: '#d63031',
+          range: e.shootRange,
+          source: e.name,
+          homing: true,
+          turnRate: 1.5,
+        });
+      }
+    } else if (phase === 2) {
+      // 5-shot spread at ±0.20 rad — tighter cone, more coverage.
+      for (let s = -2; s <= 2; s++) {
+        const a = baseAngle + s * 0.20;
+        const sx = e.x + Math.cos(a) * 500;
+        const sy = e.y + Math.sin(a) * 500;
+        fireEnemyProjectile(g, e.x, e.y, sx, sy, {
+          speed: e.shootSpeed || 160,
+          damage: e.shootDamage || 20,
+          radius: 7,
+          color: '#d63031',
+          range: e.shootRange,
+          source: e.name,
+        });
+      }
+    } else {
+      // Phase 1 — 3-shot spread at ±0.25 rad (original behavior).
+      for (let s = -1; s <= 1; s++) {
+        const a = baseAngle + s * 0.25;
+        const sx = e.x + Math.cos(a) * 500;
+        const sy = e.y + Math.sin(a) * 500;
+        fireEnemyProjectile(g, e.x, e.y, sx, sy, {
+          speed: e.shootSpeed || 160,
+          damage: e.shootDamage || 20,
+          radius: 7,
+          color: '#d63031',
+          range: e.shootRange,
+          source: e.name,
+        });
+      }
     }
   }
   emit(g, EVT.ENEMY_SHOOT, { x: e.x, y: e.y, name: e.name });
@@ -102,6 +141,33 @@ export function updateEnemyProjectiles(g, dt) {
   const obstacles = g.obstacles;
   for (let i = g.enemyProjectiles.length - 1; i >= 0; i--) {
     const p = g.enemyProjectiles[i];
+
+    // Homing — steer toward nearest alive player each tick, capped at
+    // turnRate rad/s so players can juke with good movement. Angular
+    // clamp keeps fast projectiles from snap-tracking on contact range.
+    if (p.homing && p.turnRate > 0) {
+      let nearest = null, nearestD2 = Infinity;
+      for (const pl of g.players) {
+        if (!pl.alive) continue;
+        const dx = pl.x - p.x, dy = pl.y - p.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < nearestD2) { nearest = pl; nearestD2 = d2; }
+      }
+      if (nearest) {
+        const targetAngle = Math.atan2(nearest.y - p.y, nearest.x - p.x);
+        const currentAngle = Math.atan2(p.vy, p.vx);
+        let da = targetAngle - currentAngle;
+        // Normalize to [-π, π]
+        if (da > Math.PI) da -= Math.PI * 2;
+        else if (da < -Math.PI) da += Math.PI * 2;
+        const maxTurn = p.turnRate * dt;
+        da = Math.max(-maxTurn, Math.min(maxTurn, da));
+        const newAngle = currentAngle + da;
+        p.vx = Math.cos(newAngle) * p.speed;
+        p.vy = Math.sin(newAngle) * p.speed;
+      }
+    }
+
     p.x += p.vx * dt;
     p.y += p.vy * dt;
     p.dist += p.speed * dt;

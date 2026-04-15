@@ -586,6 +586,38 @@ export function applySimEvent(evt, client) {
       break;
     }
 
+    case 'bossPhase': {
+      // Phase transition VFX — brief screen flash + particle burst at
+      // boss position. Phase 3 escalates to deep red and calls an
+      // optional minimap border flash if the client shim supports it.
+      const p3 = evt.phase === 3;
+      shake(p3 ? 0.25 : 0.15);
+      flash(p3 ? 0.20 : 0.12);
+      sfx('boss_telegraph'); // reuse until a dedicated phase-change cue exists
+      // Outer burst — phase-colored explosion ring
+      const burstColor = p3 ? '#7b1212' : '#e17055';
+      for (let i = 0; i < (p3 ? 32 : 20); i++) {
+        pushFx(client.particles, evt.x, evt.y, burstColor, {
+          speedMin: 100, speedMax: 300,
+          lifeMin: 0.4, lifeMax: 0.8,
+          radiusMin: 2, radiusMax: 4.5,
+        });
+      }
+      if (p3) {
+        // Phase 3 gets extra white-hot sparks to read as a
+        // distinct escalation vs phase 2.
+        for (let i = 0; i < 12; i++) {
+          pushFx(client.particles, evt.x, evt.y, '#ffffff', {
+            speedMin: 200, speedMax: 400,
+            lifeMin: 0.15, lifeMax: 0.3,
+            radiusMin: 1.2, radiusMax: 2.2,
+          });
+        }
+        if (client.minimapBorderFlash) client.minimapBorderFlash(0.6);
+      }
+      break;
+    }
+
     case 'bossSpawn':
       // Boss arrival — ominous sfx, big shake, deep red burst at
       // spawn so everyone knows where THE DEMON landed.

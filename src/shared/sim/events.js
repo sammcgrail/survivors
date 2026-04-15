@@ -26,6 +26,7 @@ export const EVT = {
   CONSUMABLE_PICKUP:   'consumablePickup',
   ENEMY_SHOOT:         'enemyShoot',
   ENEMY_AIM:           'enemyAim',
+  BOSS_PHASE:          'bossPhase',
 };
 
 // Spread payload first so a stray `type` field in the payload (e.g.

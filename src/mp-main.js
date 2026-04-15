@@ -30,6 +30,9 @@ ctx.imageSmoothingEnabled = false;
 // is already drawing from.
 const mmCanvas = document.createElement('canvas');
 const MM = 140;
+// mmBorderUntil: performance.now() timestamp until which the minimap
+// border should pulse red — set by the bossPhase phase-3 event.
+let mmBorderUntil = 0;
 mmCanvas.width = mmCanvas.height = MM;
 Object.assign(mmCanvas.style, {
   position: 'fixed', bottom: '12px', right: '12px',
@@ -138,7 +141,18 @@ function drawMinimap() {
     }
   }
 
-  mmCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+  // Minimap border — flashes red on boss phase-3 transition, then
+  // fades back to the standard dim white over the flash duration.
+  const now = performance.now();
+  const borderFlashAlpha = mmBorderUntil > now
+    ? Math.min(0.9, (mmBorderUntil - now) / 600) // fade out over 600 ms
+    : 0;
+  if (borderFlashAlpha > 0) {
+    mmCtx.strokeStyle = `rgba(220,40,40,${borderFlashAlpha})`;
+    mmCtx.lineWidth = 2;
+    mmCtx.strokeRect(1, 1, MM - 2, MM - 2);
+  }
+  mmCtx.strokeStyle = `rgba(255,255,255,${0.3 - borderFlashAlpha * 0.2})`;
   mmCtx.lineWidth = 1;
   mmCtx.strokeRect(0.5, 0.5, MM - 1, MM - 1);
 }
@@ -443,6 +457,9 @@ const mpEventClient = {
   // falls through to sfx('levelup') and the leveling player hears
   // the cue twice.
   onLevelUp: () => {},
+  // Pulse the minimap border red for `dur` seconds — called by the
+  // bossPhase phase-3 handler in simEventHandler.
+  minimapBorderFlash(dur) { mmBorderUntil = performance.now() + dur * 1000; },
   // Death-screen DOM flip — only the local player. Event has pid;
   // we look me up on currState (set just before this event drains
   // so it's the same snapshot the death came from).
