@@ -5,7 +5,11 @@
 import { ENEMY_TYPES, enemyType, scaleEnemy } from '../enemyTypes.js';
 import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
-import { pushOutOfObstacles, circleRectCollision } from './collision.js';
+import { pushOutOfObstacles, circleRectCollision, obstacleAvoidance } from './collision.js';
+
+// Reusable zero vector for the no-obstacles path — saves an
+// allocation per enemy per tick on maps without obstacles.
+const ZERO_VEC = { x: 0, y: 0 };
 
 // Cell size for the spatial hash. Sized to cover the largest flock
 // perception radius (150 for fast/tank) within a 1-cell neighbor
@@ -197,19 +201,27 @@ function updateEnemyTick(g, dt, hash) {
           e.x += (target.dx / target.dist) * e.speed * dt;
           e.y += (target.dy / target.dist) * e.speed * dt;
         } else {
-          // Boids blend: chase + separation + alignment + cohesion.
+          // Boids blend: chase + separation + alignment + cohesion +
+          // obstacle avoidance. Avoidance has a high implicit weight
+          // because its raw vector is summed inverse-distance — close
+          // walls dominate the steering, distant ones nudge softly.
           const fc = e.flock;
           const chaseX = target.dx / target.dist;
           const chaseY = target.dy / target.dist;
           const f = computeFlockSteering(g, hash, i);
+          const avoid = g.obstacles && g.obstacles.length > 0
+            ? obstacleAvoidance(e.x, e.y, e.vx, e.vy, g.obstacles, e.radius + 60)
+            : ZERO_VEC;
           let vx = chaseX * fc.chaseWeight
                  + f.sepX * fc.sepWeight
                  + f.alignX * fc.alignWeight
-                 + f.cohX * fc.cohWeight;
+                 + f.cohX * fc.cohWeight
+                 + avoid.x * 5.0;
           let vy = chaseY * fc.chaseWeight
                  + f.sepY * fc.sepWeight
                  + f.alignY * fc.alignWeight
-                 + f.cohY * fc.cohWeight;
+                 + f.cohY * fc.cohWeight
+                 + avoid.y * 5.0;
           const m = Math.hypot(vx, vy);
           if (m > 0.001) {
             e.vx = (vx / m) * e.speed;
@@ -302,4 +314,13 @@ export function updateEnemies(g, dt) {
   const hash = buildSpatialHash(g.enemies);
   updateEnemyTick(g, dt, hash);
   updateRepulsion(g);
+  // Final push-out pass: enemy-vs-enemy repulsion can shove neighbors
+  // sideways into walls, so we re-correct after. Without this an enemy
+  // packed against a wall by its flockmates ends each tick stuck
+  // inside the obstacle.
+  if (g.obstacles && g.obstacles.length > 0) {
+    for (const e of g.enemies) {
+      if (e.dying === undefined) pushOutOfObstacles(e, g.obstacles);
+    }
+  }
 }
