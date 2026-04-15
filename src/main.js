@@ -320,6 +320,7 @@ window.addEventListener('beforeunload', () => {
 
 // --- battle music (map-aware + mute toggle) ---
 const MAP_TRACKS = {
+  arena: 'arena_theme.ogg',
   neon: 'neon_grid.ogg',
   forest: 'forest_theme.ogg',
   graveyard: 'graveyard_theme.ogg',

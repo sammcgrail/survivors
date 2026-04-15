@@ -168,7 +168,7 @@ function sfx(type) {
 }
 
 // --- battle music (map-aware + mute toggle) ---
-const MP_MAP_TRACKS = { neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg' };
+const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg' };
 const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
 const MP_MUSIC_VOL = 0.35;
 let mpBgMusic = null;
