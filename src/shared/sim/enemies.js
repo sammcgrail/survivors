@@ -158,10 +158,14 @@ function computeFlockSteering(g, hash, ei) {
         const d2 = dx * dx + dy * dy;
         if (d2 > perR2 || d2 < 0.01) continue;
         if (d2 < sepR2) {
-          // Separation pushes harder the closer the neighbor is.
+          // Inverse-distance separation — enemies that are nearly
+          // touching push MUCH harder than ones at the edge of the
+          // separation radius. Prevents the flat-force clumping where
+          // distant and close neighbors contributed equally.
           const d = Math.sqrt(d2);
-          sepX += dx / d;
-          sepY += dy / d;
+          const strength = (fc.sepRadius - d) / fc.sepRadius;
+          sepX += (dx / d) * strength;
+          sepY += (dy / d) * strength;
         }
         alignX += o.vx;
         alignY += o.vy;

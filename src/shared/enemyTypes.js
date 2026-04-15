@@ -23,15 +23,20 @@ const F = (perceptionRadius, sepWeight, alignWeight, cohWeight, chaseWeight, sep
   perceptionRadius, sepWeight, alignWeight, cohWeight, chaseWeight, sepRadius,
 });
 
+// Tuning pass 2026-04-15 (VoX): increased separation across the board
+// so enemies spread out instead of clumping. Reduced cohesion (was
+// pulling them toward each other's center instead of the player).
+// Bumped chase weights so player-pursuit dominates over flocking.
+// Widened sepRadius so repulsion kicks in earlier.
 export const ENEMY_TYPES = [
-  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10, sprite: 'blob',    flock: F(120, 0.8, 0.5, 0.3, 1.0, 25) },
-  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8,  sprite: 'fast',    flock: F(150, 1.5, 0.3, 0.1, 1.2, 40) },
-  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30, sprite: 'tank',    flock: F(140, 1.8, 0.4, 0.2, 0.8, 50) },
-  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm',   flock: F(100, 0.5, 1.2, 1.0, 0.8, 15) },
-  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'brute',   flock: F( 80, 2.0, 0.0, 0.0, 1.5, 60) },
+  { name: 'blob',   hp: 20,  speed: 55,  radius: 10, color: '#2ecc71', damage: 8,  xp: 10, sprite: 'blob',    flock: F(120, 1.8, 0.3, 0.1, 1.5, 35) },
+  { name: 'fast',   hp: 10,  speed: 130, radius: 7,  color: '#1abc9c', damage: 4,  xp: 8,  sprite: 'fast',    flock: F(150, 2.2, 0.2, 0.0, 1.8, 50) },
+  { name: 'tank',   hp: 80,  speed: 30,  radius: 18, color: '#e67e22', damage: 18, xp: 30, sprite: 'tank',    flock: F(140, 2.5, 0.2, 0.1, 1.2, 60) },
+  { name: 'swarm',  hp: 6,   speed: 85,  radius: 5,  color: '#fd79a8', damage: 2,  xp: 4,  sprite: 'swarm',   flock: F(100, 1.2, 0.6, 0.3, 1.4, 20) },
+  { name: 'brute',  hp: 150, speed: 22,  radius: 24, color: '#e74c3c', damage: 30, xp: 60, sprite: 'brute',   flock: F( 80, 3.0, 0.0, 0.0, 2.0, 70) },
   { name: 'ghost',  hp: 15,  speed: 100, radius: 9,  color: '#a29bfe', damage: 6,  xp: 12, sprite: 'skull' },
-  { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite',   flock: F(130, 1.0, 0.8, 0.6, 1.0, 35) },
-  { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner', flock: F(100, 2.0, 0.1, 0.0, 0.6, 50) },
+  { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite',   flock: F(130, 2.0, 0.4, 0.2, 1.5, 45) },
+  { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner', flock: F(100, 2.5, 0.1, 0.0, 0.8, 60) },
   { name: 'boss',   hp: 2000,speed: 35,  radius: 40, color: '#d63031', damage: 50, xp: 500,sprite: 'boss' },
 ];
 
