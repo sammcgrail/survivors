@@ -328,12 +328,18 @@ function gameSnapshot() {
       x: r1(c.x), y: r1(c.y), type: c.type, radius: c.radius,
       color: c.color, bobPhase: r2(c.bobPhase),
     })),
-    enemyProjectiles: (game.enemyProjectiles || []).map(ep => ({
-      x: r1(ep.x), y: r1(ep.y),
-      vx: r1(ep.vx), vy: r1(ep.vy),
-      radius: ep.radius, color: ep.color,
-      source: ep.source,
-    })),
+    enemyProjectiles: (game.enemyProjectiles || []).map(ep => {
+      const o = {
+        x: r1(ep.x), y: r1(ep.y),
+        vx: r1(ep.vx), vy: r1(ep.vy),
+        radius: ep.radius, color: ep.color,
+        source: ep.source,
+      };
+      // Homing flag tells the renderer to add a tracking glow so
+      // players can read "this one curves" at a glance.
+      if (ep.homing) o.homing = true;
+      return o;
+    }),
     chargeTrails: (game.chargeTrails || []).map(t => ({
       x: r1(t.x), y: r1(t.y), radius: t.radius,
       life: r2(t.life), color: t.color,
