@@ -6,15 +6,15 @@ import { createWeapon } from '../weapons.js';
 import { EVT, emit } from './events.js';
 
 export const POWERUPS = [
-  { id: 'speed', name: 'Swift Feet', desc: 'Move 15% faster', icon: '⚡', max: 5, apply(g, p) { p.speed *= 1.15; } },
-  { id: 'damage', name: 'Raw Power', desc: '+25% damage to all weapons', icon: '💥', max: 5, apply(g, p) { p.damageMulti *= 1.25; } },
-  { id: 'hp_regen', name: 'Regeneration', desc: 'Heal 2 HP/sec', icon: '💚', max: 3, apply(g, p) { p.hpRegen += 2; } },
-  { id: 'attack_speed', name: 'Haste', desc: '+20% attack speed', icon: '🔥', max: 5, apply(g, p) { p.attackSpeedMulti *= 1.2; } },
-  { id: 'magnet', name: 'Magnet', desc: '+50% XP pickup range', icon: '🧲', max: 3, apply(g, p) { p.magnetRange *= 1.5; } },
-  { id: 'max_hp', name: 'Vitality', desc: '+25 max HP, heal to full', icon: '❤️', max: 3, apply(g, p) { p.maxHp += 25; p.hp = p.maxHp; } },
-  { id: 'projectiles', name: 'Barrage', desc: '+1 projectile to all weapons', icon: '🎯', max: 2, apply(g, p) { p.projectileBonus++; } },
-  { id: 'size', name: 'Amplify', desc: '+15% weapon size/radius', icon: '🔷', max: 3, apply(g, p) { p.sizeMulti *= 1.15; } },
-  { id: 'armor', name: 'Iron Skin', desc: '-2 damage taken per hit', icon: '🪨', max: 3, apply(g, p) { p.armor += 2; } },
+  { id: 'speed', name: 'Swift Feet', desc: 'Move 15% faster', icon: '⚡', max: 5, stats: '+15% spd', apply(g, p) { p.speed *= 1.15; } },
+  { id: 'damage', name: 'Raw Power', desc: '+25% damage to all weapons', icon: '💥', max: 5, stats: '+25% dmg', apply(g, p) { p.damageMulti *= 1.25; } },
+  { id: 'hp_regen', name: 'Regeneration', desc: 'Heal 2 HP/sec', icon: '💚', max: 3, stats: '+2 HP/s', apply(g, p) { p.hpRegen += 2; } },
+  { id: 'attack_speed', name: 'Haste', desc: '+20% attack speed', icon: '🔥', max: 5, stats: '+20% atk spd', apply(g, p) { p.attackSpeedMulti *= 1.2; } },
+  { id: 'magnet', name: 'Magnet', desc: '+50% XP pickup range', icon: '🧲', max: 3, stats: '+50% pickup range', apply(g, p) { p.magnetRange *= 1.5; } },
+  { id: 'max_hp', name: 'Vitality', desc: '+25 max HP, heal to full', icon: '❤️', max: 3, stats: '+25 max HP', apply(g, p) { p.maxHp += 25; p.hp = p.maxHp; } },
+  { id: 'projectiles', name: 'Barrage', desc: '+1 projectile to all weapons', icon: '🎯', max: 2, stats: '+1 projectile', apply(g, p) { p.projectileBonus++; } },
+  { id: 'size', name: 'Amplify', desc: '+15% weapon size/radius', icon: '🔷', max: 3, stats: '+15% size', apply(g, p) { p.sizeMulti *= 1.15; } },
+  { id: 'armor', name: 'Iron Skin', desc: '-2 damage taken per hit', icon: '🪨', max: 3, stats: '-2 dmg taken', apply(g, p) { p.armor += 2; } },
   { id: 'weapon_spit', name: 'Magic Spit', desc: 'Projectile weapon — fires at nearest enemy', icon: '🔮', max: 1, apply(g, p) { p.weapons.push(createWeapon('spit')); } },
   { id: 'weapon_breath', name: 'Dragon Breath', desc: 'Aura weapon — damages nearby enemies', icon: '🌀', max: 1, apply(g, p) { p.weapons.push(createWeapon('breath')); } },
   { id: 'weapon_charge', name: 'Bull Rush', desc: 'Sweep weapon — charges in move direction', icon: '🐂', max: 1, apply(g, p) { p.weapons.push(createWeapon('charge')); } },
@@ -26,14 +26,14 @@ export const POWERUPS = [
   // Balance pass 2026-04-15 (VoX): buffed most weapon upgrades, nerfed
   // barrier_up (shield was dominating — players were untouchable with
   // stacked barrier). Non-shield builds now scale harder per stack.
-  { id: 'spit_up', name: 'Spit+', desc: 'Extra projectile + pierce', icon: '🔮+', max: 3, requires: 'weapon_spit', apply(g, p) { let w = p.weapons.find(w=>w.type==='spit'); if(w){w.count++;w.pierce++;} } },
-  { id: 'breath_up', name: 'Breath+', desc: '+40% aura radius', icon: '🌀+', max: 3, requires: 'weapon_breath', apply(g, p) { let w = p.weapons.find(w=>w.type==='breath'); if(w) w.radius *= 1.4; } },
-  { id: 'charge_up', name: 'Rush+', desc: '+50% charge damage & width', icon: '🐂+', max: 3, requires: 'weapon_charge', apply(g, p) { let w = p.weapons.find(w=>w.type==='charge'); if(w){w.damage*=1.5;w.width*=1.5;} } },
-  { id: 'orbit_up', name: 'Orbit+', desc: '+1 blade & +10% rotation', icon: '🗡️+', max: 3, requires: 'weapon_orbit', apply(g, p) { let w = p.weapons.find(w=>w.type==='orbit'); if(w){w.bladeCount++;w.rotSpeed*=1.1;} } },
-  { id: 'chain_up', name: 'Chain+', desc: '+1 chain target & +20% damage', icon: '⚡+', max: 3, requires: 'weapon_chain', apply(g, p) { let w = p.weapons.find(w=>w.type==='chain'); if(w){w.chains++;w.damage*=1.2;} } },
-  { id: 'meteor_up', name: 'Meteor+', desc: '+50% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.5;w.damage*=1.5;} } },
-  { id: 'shield_up', name: 'Barrier+', desc: '+15% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.15;w.knockback*=1.15;} } },
-  { id: 'lightning_field_up', name: 'Field+', desc: '+2 zap targets & +25% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount+=2;w.radius*=1.25;} } },
+  { id: 'spit_up', name: 'Spit+', desc: 'Extra projectile + pierce', icon: '🔮+', max: 3, requires: 'weapon_spit', stats: '+1 proj · +1 pierce', apply(g, p) { let w = p.weapons.find(w=>w.type==='spit'); if(w){w.count++;w.pierce++;} } },
+  { id: 'breath_up', name: 'Breath+', desc: '+40% aura radius', icon: '🌀+', max: 3, requires: 'weapon_breath', stats: '+40% radius', apply(g, p) { let w = p.weapons.find(w=>w.type==='breath'); if(w) w.radius *= 1.4; } },
+  { id: 'charge_up', name: 'Rush+', desc: '+50% charge damage & width', icon: '🐂+', max: 3, requires: 'weapon_charge', stats: '+50% dmg · +50% width', apply(g, p) { let w = p.weapons.find(w=>w.type==='charge'); if(w){w.damage*=1.5;w.width*=1.5;} } },
+  { id: 'orbit_up', name: 'Orbit+', desc: '+1 blade & +10% rotation', icon: '🗡️+', max: 3, requires: 'weapon_orbit', stats: '+1 blade · +10% rot', apply(g, p) { let w = p.weapons.find(w=>w.type==='orbit'); if(w){w.bladeCount++;w.rotSpeed*=1.1;} } },
+  { id: 'chain_up', name: 'Chain+', desc: '+1 chain target & +20% damage', icon: '⚡+', max: 3, requires: 'weapon_chain', stats: '+1 chain · +20% dmg', apply(g, p) { let w = p.weapons.find(w=>w.type==='chain'); if(w){w.chains++;w.damage*=1.2;} } },
+  { id: 'meteor_up', name: 'Meteor+', desc: '+50% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', stats: '+50% blast · +50% dmg', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.5;w.damage*=1.5;} } },
+  { id: 'shield_up', name: 'Barrier+', desc: '+15% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', stats: '+15% radius · +15% knockback', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.15;w.knockback*=1.15;} } },
+  { id: 'lightning_field_up', name: 'Field+', desc: '+2 zap targets & +25% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', stats: '+2 zaps · +25% radius', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount+=2;w.radius*=1.25;} } },
   // EVOLUTIONS: fuse two maxed base weapons into a combined form. Gated
   // by `requiresEvo` — getAvailableChoices hides the entry until both
   // source `_up` stacks hit 3. Each `apply` strips the sources and pushes

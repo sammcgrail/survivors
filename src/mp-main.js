@@ -420,12 +420,26 @@ function showLevelUpChoices(choices) {
   window._levelChoices = [];
   for (let i = 0; i < choices.length; i++) {
     const c = choices[i];
+    const isEvo = !!c.requiresEvo;
     const div = document.createElement('div');
-    div.className = 'choice';
+    div.className = 'choice' + (isEvo ? ' choice--evo' : '');
     div.innerHTML = `
       <div class="name"><span style="color:#555;font-size:0.6rem">[${i+1}]</span> ${escapeHTML(c.icon)} ${escapeHTML(c.name)}</div>
       <div class="desc">${escapeHTML(c.desc)}</div>
     `;
+    if (isEvo) {
+      const badge = document.createElement('div');
+      badge.className = 'choice-evo-badge';
+      badge.textContent = '✦ EVOLUTION';
+      div.prepend(badge);
+    }
+    const statText = c.stats || '';
+    if (statText) {
+      const statsEl = document.createElement('div');
+      statsEl.className = 'choice-stats';
+      statsEl.textContent = statText;
+      div.appendChild(statsEl);
+    }
     const pick = () => {
       if (!ws || ws.readyState !== WebSocket.OPEN) return;
       ws.send(JSON.stringify({ type: 'choose', choiceId: c.id }));

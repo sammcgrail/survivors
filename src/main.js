@@ -418,6 +418,11 @@ const spEventClient = {
 };
 
 // --- level up UI ---
+// Returns the `stats` string from the catalog entry, or '' if absent.
+function formatUpgradeStat(choice) {
+  return choice.stats || '';
+}
+
 function showLevelUp(g) {
   sfx('levelup');
   paused = true;
@@ -440,12 +445,26 @@ function showLevelUp(g) {
   window._levelChoices = [];
   for (let ci = 0; ci < choices.length; ci++) {
     const choice = choices[ci];
+    const isEvo = !!choice.requiresEvo;
     const div = document.createElement('div');
-    div.className = 'choice';
+    div.className = 'choice' + (isEvo ? ' choice--evo' : '');
     div.innerHTML = `
       <div class="name"><span style="color:#555;font-size:0.6rem">[${ci+1}]</span> ${choice.icon} ${choice.name}</div>
       <div class="desc">${choice.desc}</div>
     `;
+    if (isEvo) {
+      const badge = document.createElement('div');
+      badge.className = 'choice-evo-badge';
+      badge.textContent = '✦ EVOLUTION';
+      div.prepend(badge);
+    }
+    const statText = formatUpgradeStat(choice);
+    if (statText) {
+      const statsEl = document.createElement('div');
+      statsEl.className = 'choice-stats';
+      statsEl.textContent = statText;
+      div.appendChild(statsEl);
+    }
     const pick = () => {
       stacks[choice.id] = (stacks[choice.id] || 0) + 1;
       choice.apply(g, g.player);
