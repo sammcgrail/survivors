@@ -32,6 +32,7 @@
  * @property {Array}  heartDrops  — { x, y, heal, radius, life, bobPhase }
  * @property {Array}  chainEffects  — { points: [{x,y}], life, color }
  * @property {Array}  meteorEffects — { x, y, radius, life, phase, color }
+ * @property {Array}  consumables — { x, y, type, radius, color, life, bobPhase }
  * @property {Array}  obstacles   — { x, y, w, h, type }
  */
 
@@ -53,6 +54,7 @@ export function synthesizeView(g) {
     projectiles: g.projectiles,
     gems: g.gems,
     heartDrops: g.heartDrops,
+    consumables: g.consumables,
     chainEffects: g.chainEffects,
     meteorEffects: g.meteorEffects,
     obstacles: g.obstacles,

@@ -556,6 +556,45 @@ export function drawGem(ctx, gem, drawSprite, fallbackRadius = 6) {
   ctx.globalAlpha = 1;
 }
 
+// Consumable pickups — bomb/shield/magnet ground items. Drawn as
+// glowing circles with an icon, bob + late-life fade. Viewport-culled.
+const CONSUMABLE_ICONS = { bomb: '💣', shield: '🛡', magnet: '🧲' };
+export function drawConsumables(ctx, consumables, drawSprite, cx, cy, W, H) {
+  for (const c of consumables) {
+    if (c.x < cx - 20 || c.x > cx + W + 20 || c.y < cy - 20 || c.y > cy + H + 20) continue;
+    const bob = Math.sin(c.bobPhase) * 3;
+    const fadeAlpha = c.life < 3 ? c.life / 3 : 1;
+    const pulseScale = 1 + Math.sin(c.bobPhase * 2) * 0.1;
+    ctx.save();
+    ctx.globalAlpha = fadeAlpha;
+    // Outer glow
+    ctx.fillStyle = c.color;
+    ctx.globalAlpha = fadeAlpha * 0.25;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y + bob, c.radius * 2.2 * pulseScale, 0, Math.PI * 2);
+    ctx.fill();
+    // Inner circle
+    ctx.globalAlpha = fadeAlpha * 0.85;
+    ctx.fillStyle = c.color;
+    ctx.beginPath();
+    ctx.arc(c.x, c.y + bob, c.radius * pulseScale, 0, Math.PI * 2);
+    ctx.fill();
+    // White border
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.5;
+    ctx.globalAlpha = fadeAlpha * 0.6;
+    ctx.stroke();
+    // Icon fallback (emoji text)
+    ctx.globalAlpha = fadeAlpha;
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.round(c.radius * 1.1)}px sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(CONSUMABLE_ICONS[c.type] || '?', c.x, c.y + bob);
+    ctx.restore();
+  }
+}
+
 // Heart pickups — sprite with bob + late-life fade, triangle-rounded
 // heart-shape fallback. Viewport-culled (20px margin).
 export function drawHeartDrops(ctx, heartDrops, drawSprite, cx, cy, W, H) {
@@ -682,6 +721,7 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
     drawGem(ctx, gem, drawSprite);
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
+  drawConsumables(ctx, view.consumables || [], drawSprite, cx, cy, W, H);
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
   drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);

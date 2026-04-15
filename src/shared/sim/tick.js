@@ -12,6 +12,7 @@ import { updateProjectiles } from './projectiles.js';
 import { updateEnemies } from './enemies.js';
 import { updateGems } from './gems.js';
 import { updateHearts } from './hearts.js';
+import { updateConsumables } from './consumables.js';
 import { updateTerrain } from './terrain.js';
 
 export function tickSim(g, dt) {
@@ -23,6 +24,7 @@ export function tickSim(g, dt) {
   updateEnemies(g, dt);
   updateGems(g, dt);
   updateHearts(g, dt);
+  updateConsumables(g, dt);
   updateChainEffects(g, dt);
   updateMeteorEffects(g, dt);
 }

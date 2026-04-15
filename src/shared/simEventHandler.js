@@ -373,5 +373,25 @@ export function applySimEvent(evt, client) {
     case 'waveSurvived':
       if (client.onWaveSurvived) client.onWaveSurvived(evt);
       break;
+
+    case 'consumableSpawn':
+      // Soft sparkle at spawn point so players notice the drop.
+      spawn(evt.x, evt.y, evt.color || '#f39c12', 5);
+      break;
+
+    case 'consumablePickup': {
+      if (isMe) sfx('powerup');
+      // Floating text with the item label.
+      client.floatingTexts.push({
+        x: evt.x, y: evt.y,
+        text: evt.label || evt.type.toUpperCase(),
+        color: evt.color || '#f39c12',
+        life: 1.0, maxLife: 1.0, vy: -50,
+      });
+      // Pickup burst — color-matched, generous.
+      spawn(evt.x, evt.y, evt.color || '#f39c12', 12);
+      if (isMe) shake(0.12);
+      break;
+    }
   }
 }

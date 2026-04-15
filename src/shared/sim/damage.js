@@ -3,6 +3,7 @@
 // turn into sfx, floating text, particles.
 import { spawnGem } from './gems.js';
 import { EVT, emit } from './events.js';
+import { consumableDrop, spawnConsumable } from './consumables.js';
 
 // Heart drop chance per enemy type, gated on wave 6+. Tougher enemies
 // drop more often; bosses always drop.
@@ -34,6 +35,12 @@ export function damageEnemy(g, e, dmg, killerId) {
     spawnGem(g, e.x, e.y, e.xp);
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
       spawnHeart(g, e.x, e.y, 15);
+    }
+    // Consumable drops — elite/brute/boss only. Wave 4+ so players
+    // learn the basic loop before consumables appear.
+    if (g.wave >= 4) {
+      const cType = consumableDrop(e.name, g.rng);
+      if (cType) spawnConsumable(g, e.x, e.y, cType);
     }
     // Death VFX is driven entirely by the ENEMY_KILLED event in
     // applySimEvent now — per-enemy personality bursts replace the

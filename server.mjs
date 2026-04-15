@@ -101,6 +101,7 @@ function initGame() {
     projectiles: [],
     gems: [],
     heartDrops: [],
+    consumables: [],
     chainEffects: [],
     meteorEffects: [],
     deathFeed: [],
@@ -297,6 +298,10 @@ function gameSnapshot() {
       x: r1(h.x), y: r1(h.y), heal: h.heal, radius: h.radius,
       life: r2(h.life), bobPhase: r2(h.bobPhase),
     })),
+    consumables: game.consumables.map(c => ({
+      x: r1(c.x), y: r1(c.y), type: c.type, radius: c.radius,
+      color: c.color, life: r2(c.life), bobPhase: r2(c.bobPhase),
+    })),
     deathFeed: game.deathFeed.slice(-5).map(d => ({ text: d.text, time: r1(d.time) })),
     // Transient sim events from this tick — damage numbers, kill
     // particles, sfx triggers, screen-shake cues. Clients drain and
@@ -320,6 +325,8 @@ function gameSnapshot() {
       if (e.healed !== undefined) o.healed = r1(e.healed);
       if (e.level !== undefined) o.level = e.level;
       if (e.wave !== undefined) o.wave = e.wave;
+      if (e.label !== undefined) o.label = e.label;
+      if (e.ctype !== undefined) o.ctype = e.ctype;
       return o;
     }),
     waveMsg:        game.waveMsgTimer        > 0 ? game.waveMsg        : null,

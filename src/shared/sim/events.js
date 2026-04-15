@@ -21,6 +21,8 @@ export const EVT = {
   HIVE_BURST:          'hiveBurst',
   EVOLUTION:           'evolution',
   WAVE_SURVIVED:       'waveSurvived',
+  CONSUMABLE_SPAWN:    'consumableSpawn',
+  CONSUMABLE_PICKUP:   'consumablePickup',
 };
 
 export function emit(g, type, payload) {
