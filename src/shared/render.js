@@ -610,13 +610,27 @@ export function drawWeaponAuras(ctx, players, time, viewport) {
   }
 }
 
-// Gem render: sprite when loaded, blue diamond fallback. Fallback
-// radius defaults to 6 (MP snapshot omits radius); SP passes
-// gem.radius for sim-side visuals.
+// Gem render: sprite when loaded, blue diamond fallback. Tier
+// scales the visual so high-XP drops (boss/elite) read distinct
+// from common swarm gems on the ground.
+//
+// Tier sources:
+//  - SP: derived from gem.xp (sim has the raw value)
+//  - MP: server ships gem.tier directly (snapshot omits xp)
+const GEM_TIER_SCALE = [1, 1.5, 2.2];
+const GEM_TIER_COLOR = ['#3498db', '#9b59b6', '#f1c40f'];
+function gemTier(gem) {
+  if (gem.tier !== undefined) return gem.tier;
+  if (gem.xp >= 80) return 2;
+  if (gem.xp >= 30) return 1;
+  return 0;
+}
 export function drawGem(ctx, gem, drawSprite, fallbackRadius = 6) {
-  if (drawSprite('gem', gem.x, gem.y, 0.9, 0.85)) return;
-  const r = gem.radius || fallbackRadius;
-  ctx.fillStyle = '#3498db';
+  const tier = gemTier(gem);
+  const scale = GEM_TIER_SCALE[tier];
+  if (drawSprite('gem', gem.x, gem.y, 0.9 * scale, 0.85)) return;
+  const r = (gem.radius || fallbackRadius) * scale;
+  ctx.fillStyle = GEM_TIER_COLOR[tier];
   ctx.globalAlpha = 0.8;
   ctx.beginPath();
   ctx.moveTo(gem.x, gem.y - r);

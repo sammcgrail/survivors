@@ -289,10 +289,16 @@ function gameSnapshot() {
       ...(e.hitFlash > 0 ? { hitFlash: r2(e.hitFlash) } : {}),
       ...(e.dying !== undefined ? { dying: r2(e.dying) } : {}),
     })),
-    // Renderer doesn't read xp on the gem snapshot — xp ships on
-    // the GEM_PICKUP event when picked up. drawGem falls back on a
-    // default radius too, so position is enough.
-    gems: game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y) })),
+    // Tier ride-along — 0 (default) for small/medium, 1 for >=30 xp,
+    // 2 for >=80 xp. Lets drawGem render boss/elite drops larger so
+    // a 500-xp gem reads distinct from a 4-xp swarm gem on the
+    // ground. xp itself stays off the snapshot.
+    gems: game.gems.map(gem => {
+      const o = { x: r1(gem.x), y: r1(gem.y) };
+      if (gem.xp >= 80) o.tier = 2;
+      else if (gem.xp >= 30) o.tier = 1;
+      return o;
+    }),
     projectiles: game.projectiles.map(pr => ({
       x: r1(pr.x), y: r1(pr.y), radius: pr.radius, owner: pr.owner,
       // Color + velocity ride along so the shared projectile render
