@@ -747,29 +747,57 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
   drawConsumables(ctx, view.consumables || [], drawSprite, cx, cy, W, H);
-  // Charge fire wake — lingering damage zones left behind Bull Rush
-  // dashes. Drawn before enemies/auras so the trail reads as ground.
-  for (const t of (view.chargeTrails || [])) {
+  drawChargeTrailWake(ctx, view.chargeTrails || [], particles, view.time || 0, viewport);
+  drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
+  drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
+  drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
+}
+
+// Charge fire-wake render — lingering damage zones left behind a
+// charge dash. Was a flat alpha-fading circle; now flickers like
+// fire and occasionally drops upward-drifting embers so it reads
+// as a real burning patch instead of a transparent disc.
+function drawChargeTrailWake(ctx, trails, particles, time, viewport) {
+  const { cx, cy, W, H } = viewport;
+  for (const t of trails) {
     if (t.x < cx - t.radius || t.x > cx + W + t.radius ||
         t.y < cy - t.radius || t.y > cy + H + t.radius) continue;
-    const alpha = Math.min(1, t.life * 1.5) * 0.4;
+    // Per-trail offset so two adjacent trails don't flicker in sync.
+    const flicker = 0.85 + Math.sin(time * 9 + t.x * 0.05) * 0.15;
+    const baseAlpha = Math.min(1, t.life * 1.5) * 0.4;
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = baseAlpha * flicker;
     ctx.fillStyle = t.color || '#e74c3c';
     ctx.beginPath();
     ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
     ctx.fill();
-    // Bright core
-    ctx.globalAlpha = alpha * 0.6;
+    // Bright flickering core — shifted half a step out of phase
+    // so the inner heat doesn't pulse with the outer body.
+    ctx.globalAlpha = baseAlpha * 0.6 * flicker;
     ctx.fillStyle = '#f39c12';
+    const coreScale = 0.45 + Math.sin(time * 11 + t.x * 0.07) * 0.08;
     ctx.beginPath();
-    ctx.arc(t.x, t.y, t.radius * 0.5, 0, Math.PI * 2);
+    ctx.arc(t.x, t.y, t.radius * coreScale, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
+
+    // Occasional upward ember — keyed off life so old trails stop
+    // emitting before they fully fade.
+    if (particles && t.life > 0.15 && Math.random() < 0.18) {
+      const ang = Math.random() * Math.PI * 2;
+      const offR = Math.random() * t.radius * 0.7;
+      particles.push({
+        x: t.x + Math.cos(ang) * offR,
+        y: t.y + Math.sin(ang) * offR,
+        vx: (Math.random() - 0.5) * 30,
+        vy: -40 - Math.random() * 50,
+        life: 0.4 + Math.random() * 0.3,
+        maxLife: 0.7,
+        radius: 1.2 + Math.random() * 1.6,
+        color: Math.random() < 0.5 ? '#f39c12' : '#e74c3c',
+      });
+    }
   }
-  drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
-  drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
-  drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
 }
 
 // Charge weapon dash trail — tapered streak + speed lines + slash arc
