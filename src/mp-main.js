@@ -6,6 +6,7 @@
 
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
+import { installKeyboardInput } from './shared/input.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
@@ -877,31 +878,18 @@ function render(dt) {
 // INPUT
 // ============================================================
 
-const KEY_MAP = {
-  'w': 'up', 'arrowup': 'up',
-  's': 'down', 'arrowdown': 'down',
-  'a': 'left', 'arrowleft': 'left',
-  'd': 'right', 'arrowright': 'right',
-};
-
-document.addEventListener('keydown', e => {
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-  // Number keys 1-3 pick a level-up choice when the overlay is open.
-  // The handlers in window._levelChoices send the `choose` message and
-  // hide the overlay themselves.
-  if (window._levelChoices && window._levelChoices.length > 0 && /^[1-3]$/.test(e.key)) {
-    const idx = Number(e.key) - 1;
+// Keyboard handlers + KEY_MAP live in shared/input.js. Level-up
+// callback gates on the per-mode overlay state — MP uses the
+// server-driven _levelChoices array (sent via the `levelup`
+// message after a level-up event).
+installKeyboardInput(keys, {
+  onLevelUpKey(idx) {
+    if (!window._levelChoices) return false;
     const pick = window._levelChoices[idx];
-    if (pick) { pick(); e.preventDefault(); return; }
-  }
-  const k = KEY_MAP[e.key.toLowerCase()];
-  if (k) { keys[k] = true; e.preventDefault(); }
-});
-
-document.addEventListener('keyup', e => {
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-  const k = KEY_MAP[e.key.toLowerCase()];
-  if (k) { keys[k] = false; e.preventDefault(); }
+    if (!pick) return false;
+    pick();
+    return true;
+  },
 });
 
 // Keyboard shortcuts for start/death screens
