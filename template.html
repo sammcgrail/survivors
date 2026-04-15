@@ -146,6 +146,20 @@ canvas { touch-action: none; }
 .beast-card.unseen .beast-name,
 .beast-card.unseen .beast-stats,
 .beast-card.unseen .beast-desc { color: #555; }
+
+/* achievement toast */
+.achievement-toast {
+  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
+  background: rgba(20,20,20,0.92); border: 1px solid #f1c40f; border-radius: 6px;
+  padding: 8px 16px; color: #fff; font-family: monospace; font-size: 13px;
+  opacity: 0; transition: opacity 0.3s, transform 0.3s; z-index: 200; pointer-events: none;
+}
+.achievement-toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+.ach-icon { margin-right: 6px; }
+.ach-label { color: #f1c40f; }
+/* death screen achievement badges */
+.ds-ach-badge { font-size: 20px; cursor: default; }
+.ds-ach-badge--locked { opacity: 0.25; filter: grayscale(1); }
 </style>
 </head>
 <body data-mode="{{MODE}}">

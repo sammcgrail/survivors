@@ -23,6 +23,7 @@ import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainE
 import { synthesizeView } from './shared/view.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
+import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -196,6 +197,10 @@ try {
   }
 } catch (e) {}
 let gameStarted = false;
+
+// --- achievements ---
+let achievements = loadAchievements(); // persists across sessions in localStorage
+let sessionNewUnlocks = [];            // ids unlocked this run (drives toast queue)
 
 // --- init game ---
 function initGame() {
@@ -391,9 +396,28 @@ function update(dt) {
   // spawns, screen shake triggers); client decides what to do. Empty
   // until PR #12 starts emitting from extracted sim code.
   if (g.events.length > 0) {
-    for (const evt of g.events) applySimEvent(evt, spEventClient);
+    for (const evt of g.events) {
+      applySimEvent(evt, spEventClient);
+      // Achievement checks on per-event triggers.
+      if (evt.type === 'enemyKilled') {
+        unlockAchievement('first_blood');
+        if (evt.name === 'boss') unlockAchievement('boss_slayer');
+      } else if (evt.type === 'levelUp' && evt.level >= 10) {
+        unlockAchievement('level_10');
+      } else if (evt.type === 'evolution') {
+        unlockAchievement('evolved');
+      }
+    }
     g.events.length = 0;
   }
+
+  // State-based milestone checks (run every frame, idempotent via grantAchievement).
+  if (g.wave >= 10)  unlockAchievement('wave_10');
+  if (g.wave >= 20)  unlockAchievement('wave_20');
+  if (g.kills >= 100)  unlockAchievement('kills_100');
+  if (g.kills >= 1000) unlockAchievement('kills_1000');
+  if (p.weapons.length >= 4) unlockAchievement('full_loadout');
+  if (g.time >= 300) unlockAchievement('survivor_5min');
 }
 
 // SP event-client shim — drains g.events via the shared
@@ -467,6 +491,7 @@ function showLevelUp(g) {
     }
     const pick = () => {
       stacks[choice.id] = (stacks[choice.id] || 0) + 1;
+      if (choice.requiresEvo) unlockAchievement('evolved');
       choice.apply(g, g.player);
       document.getElementById('level-up').style.display = 'none';
       paused = false;
@@ -481,6 +506,29 @@ function showLevelUp(g) {
   if (choices.length === 0) {
     document.getElementById('level-up').style.display = 'none';
     paused = false;
+  }
+}
+
+// Show a brief achievement-unlock toast in the bottom-centre of the screen.
+function showAchievementToast(id) {
+  const def = ACHIEVEMENTS.find(a => a.id === id);
+  if (!def) return;
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.innerHTML = `<span class="ach-icon">${def.icon}</span> <span class="ach-label">Achievement: ${def.label}</span>`;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.classList.add('achievement-toast--visible'), 50);
+  setTimeout(() => {
+    toast.classList.remove('achievement-toast--visible');
+    setTimeout(() => toast.remove(), 400);
+  }, 3000);
+}
+
+// Grant an achievement and show a toast if newly unlocked.
+function unlockAchievement(id) {
+  if (grantAchievement(achievements, id)) {
+    sessionNewUnlocks.push(id);
+    showAchievementToast(id);
   }
 }
 
@@ -634,6 +682,24 @@ function showDeathScreen(g) {
     <div class="scales-breakdown">wave: ${waveScales} | kills: ${killScales} | evolutions: ${evoScales}</div>
     <div class="scales-total">Total: ${prestige.scales} scales</div>
   `;
+
+  // Achievement badges row — persist across runs, greyed when locked.
+  let achEl = document.getElementById('ds-achievements');
+  if (!achEl) {
+    achEl = document.createElement('div');
+    achEl.id = 'ds-achievements';
+    achEl.style.cssText = 'margin-top:12px;margin-bottom:4px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+    document.getElementById('death-scales').after(achEl);
+  }
+  achEl.innerHTML = '';
+  const allAch = loadAchievements();
+  for (const def of ACHIEVEMENTS) {
+    const badge = document.createElement('span');
+    badge.className = `ds-ach-badge${allAch[def.id] ? '' : ' ds-ach-badge--locked'}`;
+    badge.title = `${def.label}: ${def.desc}${allAch[def.id] ? '' : ' (locked)'}`;
+    badge.textContent = allAch[def.id] ? def.icon : '🔒';
+    achEl.appendChild(badge);
+  }
 
   document.getElementById('death-screen').style.display = 'flex';
 }
@@ -1036,6 +1102,8 @@ function startGame() {
   hidePrestigeShop();
   document.getElementById('level-up').style.display = 'none';
   paused = false;
+  sessionNewUnlocks = [];
+  achievements = loadAchievements(); // refresh in case another tab updated it
   game = initGame();
   // Headstart prestige: queue level-up choices for bonus levels so the
   // player picks a perk immediately on game start.
