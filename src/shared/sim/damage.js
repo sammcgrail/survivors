@@ -16,8 +16,11 @@ export function spawnHeart(g, x, y, heal) {
   g.heartDrops.push({ x, y, heal, radius: 8, life: 12, bobPhase: g.rng.range(0, Math.PI * 2) });
 }
 
+// Returns true when this call killed the enemy (enables on-kill hooks
+// like meteor_orbit's mini-meteor trigger); false on hit-but-alive or
+// already-dying calls.
 export function damageEnemy(g, e, dmg, killerId) {
-  if (e.dying) return; // already dead, ignore further damage
+  if (e.dying) return false;
   e.hp -= dmg;
   e.hitFlash = 1;
   // damage numbers gated to dmg >= 5 to avoid floating-text spam from
@@ -32,5 +35,7 @@ export function damageEnemy(g, e, dmg, killerId) {
     e.dying = 0.2; // 200ms death animation
     g.kills++;
     for (const p of g.players) if (p.id === killerId) { p.kills++; break; }
+    return true;
   }
+  return false;
 }

@@ -28,14 +28,40 @@ export const POWERUPS = [
   { id: 'meteor_up', name: 'Meteor+', desc: '+40% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.4;w.damage*=1.4;} } },
   { id: 'shield_up', name: 'Barrier+', desc: '+25% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.25;w.knockback*=1.25;} } },
   { id: 'lightning_field_up', name: 'Field+', desc: '+1 zap target & +20% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount++;w.radius*=1.2;} } },
-  // EVOLUTION: fuses spit + breath into dragon_storm once both _up
-  // powerups are maxed. `requiresEvo` is filtered by getAvailableChoices.
+  // EVOLUTIONS: fuse two maxed base weapons into a combined form. Gated
+  // by `requiresEvo` — getAvailableChoices hides the entry until both
+  // source `_up` stacks hit 3. Each `apply` strips the sources and pushes
+  // the evolution, then emits EVT.EVOLUTION for screen-shake + sfx.
   { id: 'evo_dragon_storm', name: 'DRAGON STORM', desc: 'Spit + Breath fuse into homing fireballs + damage aura', icon: '🐉',
     max: 1, requiresEvo: ['spit_up', 'breath_up'],
     apply(g, p) {
       p.weapons = p.weapons.filter(w => w.type !== 'spit' && w.type !== 'breath');
       p.weapons.push(createWeapon('dragon_storm'));
       emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'dragon_storm' });
+    }
+  },
+  { id: 'evo_thunder_god', name: 'THUNDER GOD', desc: 'Chain + Field fuse into omni-lightning with overcharge stun', icon: '⚡',
+    max: 1, requiresEvo: ['chain_up', 'lightning_field_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'chain' && w.type !== 'lightning_field');
+      p.weapons.push(createWeapon('thunder_god'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'thunder_god' });
+    }
+  },
+  { id: 'evo_meteor_orbit', name: 'METEOR ORBIT', desc: 'Orbit + Meteor fuse into flame blades that trigger explosions on kill', icon: '🔥',
+    max: 1, requiresEvo: ['orbit_up', 'meteor_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'orbit' && w.type !== 'meteor');
+      p.weapons.push(createWeapon('meteor_orbit'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'meteor_orbit' });
+    }
+  },
+  { id: 'evo_fortress', name: 'FORTRESS', desc: 'Shield + Charge fuse into battering ram with shockwave', icon: '🏰',
+    max: 1, requiresEvo: ['shield_up', 'charge_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'shield' && w.type !== 'charge');
+      p.weapons.push(createWeapon('fortress'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'fortress' });
     }
   },
 ];

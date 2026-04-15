@@ -2,7 +2,6 @@
 // a tick); single-player wraps `[g.player]` so the same code drives SP
 // and MP. Pure sim — emits WEAPON_FIRE, CHAIN_ZAP, METEOR_WARN,
 // METEOR_EXPLODE, SHIELD_HUM, CHARGE_BURST events.
-import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
 import { damageEnemy } from './damage.js';
 
@@ -14,6 +13,9 @@ function fireWeapon(g, w, p) {
   else if (w.type === 'chain')   fireChain(g, w, p);
   else if (w.type === 'meteor')  fireMeteor(g, w, p);
   else if (w.type === 'dragon_storm') fireDragonStorm(g, w, p);
+  else if (w.type === 'thunder_god')  fireThunderGod(g, w, p);
+  else if (w.type === 'meteor_orbit') fireMeteorOrbit(g, w, p);
+  else if (w.type === 'fortress')     fireCharge(g, w, p);
 }
 
 function fireSpit(g, w, p) {
@@ -52,8 +54,8 @@ function fireCharge(g, w, p) {
   w.chargeDy = f.y / d;
   p.x += w.chargeDx * w.speed * w.duration;
   p.y += w.chargeDy * w.speed * w.duration;
-  p.x = Math.max(p.radius, Math.min(WORLD_W - p.radius, p.x));
-  p.y = Math.max(p.radius, Math.min(WORLD_H - p.radius, p.y));
+  p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x));
+  p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y));
   emit(g, EVT.CHARGE_BURST, { x: p.x, y: p.y, color: w.color, pid: p.id });
 }
 
@@ -148,14 +150,20 @@ export function updateWeapons(g, dt) {
       if (w.type === 'breath') w.pulsePhase = (w.pulsePhase || 0) + dt * 3;
       if (w.type === 'dragon_storm') w.pulsePhase = (w.pulsePhase || 0) + dt * 4;
 
-      if (w.type === 'charge' && w.active) {
+      if ((w.type === 'charge' || w.type === 'fortress') && w.active) {
         w.chargeTimer -= dt;
-        if (w.chargeTimer <= 0) w.active = false;
+        if (w.chargeTimer <= 0) {
+          w.active = false;
+          if (w.type === 'fortress') fortressShockwave(g, w, p);
+        }
       }
 
       if (w.type === 'orbit') tickOrbit(g, w, p, dt);
       if (w.type === 'shield') tickShield(g, w, p, dt);
       if (w.type === 'lightning_field' && w.timer >= w.cooldown - 0.01) tickLightningField(g, w, p);
+      if (w.type === 'meteor_orbit') tickMeteorOrbit(g, w, p, dt);
+      if (w.type === 'fortress') tickFortressShield(g, w, p, dt);
+      if (w.type === 'thunder_god' && w.timer >= w.cooldown - 0.01) tickThunderField(g, w, p);
     }
   }
 }
@@ -223,14 +231,16 @@ function tickLightningField(g, w, p) {
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'lightning_field', pid: p.id });
 }
 
-// Post-projectile damage passes (breath aura + charge sweep + dragon storm
-// aura). Same iteration shape as updateWeapons — once per alive player.
+// Post-projectile damage passes (breath aura + charge/fortress sweep +
+// dragon storm aura). Same iteration shape as updateWeapons — once per
+// alive player. Fortress reuses the charge sweep because its fields
+// (speed/duration/width/damage/active/chargeDx/Dy) match.
 export function updateAuras(g, dt) {
   for (const p of g.players) {
     if (!p.alive) continue;
     for (const w of p.weapons) {
       if (w.type === 'breath') tickBreathAura(g, w, p, dt);
-      else if (w.type === 'charge' && w.active) tickChargeSweep(g, w, p, dt);
+      else if ((w.type === 'charge' || w.type === 'fortress') && w.active) tickChargeSweep(g, w, p, dt);
       else if (w.type === 'dragon_storm') tickDragonStormAura(g, w, p, dt);
     }
   }
@@ -268,6 +278,138 @@ function tickDragonStormAura(g, w, p, dt) {
       damageEnemy(g, e, w.auraDamage * p.damageMulti * dt, p.id);
     }
   }
+}
+
+// --- Thunder God ---
+// Chain fires each cooldown; field is scheduled alongside via the
+// `w.timer >= w.cooldown - 0.01` guard in updateWeapons so both count as
+// one "fire" for overcharge gating.
+function fireThunderGod(g, w, p) {
+  w.fireCount = (w.fireCount || 0) + 1;
+  fireChain(g, w, p);
+}
+
+function tickThunderField(g, w, p) {
+  const inRange = [];
+  for (const e of g.enemies) {
+    const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+    if (d2 < w.fieldRadius * w.fieldRadius) inRange.push(e);
+  }
+  if (inRange.length === 0) return;
+  // Every `overchargeEvery`th fire hits everyone in range at 2x and
+  // stuns — a rhythmic crowd-wipe that makes the weapon feel climactic.
+  const overcharge = w.fireCount > 0 && w.fireCount % w.overchargeEvery === 0;
+  if (overcharge) {
+    for (const e of inRange) {
+      damageEnemy(g, e, w.fieldDamage * 2 * p.damageMulti, p.id);
+      e.stunTimer = Math.max(e.stunTimer || 0, 0.3);
+    }
+    emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god_overcharge', pid: p.id });
+    return;
+  }
+  for (let z = inRange.length - 1; z > 0; z--) {
+    const r = g.rng.int(z + 1);
+    [inRange[z], inRange[r]] = [inRange[r], inRange[z]];
+  }
+  const targets = inRange.slice(0, w.zapCount);
+  for (const t of targets) {
+    damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id);
+    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
+  }
+  emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god', pid: p.id });
+}
+
+// --- Meteor Orbit ---
+function fireMeteorOrbit(g, w, p) {
+  if (g.enemies.length === 0) return;
+  const target = g.enemies[g.rng.int(g.enemies.length)];
+  g.meteorEffects.push({
+    x: target.x, y: target.y,
+    radius: w.blastRadius,
+    damage: w.damage * p.damageMulti,
+    life: 0.5, phase: 'warn',
+    color: w.color, owner: p.id,
+  });
+  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius });
+}
+
+function tickMeteorOrbit(g, w, p, dt) {
+  w.phase = (w.phase || 0) + w.rotSpeed * dt;
+  for (let b = 0; b < w.bladeCount; b++) {
+    const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
+    const bx = p.x + Math.cos(angle) * w.radius;
+    const by = p.y + Math.sin(angle) * w.radius;
+    for (let j = g.enemies.length - 1; j >= 0; j--) {
+      const e = g.enemies[j];
+      const dx = bx - e.x, dy = by - e.y;
+      if (dx * dx + dy * dy < (10 + e.radius) ** 2) {
+        const killed = damageEnemy(g, e, w.bladeDamage * p.damageMulti * dt * 8, p.id);
+        // Chain-reaction trigger: mini-meteor at the kill site. Queued as
+        // a normal meteor with `warn` phase 0 → explode in 0.15s.
+        if (killed) {
+          g.meteorEffects.push({
+            x: e.x, y: e.y,
+            radius: w.miniMeteorRadius,
+            damage: w.miniMeteorDamage * p.damageMulti,
+            life: 0.15, phase: 'warn',
+            color: w.color, owner: p.id,
+          });
+          emit(g, EVT.METEOR_WARN, { x: e.x, y: e.y, radius: w.miniMeteorRadius });
+        }
+      }
+    }
+  }
+}
+
+// --- Fortress ---
+// Reuses fireCharge — fortress stat field names (duration/speed/width/
+// damage) match charge on purpose so the existing code works unchanged.
+
+function tickFortressShield(g, w, p, dt) {
+  w.phase = (w.phase || 0) + dt * 4;
+  let hit = false;
+  for (const e of g.enemies) {
+    const edx = e.x - p.x, edy = e.y - p.y;
+    const dist = Math.hypot(edx, edy);
+    if (dist < w.shieldRadius + e.radius && dist > 1) {
+      hit = true;
+      const nx = edx / dist, ny = edy / dist;
+      e.x += nx * w.knockback * dt;
+      e.y += ny * w.knockback * dt;
+      damageEnemy(g, e, w.shieldDamage * p.damageMulti * dt * 2, p.id);
+    }
+  }
+  if (hit) {
+    w._humTimer = (w._humTimer || 0) - dt;
+    if (w._humTimer <= 0) {
+      emit(g, EVT.SHIELD_HUM);
+      w._humTimer = 0.4;
+    }
+  }
+}
+
+function fortressShockwave(g, w, p) {
+  for (const e of g.enemies) {
+    const dx = e.x - p.x, dy = e.y - p.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < w.shockwaveRadius + e.radius) {
+      damageEnemy(g, e, w.shockwaveDamage * p.damageMulti, p.id);
+      if (dist > 1) {
+        const push = 200;
+        e.x += (dx / dist) * push * 0.05;
+        e.y += (dy / dist) * push * 0.05;
+      }
+    }
+  }
+  // Reuse meteor explode effect for the visual — expanding ring at the
+  // endpoint reads well and saves a new render path.
+  g.meteorEffects.push({
+    x: p.x, y: p.y,
+    radius: w.shockwaveRadius,
+    damage: 0, life: 0.25, phase: 'explode',
+    color: w.color, owner: p.id,
+  });
+  emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: w.shockwaveRadius });
 }
 
 // --- chain + meteor effect lifetimes ---

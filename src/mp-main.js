@@ -769,6 +769,76 @@ function render(dt) {
         ctx.stroke();
         ctx.setLineDash([]);
       }
+      if (wtype === 'thunder_god') {
+        const r = 180;
+        const a = 0.06 + Math.sin(gameTime * 8) * 0.03;
+        ctx.fillStyle = `rgba(0, 210, 211, ${a})`;
+        ctx.beginPath();
+        ctx.arc(pl.x, pl.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(0, 210, 211, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      if (wtype === 'meteor_orbit') {
+        const bladeCount = 4;
+        const orbitRadius = 90;
+        const phase = gameTime * 4;
+        for (let b = 0; b < bladeCount; b++) {
+          const angle = phase + (b * Math.PI * 2 / bladeCount);
+          const bx = pl.x + Math.cos(angle) * orbitRadius;
+          const by = pl.y + Math.sin(angle) * orbitRadius;
+          for (let t = 1; t <= 3; t++) {
+            const ta = angle - t * 0.1;
+            const tx = pl.x + Math.cos(ta) * orbitRadius;
+            const ty = pl.y + Math.sin(ta) * orbitRadius;
+            ctx.globalAlpha = 0.3 / t;
+            ctx.fillStyle = '#ff6348';
+            ctx.beginPath();
+            ctx.arc(tx, ty, 4 - t, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          ctx.save();
+          ctx.translate(bx, by);
+          ctx.rotate(angle + Math.PI / 2);
+          ctx.fillStyle = '#ff6348';
+          ctx.shadowColor = '#ff6348';
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.moveTo(0, -14);
+          ctx.lineTo(6, 6);
+          ctx.lineTo(-6, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.restore();
+        }
+      }
+      if (wtype === 'fortress') {
+        const r = 80 * (1 + Math.sin(gameTime * 4) * 0.08);
+        const grad = ctx.createRadialGradient(pl.x, pl.y, r * 0.7, pl.x, pl.y, r);
+        grad.addColorStop(0, 'rgba(116, 185, 255, 0)');
+        grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.18)');
+        grad.addColorStop(1, 'rgba(116, 185, 255, 0.35)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(pl.x, pl.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(116, 185, 255, 0.8)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let h = 0; h < 6; h++) {
+          const a = gameTime * 1.2 + (Math.PI * 2 / 6) * h;
+          const x = pl.x + Math.cos(a) * r;
+          const y = pl.y + Math.sin(a) * r;
+          if (h === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+      }
     }
   }
 

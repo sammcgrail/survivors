@@ -124,13 +124,19 @@ function updateEnemyTick(g, dt) {
       continue;
     }
 
-    const target = nearestAlivePlayer(g, e.x, e.y);
-    if (target && target.dist > 1) {
-      if (e.name === 'ghost')      updateGhostMovement(e, dt, target.dx, target.dy, target.dist);
-      else if (e.name === 'boss')  updateBossAi(g, e, dt, target.dx, target.dy, target.dist);
-      else {
-        e.x += (target.dx / target.dist) * e.speed * dt;
-        e.y += (target.dy / target.dist) * e.speed * dt;
+    // Stunned enemies freeze in place but still take damage. Thunder god
+    // overcharge is the current source; any future CC rides the same hook.
+    if (e.stunTimer > 0) {
+      e.stunTimer -= dt;
+    } else {
+      const target = nearestAlivePlayer(g, e.x, e.y);
+      if (target && target.dist > 1) {
+        if (e.name === 'ghost')      updateGhostMovement(e, dt, target.dx, target.dy, target.dist);
+        else if (e.name === 'boss')  updateBossAi(g, e, dt, target.dx, target.dy, target.dist);
+        else {
+          e.x += (target.dx / target.dist) * e.speed * dt;
+          e.y += (target.dy / target.dist) * e.speed * dt;
+        }
       }
     }
 
