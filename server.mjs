@@ -236,6 +236,14 @@ function snapshotWeapon(w) {
     o.chargeTimer = r2(w.chargeTimer);
     o.width = w.width;
   }
+  // Cooldown indicator — drawn around the player on charge/fortress
+  // while the weapon recharges. Without these the MP player has no
+  // visual cue when their next dash is ready (SP reads w.timer +
+  // w.cooldown directly from the live sim).
+  if ((w.type === 'charge' || w.type === 'fortress') && !w.active) {
+    if (w.timer !== undefined)    o.timer = r2(w.timer);
+    if (w.cooldown !== undefined) o.cooldown = w.cooldown;
+  }
   return o;
 }
 
