@@ -11,6 +11,7 @@
     "watch": "node scripts/build.cjs --watch",
     "stress": "node tests/stress.mjs",
     "smoke": "node tests/sim_smoke.mjs",
+    "test": "node tests/sim_tests.mjs",
     "mp-server": "node server.mjs",
     "mp-smoke": "node tests/server_smoke.mjs",
     "regression": "node tests/regression.mjs"
