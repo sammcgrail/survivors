@@ -8,6 +8,7 @@ import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
+import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 
 const canvas = document.getElementById('c');
@@ -278,6 +279,7 @@ function connectWS() {
       console.log(`[ws] welcome: id=${myId}, name=${myName}, map=${mapId}`);
       // Load this map's ground tileset (async — falls back to grid).
       buildBackgroundCanvas(mapId).then(c => { bgCanvas = c; }).catch(() => {});
+      loadObstacleSprites();
       return;
     }
 
@@ -620,19 +622,7 @@ function render(dt) {
   // --- map obstacles ---
   for (const obs of obstacles) {
     if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
-    if (obs.type === 'wall' || obs.type === 'tomb') {
-      ctx.fillStyle = '#1a1a2e';
-      ctx.strokeStyle = '#333';
-    } else if (obs.type === 'pillar') {
-      ctx.fillStyle = '#2a1a1e';
-      ctx.strokeStyle = '#533';
-    } else if (obs.type === 'tree') {
-      ctx.fillStyle = 'rgba(46, 100, 60, 0.5)';
-      ctx.strokeStyle = 'rgba(46, 204, 113, 0.5)';
-    }
-    ctx.lineWidth = 2;
-    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-    ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+    drawObstacle(ctx, obs);
   }
 
   // --- gems ---
