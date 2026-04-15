@@ -46,8 +46,9 @@ function fireSpit(g, w, p) {
   const dx = nearest.x - p.x, dy = nearest.y - p.y;
   const d = Math.hypot(dx, dy);
   const nx = dx / d, ny = dy / d;
-  for (let i = 0; i < w.count; i++) {
-    const spread = w.count > 1 ? (i - (w.count - 1) / 2) * 0.15 : 0;
+  const count = w.count + (p.projectileBonus || 0);
+  for (let i = 0; i < count; i++) {
+    const spread = count > 1 ? (i - (count - 1) / 2) * 0.15 : 0;
     const cos = Math.cos(spread), sin = Math.sin(spread);
     const fx = nx * cos - ny * sin;
     const fy = nx * sin + ny * cos;
@@ -88,7 +89,8 @@ function fireChain(g, w, p) {
   emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', pid: p.id });
   const targets = [inRange[0]];
   const hit = new Set([inRange[0]]);
-  for (let c = 0; c < w.chains && targets.length > 0; c++) {
+  const chains = w.chains + (p.projectileBonus || 0);
+  for (let c = 0; c < chains && targets.length > 0; c++) {
     const last = targets[targets.length - 1];
     let best = null, bestDist = w.chainRange;
     for (const e of g.enemies) {
@@ -111,14 +113,14 @@ function fireMeteor(g, w, p) {
   const target = g.enemies[g.rng.int(g.enemies.length)];
   g.meteorEffects.push({
     x: target.x, y: target.y,
-    radius: w.blastRadius,
+    radius: w.blastRadius * (p.sizeMulti || 1),
     damage: w.damage * p.damageMulti,
     life: 0.5,
     phase: 'warn',
     color: w.color,
     owner: p.id,
   });
-  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius });
+  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius * (p.sizeMulti || 1) });
 }
 
 function fireDragonStorm(g, w, p) {
@@ -133,8 +135,9 @@ function fireDragonStorm(g, w, p) {
   if (!nearest) return;
   const dx = nearest.x - p.x, dy = nearest.y - p.y;
   const d = Math.hypot(dx, dy);
-  for (let i = 0; i < w.count; i++) {
-    const spread = (i - (w.count - 1) / 2) * 0.2;
+  const dsCount = w.count + (p.projectileBonus || 0);
+  for (let i = 0; i < dsCount; i++) {
+    const spread = (i - (dsCount - 1) / 2) * 0.2;
     const cos = Math.cos(spread), sin = Math.sin(spread);
     const fx = (dx / d) * cos - (dy / d) * sin;
     const fy = (dx / d) * sin + (dy / d) * cos;
@@ -183,10 +186,11 @@ export function updateWeapons(g, dt) {
 
 function tickOrbit(g, w, p, dt) {
   w.phase = (w.phase || 0) + w.rotSpeed * dt;
+  const effectiveRadius = w.radius * (p.sizeMulti || 1);
   for (let b = 0; b < w.bladeCount; b++) {
     const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
-    const bx = p.x + Math.cos(angle) * w.radius;
-    const by = p.y + Math.sin(angle) * w.radius;
+    const bx = p.x + Math.cos(angle) * effectiveRadius;
+    const by = p.y + Math.sin(angle) * effectiveRadius;
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
@@ -199,12 +203,13 @@ function tickOrbit(g, w, p, dt) {
 
 function tickShield(g, w, p, dt) {
   w.phase = (w.phase || 0) + dt * 4;
+  const effectiveRadius = w.radius * (p.sizeMulti || 1);
   let hit = false;
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const edx = e.x - p.x, edy = e.y - p.y;
     const dist = Math.hypot(edx, edy);
-    if (dist < w.radius + e.radius && dist > 1) {
+    if (dist < effectiveRadius + e.radius && dist > 1) {
       hit = true;
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
@@ -222,7 +227,9 @@ function tickShield(g, w, p, dt) {
 }
 
 function tickLightningField(g, w, p) {
-  const targets = randomEnemiesInRange(g, p.x, p.y, w.radius, w.zapCount);
+  const effectiveRadius = w.radius * (p.sizeMulti || 1);
+  const zapCount = w.zapCount + (p.projectileBonus || 0);
+  const targets = randomEnemiesInRange(g, p.x, p.y, effectiveRadius, zapCount);
   for (const t of targets) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
@@ -246,11 +253,12 @@ export function updateAuras(g, dt) {
 }
 
 function tickBreathAura(g, w, p, dt) {
+  const effectiveRadius = w.radius * (p.sizeMulti || 1);
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const edx = p.x - e.x, edy = p.y - e.y;
     const dist = Math.hypot(edx, edy);
-    if (dist < w.radius + e.radius) {
+    if (dist < effectiveRadius + e.radius) {
       damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id);
     }
   }
@@ -258,22 +266,24 @@ function tickBreathAura(g, w, p, dt) {
 
 function tickChargeSweep(g, w, p, dt) {
   const cdx = w.chargeDx, cdy = w.chargeDy;
+  const effectiveWidth = w.width * (p.sizeMulti || 1);
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const ex = e.x - p.x, ey = e.y - p.y;
     const forward = ex * cdx + ey * cdy;
     const lateral = Math.abs(ex * (-cdy) + ey * cdx);
-    if (forward > -w.width && forward < w.speed * w.duration && lateral < w.width + e.radius) {
+    if (forward > -effectiveWidth && forward < w.speed * w.duration && lateral < effectiveWidth + e.radius) {
       damageEnemy(g, e, w.damage * p.damageMulti * dt * 3, p.id);
     }
   }
 }
 
 function tickDragonStormAura(g, w, p, dt) {
+  const effectiveAura = w.auraRadius * (p.sizeMulti || 1);
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const dx = p.x - e.x, dy = p.y - e.y;
-    if (dx * dx + dy * dy < (w.auraRadius + e.radius) ** 2) {
+    if (dx * dx + dy * dy < (effectiveAura + e.radius) ** 2) {
       damageEnemy(g, e, w.auraDamage * p.damageMulti * dt, p.id);
     }
   }
@@ -293,10 +303,11 @@ function tickThunderField(g, w, p) {
   // stuns — a rhythmic crowd-wipe that makes the weapon feel climactic.
   const overcharge = w.fireCount > 0 && w.fireCount % w.overchargeEvery === 0;
   if (overcharge) {
+    const effectiveFieldR = w.fieldRadius * (p.sizeMulti || 1);
     let any = false;
     for (const e of g.enemies) {
       const dx = e.x - p.x, dy = e.y - p.y;
-      if (dx * dx + dy * dy >= w.fieldRadius * w.fieldRadius) continue;
+      if (dx * dx + dy * dy >= effectiveFieldR * effectiveFieldR) continue;
       any = true;
       damageEnemy(g, e, w.fieldDamage * 2 * p.damageMulti, p.id);
       e.stunTimer = Math.max(e.stunTimer || 0, 0.3);
@@ -304,7 +315,9 @@ function tickThunderField(g, w, p) {
     if (any) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god_overcharge', pid: p.id });
     return;
   }
-  const targets = randomEnemiesInRange(g, p.x, p.y, w.fieldRadius, w.zapCount);
+  const effectiveFieldR2 = w.fieldRadius * (p.sizeMulti || 1);
+  const tgZapCount = w.zapCount + (p.projectileBonus || 0);
+  const targets = randomEnemiesInRange(g, p.x, p.y, effectiveFieldR2, tgZapCount);
   for (const t of targets) {
     damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
@@ -318,10 +331,11 @@ function tickThunderField(g, w, p) {
 
 function tickMeteorOrbit(g, w, p, dt) {
   w.phase = (w.phase || 0) + w.rotSpeed * dt;
+  const effectiveRadius = w.radius * (p.sizeMulti || 1);
   for (let b = 0; b < w.bladeCount; b++) {
     const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
-    const bx = p.x + Math.cos(angle) * w.radius;
-    const by = p.y + Math.sin(angle) * w.radius;
+    const bx = p.x + Math.cos(angle) * effectiveRadius;
+    const by = p.y + Math.sin(angle) * effectiveRadius;
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
@@ -350,11 +364,12 @@ function tickMeteorOrbit(g, w, p, dt) {
 
 function tickFortressShield(g, w, p, dt) {
   w.phase = (w.phase || 0) + dt * 4;
+  const effectiveRadius = w.shieldRadius * (p.sizeMulti || 1);
   let hit = false;
   for (const e of g.enemies) {
     const edx = e.x - p.x, edy = e.y - p.y;
     const dist = Math.hypot(edx, edy);
-    if (dist < w.shieldRadius + e.radius && dist > 1) {
+    if (dist < effectiveRadius + e.radius && dist > 1) {
       hit = true;
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
@@ -372,10 +387,11 @@ function tickFortressShield(g, w, p, dt) {
 }
 
 function fortressShockwave(g, w, p) {
+  const effectiveShockR = w.shockwaveRadius * (p.sizeMulti || 1);
   for (const e of g.enemies) {
     const dx = e.x - p.x, dy = e.y - p.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < w.shockwaveRadius + e.radius) {
+    if (dist < effectiveShockR + e.radius) {
       damageEnemy(g, e, w.shockwaveDamage * p.damageMulti, p.id);
       if (dist > 1) {
         const push = 200;

@@ -257,9 +257,10 @@ function updateEnemyTick(g, dt, hash) {
       if (!p.alive || p.iframes > 0) continue;
       const dx = p.x - e.x, dy = p.y - e.y;
       if (dx * dx + dy * dy < (p.radius + e.radius) ** 2) {
-        p.hp -= e.damage;
+        const dmg = Math.max(1, e.damage - (p.armor || 0));
+        p.hp -= dmg;
         p.iframes = 0.5;
-        emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg: e.damage, by: e.name, pid: p.id });
+        emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: e.name, pid: p.id });
         if (p.hp <= 0) {
           p.hp = 0;
           p.alive = false;
