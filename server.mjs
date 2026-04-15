@@ -273,12 +273,17 @@ function gameSnapshot() {
       x: r1(e.x), y: r1(e.y),
       hp: e.hp, maxHp: e.maxHp,
       radius: e.radius, color: e.color,
-      hitFlash: r2(e.hitFlash || 0),
-      // Ship dying only when present so MP can draw the shrink+fade
-      // death animation that shared drawEnemies already handles.
+      // hitFlash + dying ride only when meaningful — the common
+      // case (no flash, alive) saves bytes per enemy per tick.
+      // Renderer reads both as `|| 0` / `=== undefined` so missing
+      // is fine.
+      ...(e.hitFlash > 0 ? { hitFlash: r2(e.hitFlash) } : {}),
       ...(e.dying !== undefined ? { dying: r2(e.dying) } : {}),
     })),
-    gems: game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y), xp: gem.xp })),
+    // Renderer doesn't read xp on the gem snapshot — xp ships on
+    // the GEM_PICKUP event when picked up. drawGem falls back on a
+    // default radius too, so position is enough.
+    gems: game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y) })),
     projectiles: game.projectiles.map(pr => ({
       x: r1(pr.x), y: r1(pr.y), radius: pr.radius, owner: pr.owner,
       // Color + velocity ride along so the shared projectile render
@@ -295,13 +300,18 @@ function gameSnapshot() {
       x: r1(m.x), y: r1(m.y), radius: m.radius,
       life: r2(m.life), phase: m.phase, color: m.color,
     })),
+    // Renderer doesn't read heal on the heart snapshot — `+N HP`
+    // text comes through HEART_PICKUP event when grabbed.
     heartDrops: game.heartDrops.map(h => ({
-      x: r1(h.x), y: r1(h.y), heal: h.heal, radius: h.radius,
+      x: r1(h.x), y: r1(h.y), radius: h.radius,
       life: r2(h.life), bobPhase: r2(h.bobPhase),
     })),
+    // Consumables never despawn now (life: Infinity) so dropping
+    // life saves bytes per drop per tick. Late-fade branch in
+    // drawConsumables is dead code under the new lifetime policy.
     consumables: game.consumables.map(c => ({
       x: r1(c.x), y: r1(c.y), type: c.type, radius: c.radius,
-      color: c.color, life: r2(c.life), bobPhase: r2(c.bobPhase),
+      color: c.color, bobPhase: r2(c.bobPhase),
     })),
     chargeTrails: (game.chargeTrails || []).map(t => ({
       x: r1(t.x), y: r1(t.y), radius: t.radius,
