@@ -6,6 +6,7 @@
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
+import { makeBgmPlayer } from './shared/bgm.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
@@ -79,19 +80,12 @@ const MAP_TRACKS = {
 };
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
-const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
 // BGM volume — persisted per-slider in localStorage. SFX volume
 // lives in shared/sfx.js (since the gain node is created there).
 let bgmVol = 0.45;
 try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) bgmVol = +v; } catch (_) {}
 const MENU_VOL_RATIO = 0.67; // menu music plays at 67% of bgm slider
 
-let bgMusic = null;
-let bgMusicGain = null;
-let musicFading = false;
-let currentTrackSrc = null;
-let menuMusic = null;
-let menuMusicGain = null;
 let menuMusicStarted = false;
 let musicMuted = false;
 try { musicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
@@ -112,17 +106,8 @@ function setBgmVol(v) {
   bgmVol = Math.max(0, Math.min(1, v / 100));
   try { localStorage.setItem('survivors_bgm_vol', bgmVol.toFixed(2)); } catch (_) {}
   if (!musicMuted) {
-    try {
-      const ac = getAudio();
-      if (bgMusicGain) {
-        bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-        bgMusicGain.gain.linearRampToValueAtTime(bgmVol, ac.currentTime + 0.1);
-      }
-      if (menuMusicGain) {
-        menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
-        menuMusicGain.gain.linearRampToValueAtTime(bgmVol * MENU_VOL_RATIO, ac.currentTime + 0.1);
-      }
-    } catch (_) {}
+    battlePlayer.setVol(bgmVol);
+    menuPlayer.setVol(bgmVol * MENU_VOL_RATIO);
   }
 }
 function setSfxVol(v) {
@@ -136,117 +121,34 @@ function toggleVolPanel() {
 
 // Menu music — plays on the start/death screen. Fades out when game
 // starts, fades back in on return. Barn's E dorian 78 BPM ambient.
+// fadeIn keeps the audio element loaded so the track resumes from
+// where it was paused instead of restarting from 0:00.
+const battlePlayer = makeBgmPlayer();
+const menuPlayer = makeBgmPlayer();
+
 function startMenuMusic() {
   if (menuMusicStarted) return;
-  try {
-    const ac = getAudio();
-    if (ac.state === 'suspended') ac.resume();
-    menuMusic = new Audio();
-    menuMusic.loop = true;
-    menuMusic.volume = 1;
-    menuMusic.src = MENU_TRACK;
-    const mediaSrc = ac.createMediaElementSource(menuMusic);
-    menuMusicGain = ac.createGain();
-    menuMusicGain.gain.value = 0;
-    mediaSrc.connect(menuMusicGain);
-    menuMusicGain.connect(ac.destination);
-    menuMusic.play().catch(() => {});
-    const target = musicMuted ? 0 : bgmVol * MENU_VOL_RATIO;
-    menuMusicGain.gain.setValueAtTime(0, ac.currentTime);
-    menuMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
-    menuMusicStarted = true;
-  } catch (_) {}
+  menuPlayer.play(MENU_TRACK, musicMuted ? 0 : bgmVol * MENU_VOL_RATIO);
+  menuMusicStarted = true;
 }
-
-function fadeOutMenuMusic() {
-  if (!menuMusic || !menuMusicGain) return;
-  try {
-    const ac = getAudio();
-    menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
-    menuMusicGain.gain.setValueAtTime(menuMusicGain.gain.value, ac.currentTime);
-    menuMusicGain.gain.linearRampToValueAtTime(0, ac.currentTime + 1.5);
-    setTimeout(() => { if (menuMusic) menuMusic.pause(); }, 1600);
-  } catch (_) {}
-}
-
+function fadeOutMenuMusic() { menuPlayer.fadeOut(); }
 function fadeInMenuMusic() {
-  if (!menuMusic || !menuMusicGain) { startMenuMusic(); return; }
-  try {
-    const ac = getAudio();
-    if (ac.state === 'suspended') ac.resume();
-    menuMusic.play().catch(() => {});
-    const target = musicMuted ? 0 : bgmVol * MENU_VOL_RATIO;
-    menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
-    menuMusicGain.gain.setValueAtTime(menuMusicGain.gain.value, ac.currentTime);
-    menuMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
-  } catch (_) {}
+  menuPlayer.play(MENU_TRACK, musicMuted ? 0 : bgmVol * MENU_VOL_RATIO);
 }
 
 function startMusic() {
-  try {
-    const ac = getAudio();
-    if (ac.state === 'suspended') ac.resume();
-    // Pick track for current map.
-    const mapId = (game && game.mapId) || selectedMapId || 'arena';
-    const canOgg = !bgMusic || (bgMusic.canPlayType && bgMusic.canPlayType('audio/ogg; codecs=vorbis'));
-    let src = MAP_TRACKS[mapId] || (canOgg ? DEFAULT_TRACK_OGG : DEFAULT_TRACK_MP3);
-    // If track changed, tear down old audio element (createMediaElementSource
-    // binds permanently to one AudioContext, can't reassign .src safely).
-    if (bgMusic && currentTrackSrc !== src) {
-      bgMusic.pause();
-      bgMusic = null;
-      bgMusicGain = null;
-    }
-    if (!bgMusic) {
-      bgMusic = new Audio();
-      bgMusic.loop = true;
-      bgMusic.volume = 1; // volume via gain node
-      bgMusic.src = src;
-      currentTrackSrc = src;
-      const mediaSrc = ac.createMediaElementSource(bgMusic);
-      bgMusicGain = ac.createGain();
-      bgMusicGain.gain.value = 0;
-      mediaSrc.connect(bgMusicGain);
-      bgMusicGain.connect(ac.destination);
-    }
-    bgMusic.currentTime = 0;
-    bgMusic.play().catch(() => {});
-    // fade in over 2s (skip if muted)
-    const target = musicMuted ? 0 : bgmVol;
-    bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-    bgMusicGain.gain.setValueAtTime(0, ac.currentTime);
-    bgMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
-    musicFading = false;
-  } catch (e) {}
+  const mapId = (game && game.mapId) || selectedMapId || 'arena';
+  const src = MAP_TRACKS[mapId] || DEFAULT_TRACK_OGG;
+  battlePlayer.play(src, musicMuted ? 0 : bgmVol);
 }
-
-function fadeOutMusic() {
-  if (!bgMusic || !bgMusicGain || musicFading) return;
-  musicFading = true;
-  try {
-    const ac = getAudio();
-    bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-    bgMusicGain.gain.setValueAtTime(bgMusicGain.gain.value, ac.currentTime);
-    bgMusicGain.gain.linearRampToValueAtTime(0, ac.currentTime + 1.5);
-    setTimeout(() => { bgMusic.pause(); musicFading = false; }, 1600);
-  } catch (e) {}
-}
+function fadeOutMusic() { battlePlayer.fadeOut(); }
 
 function toggleMuteMusic() {
   musicMuted = !musicMuted;
   try { localStorage.setItem('survivors_mute', musicMuted ? '1' : '0'); } catch (_) {}
   updateMuteBtn();
-  try {
-    const ac = getAudio();
-    if (bgMusicGain) {
-      bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      bgMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : bgmVol, ac.currentTime + 0.3);
-    }
-    if (menuMusicGain) {
-      menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      menuMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : bgmVol * MENU_VOL_RATIO, ac.currentTime + 0.3);
-    }
-  } catch (_) {}
+  battlePlayer.setVol(musicMuted ? 0 : bgmVol, 0.3);
+  menuPlayer.setVol(musicMuted ? 0 : bgmVol * MENU_VOL_RATIO, 0.3);
 }
 
 // --- resize ---
