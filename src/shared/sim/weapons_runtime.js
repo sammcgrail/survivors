@@ -108,7 +108,7 @@ function fireChain(g, w, p) {
   });
   const inRange = sorted.filter(e => Math.hypot(e.x - p.x, e.y - p.y) < w.range);
   if (inRange.length === 0) return;
-  emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', pid: p.id });
+  emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', x: p.x, y: p.y, pid: p.id });
   const targets = [inRange[0]];
   const hit = new Set([inRange[0]]);
   const chains = w.chains + (p.projectileBonus || 0);
@@ -128,7 +128,7 @@ function fireChain(g, w, p) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id);
     applyStatus(g, t, { type: 'slow', remaining: 2.0, magnitude: 0.4, tickRate: 0 });
   }
-  g.chainEffects.push({ points: chainPoints, life: 0.2, color: w.color });
+  g.chainEffects.push({ points: chainPoints, life: 0.32, maxLife: 0.32, color: w.color });
 }
 
 function fireMeteor(g, w, p) {
@@ -149,7 +149,7 @@ function fireMeteor(g, w, p) {
 function fireDragonStorm(g, w, p) {
   if (g.enemies.length === 0) return;
   w.fireCount = (w.fireCount || 0) + 1;
-  if (w.fireCount % 3 === 1) emit(g, EVT.WEAPON_FIRE, { weapon: 'dragon_storm', pid: p.id });
+  if (w.fireCount % 3 === 1) emit(g, EVT.WEAPON_FIRE, { weapon: 'dragon_storm', x: p.x, y: p.y, pid: p.id });
   let nearest = null, nearestDist = w.range;
   for (const e of g.enemies) {
     const d = Math.hypot(e.x - p.x, e.y - p.y);
@@ -260,7 +260,7 @@ function tickLightningField(g, w, p) {
   for (const t of targets) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id);
     applyStatus(g, t, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
-    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
+    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'lightning_field', pid: p.id });
 }
@@ -348,7 +348,7 @@ function tickThunderField(g, w, p) {
   const targets = randomEnemiesInRange(g, p.x, p.y, effectiveFieldR2, tgZapCount);
   for (const t of targets) {
     damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id);
-    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
+    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god', pid: p.id });
 }
@@ -550,14 +550,14 @@ function fireTeslaAegisPulse(g, w, p) {
     nextRange = w.chainRange * 0.6;
   }
   if (points.length > 1) {
-    g.chainEffects.push({ points, life: 0.2, color: w.color });
+    g.chainEffects.push({ points, life: 0.32, maxLife: 0.32, color: w.color });
     emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis', pid: p.id });
   }
 }
 
 // --- Void Anchor ---
 function fireVoidAnchor(g, w, p) {
-  emit(g, EVT.WEAPON_FIRE, { weapon: 'void_anchor', pid: p.id });
+  emit(g, EVT.WEAPON_FIRE, { weapon: 'void_anchor', x: p.x, y: p.y, pid: p.id });
   const pullR = w.pullRadius * (p.sizeMulti || 1);
   const nearest = g.enemies
     .filter(e => Math.hypot(e.x - p.x, e.y - p.y) < pullR)

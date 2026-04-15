@@ -457,27 +457,59 @@ export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H, 
 // weapon, lightning_field, thunder_god, fortress shockwave reuse.
 export function drawChainEffects(ctx, chainEffects) {
   for (const ce of chainEffects) {
-    const t = ce.life / 0.2;
-    ctx.shadowColor = ce.color;
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.lineWidth = pass === 0 ? 6 : 2;
-      ctx.strokeStyle = pass === 0 ? ce.color : '#ffffff';
-      ctx.shadowBlur = pass === 0 ? 14 : 6;
-      ctx.globalAlpha = pass === 0 ? t * 0.45 : t;
-      for (let i = 0; i < ce.points.length - 1; i++) {
-        const a = ce.points[i];
-        const b = ce.points[i + 1];
-        const dx = (b.x - a.x), dy = (b.y - a.y);
-        const m1x = a.x + dx * 0.33 + (Math.random() - 0.5) * 18;
-        const m1y = a.y + dy * 0.33 + (Math.random() - 0.5) * 18;
-        const m2x = a.x + dx * 0.66 + (Math.random() - 0.5) * 18;
-        const m2y = a.y + dy * 0.66 + (Math.random() - 0.5) * 18;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(m1x, m1y);
-        ctx.lineTo(m2x, m2y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
+    // Two-phase: first 60% of life is the full jagged bolt; last 40%
+    // is residual crackle at each struck endpoint only. Reads as
+    // "impact → lingering spark" instead of a single jump-cut fade.
+    const maxLife = ce.maxLife || 0.2;
+    const lifeFrac = Math.max(0, ce.life / maxLife);
+    if (lifeFrac > 0.4) {
+      // Bolt phase — same jagged render as before but alpha mapped to
+      // the active window (0.4..1.0 fraction) so the bolt fades out
+      // before the residual takes over.
+      const t = (lifeFrac - 0.4) / 0.6;
+      ctx.shadowColor = ce.color;
+      for (let pass = 0; pass < 2; pass++) {
+        ctx.lineWidth = pass === 0 ? 6 : 2;
+        ctx.strokeStyle = pass === 0 ? ce.color : '#ffffff';
+        ctx.shadowBlur = pass === 0 ? 14 : 6;
+        ctx.globalAlpha = pass === 0 ? t * 0.45 : t;
+        for (let i = 0; i < ce.points.length - 1; i++) {
+          const a = ce.points[i];
+          const b = ce.points[i + 1];
+          const dx = (b.x - a.x), dy = (b.y - a.y);
+          const m1x = a.x + dx * 0.33 + (Math.random() - 0.5) * 18;
+          const m1y = a.y + dy * 0.33 + (Math.random() - 0.5) * 18;
+          const m2x = a.x + dx * 0.66 + (Math.random() - 0.5) * 18;
+          const m2y = a.y + dy * 0.66 + (Math.random() - 0.5) * 18;
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(m1x, m1y);
+          ctx.lineTo(m2x, m2y);
+          ctx.lineTo(b.x, b.y);
+          ctx.stroke();
+        }
+      }
+    } else {
+      // Residual phase — small random-direction spark arcs at each
+      // struck endpoint. Skip index 0 (the player/source). Alpha rises
+      // into the phase then fades linearly.
+      const rf = lifeFrac / 0.4; // 1→0
+      ctx.shadowColor = ce.color;
+      ctx.shadowBlur = 6;
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.3;
+      ctx.globalAlpha = rf * 0.8;
+      for (let i = 1; i < ce.points.length; i++) {
+        const p = ce.points[i];
+        // 2 short arcs in random directions per endpoint
+        for (let j = 0; j < 2; j++) {
+          const a = Math.random() * Math.PI * 2;
+          const len = 4 + Math.random() * 6;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x + Math.cos(a) * len, p.y + Math.sin(a) * len);
+          ctx.stroke();
+        }
       }
     }
   }

@@ -19,6 +19,17 @@
 // callbacks are optional and only make sense for the player whose
 // pid matches the event.
 
+// Muzzle flash color pairs per weapon — {bright: first bloom, trail:
+// slow sparks}. Weapons not listed (breath/orbit/shield — aura types
+// with no discrete "shot") skip the muzzle flash entirely.
+const MUZZLE_STYLES = {
+  spit:         { bright: '#d6a0f5', trail: '#8e44ad' },
+  chain:        { bright: '#b7ebff', trail: '#0099cc' },
+  dragon_storm: { bright: '#ffd27f', trail: '#e67e22' },
+  thunder_god:  { bright: '#e0fdff', trail: '#00d2d3' },
+  void_anchor:  { bright: '#c8b6ff', trail: '#6c5ce7' },
+};
+
 function spawnParticleBurst(particles, x, y, color, count) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
@@ -530,6 +541,29 @@ export function applySimEvent(evt, client) {
       else if (evt.weapon === 'chain')        sfx('chain');
       else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
       else if (evt.weapon === 'thunder_god')  sfx('chain');
+      // Muzzle flash — short bloom at the fire origin so every shot has
+      // a kinetic starting frame. Same bloom-then-fade shape as damage
+      // feedback (PR 1): 5 fast bright particles + 2 slow trail. Per
+      // weapon color so each weapon reads distinct at the muzzle.
+      if (evt.x !== undefined && evt.y !== undefined) {
+        const style = MUZZLE_STYLES[evt.weapon];
+        if (style) {
+          for (let i = 0; i < 5; i++) {
+            pushFx(client.particles, evt.x, evt.y, style.bright, {
+              speedMin: 120, speedMax: 220,
+              lifeMin: 0.1, lifeMax: 0.18,
+              radiusMin: 1.3, radiusMax: 2.4,
+            });
+          }
+          for (let i = 0; i < 2; i++) {
+            pushFx(client.particles, evt.x, evt.y, style.trail, {
+              speedMin: 40, speedMax: 80,
+              lifeMin: 0.25, lifeMax: 0.45,
+              radiusMin: 0.9, radiusMax: 1.5,
+            });
+          }
+        }
+      }
       break;
 
     case 'chargeBurst':
