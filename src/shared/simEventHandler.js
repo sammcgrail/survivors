@@ -534,6 +534,18 @@ export function applySimEvent(evt, client) {
       sfx('hive_burst');
       break;
 
+    case 'enemyShoot':
+      // Hostile fire — sharp warning sound + muzzle flash particles.
+      sfx('spit'); // reuse spit sfx for now — higher pitch reads as hostile
+      for (let i = 0; i < 4; i++) {
+        pushFx(client.particles, evt.x, evt.y, evt.name === 'boss' ? '#d63031' : '#6c5ce7', {
+          speedMin: 40, speedMax: 80,
+          lifeMin: 0.15, lifeMax: 0.3,
+          radiusMin: 1, radiusMax: 2.5,
+        });
+      }
+      break;
+
     case 'bossSpawn':
       // Boss arrival — ominous sfx, big shake, deep red burst at
       // spawn so everyone knows where THE DEMON landed.

@@ -40,6 +40,7 @@
  * @property {Array}  consumables — { x, y, type, radius, color, bobPhase }
  *                                    — never despawn (no life field)
  * @property {Array}  chargeTrails — { x, y, radius, life, color }
+ * @property {Array}  enemyProjectiles — { x, y, vx, vy, radius, color, source }
  * @property {Array}  obstacles   — { x, y, w, h, type }
  * @property {Array}  events?     — transient sim events drained by
  *                                    applySimEvent (sfx/particles/text)
@@ -68,6 +69,7 @@ export function synthesizeView(g) {
     heartDrops: g.heartDrops,
     consumables: g.consumables,
     chargeTrails: g.chargeTrails,
+    enemyProjectiles: g.enemyProjectiles,
     chainEffects: g.chainEffects,
     meteorEffects: g.meteorEffects,
     obstacles: g.obstacles,

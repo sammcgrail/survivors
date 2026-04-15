@@ -26,7 +26,7 @@ function makeGame(seed = 42) {
   return {
     player,
     players: [player],
-    enemies: [], projectiles: [], gems: [], heartDrops: [], consumables: [],
+    enemies: [], projectiles: [], gems: [], heartDrops: [], consumables: [], enemyProjectiles: [],
     particles: [], floatingTexts: [], deathFeed: [],
     chainEffects: [], meteorEffects: [],
     time: 0, wave: 1, waveTimer: 0, waveDuration: 20,

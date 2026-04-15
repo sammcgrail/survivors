@@ -568,6 +568,7 @@ function initGame() {
     gems: [],
     heartDrops: [],
     consumables: [],
+    enemyProjectiles: [],
     particles: [],
     floatingTexts: [],
     time: 0,

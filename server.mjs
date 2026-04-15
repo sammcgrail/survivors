@@ -102,6 +102,7 @@ function initGame() {
     gems: [],
     heartDrops: [],
     consumables: [],
+    enemyProjectiles: [],
     chainEffects: [],
     meteorEffects: [],
     chargeTrails: [],
@@ -320,6 +321,12 @@ function gameSnapshot() {
     consumables: game.consumables.map(c => ({
       x: r1(c.x), y: r1(c.y), type: c.type, radius: c.radius,
       color: c.color, bobPhase: r2(c.bobPhase),
+    })),
+    enemyProjectiles: (game.enemyProjectiles || []).map(ep => ({
+      x: r1(ep.x), y: r1(ep.y),
+      vx: r1(ep.vx), vy: r1(ep.vy),
+      radius: ep.radius, color: ep.color,
+      source: ep.source,
     })),
     chargeTrails: (game.chargeTrails || []).map(t => ({
       x: r1(t.x), y: r1(t.y), radius: t.radius,

@@ -6,6 +6,7 @@ import { ENEMY_TYPES, enemyType, scaleEnemy } from '../enemyTypes.js';
 import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
 import { pushOutOfObstacles, obstacleAvoidance } from './collision.js';
+import { enemyShootingAi } from './enemyProjectiles.js';
 
 // Reusable zero vector for the no-obstacles path — saves an
 // allocation per enemy per tick on maps without obstacles.
@@ -256,6 +257,14 @@ function updateEnemyTick(g, dt, hash) {
     // Spawner births minions on a timer — gated by stun so a stunned
     // hive doesn't keep pumping out swarmlings during the freeze.
     if (e.name === 'spawner' && (!e.stunTimer || e.stunTimer <= 0)) updateSpawnerAi(g, e, dt);
+
+    // Ranged attacks — elites fire aimed shots, bosses fire spreads.
+    // Uses its own nearest-player lookup because the movement target
+    // is scoped inside the stun guard above.
+    if (e.shootCooldown && (!e.stunTimer || e.stunTimer <= 0)) {
+      const shootTarget = nearestAlivePlayer(g, e.x, e.y);
+      enemyShootingAi(g, e, dt, shootTarget);
+    }
 
     if (e.hitFlash > 0) e.hitFlash -= dt * 5;
 

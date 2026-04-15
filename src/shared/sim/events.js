@@ -24,6 +24,7 @@ export const EVT = {
   WAVE_SURVIVED:       'waveSurvived',
   CONSUMABLE_SPAWN:    'consumableSpawn',
   CONSUMABLE_PICKUP:   'consumablePickup',
+  ENEMY_SHOOT:         'enemyShoot',
 };
 
 // Spread payload first so a stray `type` field in the payload (e.g.

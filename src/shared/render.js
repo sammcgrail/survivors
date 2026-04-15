@@ -211,6 +211,53 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
   }
 }
 
+// Enemy projectiles — hostile orbs with a menacing red/purple glow
+// and a short ghostly trail. Visually distinct from player projectiles
+// so players can read incoming fire at a glance.
+export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H) {
+  for (const p of projectiles) {
+    if (p.x < cx - 30 || p.x > cx + W + 30 || p.y < cy - 30 || p.y > cy + H + 30) continue;
+    const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+    // Ghostly trail
+    if (speed > 0) {
+      const nx = -p.vx / speed, ny = -p.vy / speed;
+      for (let t = 1; t <= 3; t++) {
+        ctx.globalAlpha = 0.25 - t * 0.07;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x + nx * t * 5, p.y + ny * t * 5, p.radius * (1 - t * 0.2), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+    // Main body — outer glow + bright core
+    ctx.shadowColor = p.color;
+    ctx.shadowBlur = 12;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+    // White-hot core
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    // Spark particles
+    if (particles && Math.random() < 0.3) {
+      particles.push({
+        x: p.x + (Math.random() - 0.5) * 4,
+        y: p.y + (Math.random() - 0.5) * 4,
+        vx: (Math.random() - 0.5) * 30,
+        vy: (Math.random() - 0.5) * 30,
+        life: 0.2, maxLife: 0.2,
+        radius: 1 + Math.random(),
+        color: p.color,
+      });
+    }
+  }
+}
+
 // Chain-lightning effects — two passes per bolt (thick translucent
 // outer glow + thin bright inner core), two jagged midpoints per
 // segment so the bolts read as proper electric arcs. Used for chain
@@ -751,6 +798,7 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
   drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
+  drawEnemyProjectiles(ctx, view.enemyProjectiles || [], particles, cx, cy, W, H);
 }
 
 // Charge fire-wake render — lingering damage zones left behind a
