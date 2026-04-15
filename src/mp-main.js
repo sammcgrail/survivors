@@ -147,7 +147,7 @@ function getAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     sfxMaster = audioCtx.createGain();
-    sfxMaster.gain.value = 0.6;
+    sfxMaster.gain.value = mpSfxVol;
     sfxMaster.connect(audioCtx.destination);
   }
   return audioCtx;
@@ -289,7 +289,10 @@ function sfx(type) {
 // --- battle music (map-aware + mute toggle) ---
 const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg' };
 const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
-const MP_MUSIC_VOL = 0.45;
+let mpBgmVol = 0.45;
+let mpSfxVol = 0.60;
+try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) mpBgmVol = +v; } catch (_) {}
+try { const v = localStorage.getItem('survivors_sfx_vol'); if (v !== null) mpSfxVol = +v; } catch (_) {}
 let mpBgMusic = null;
 let mpBgMusicGain = null;
 let mpMusicFading = false;
@@ -300,7 +303,35 @@ function updateMpMuteBtn() {
   const b = document.getElementById('mute-btn');
   if (b) b.textContent = mpMusicMuted ? '🔇' : '🔊';
 }
+function initMpVolSliders() {
+  const bs = document.getElementById('vol-bgm');
+  const ss = document.getElementById('vol-sfx');
+  if (bs) bs.value = Math.round(mpBgmVol * 100);
+  if (ss) ss.value = Math.round(mpSfxVol * 100);
+}
 updateMpMuteBtn();
+initMpVolSliders();
+
+function setBgmVol(v) {
+  mpBgmVol = Math.max(0, Math.min(1, v / 100));
+  try { localStorage.setItem('survivors_bgm_vol', mpBgmVol.toFixed(2)); } catch (_) {}
+  if (!mpMusicMuted && mpBgMusicGain) {
+    try {
+      const ac = getAudio();
+      mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+      mpBgMusicGain.gain.linearRampToValueAtTime(mpBgmVol, ac.currentTime + 0.1);
+    } catch (_) {}
+  }
+}
+function setSfxVol(v) {
+  mpSfxVol = Math.max(0, Math.min(1, v / 100));
+  try { localStorage.setItem('survivors_sfx_vol', mpSfxVol.toFixed(2)); } catch (_) {}
+  if (sfxMaster) sfxMaster.gain.value = mpSfxVol;
+}
+function toggleVolPanel() {
+  const p = document.getElementById('vol-panel');
+  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
 
 function startMpMusic(mapId) {
   try {
@@ -324,7 +355,7 @@ function startMpMusic(mapId) {
     }
     mpBgMusic.currentTime = 0;
     mpBgMusic.play().catch(() => {});
-    const target = mpMusicMuted ? 0 : MP_MUSIC_VOL;
+    const target = mpMusicMuted ? 0 : mpBgmVol;
     mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
     mpBgMusicGain.gain.setValueAtTime(0, ac.currentTime);
     mpBgMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
@@ -340,7 +371,7 @@ function toggleMpMute() {
     try {
       const ac = getAudio();
       mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      mpBgMusicGain.gain.linearRampToValueAtTime(mpMusicMuted ? 0 : MP_MUSIC_VOL, ac.currentTime + 0.3);
+      mpBgMusicGain.gain.linearRampToValueAtTime(mpMusicMuted ? 0 : mpBgmVol, ac.currentTime + 0.3);
     } catch (_) {}
   }
 }
@@ -1095,6 +1126,9 @@ window.addEventListener('load', () => {
 window.startGame = () => (renderStarted && iDied ? respawnGame() : joinGame());
 window.selectWeapon = selectWeapon;
 window.toggleMute = toggleMpMute;
+window.setBgmVol = setBgmVol;
+window.setSfxVol = setSfxVol;
+window.toggleVolPanel = toggleVolPanel;
 window.showBestiary = showBestiary;
 window.hideBestiary = hideBestiary;
 

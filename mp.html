@@ -159,7 +159,14 @@ canvas { touch-action: none; }
     <span id="hud-players" class="mp-only"></span>
     <span id="hud-wave">Wave 1</span>
     <span id="hud-weapons"></span>
-    <button id="mute-btn" onclick="toggleMute()" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;padding:2px 6px;">🔊</button>
+    <div id="audio-wrap" style="position:relative;display:inline-block;pointer-events:auto;">
+      <button id="mute-btn" onclick="toggleMute()" style="background:none;border:none;color:#888;font-size:1.2rem;cursor:pointer;padding:2px 6px;">🔊</button>
+      <button id="vol-toggle" onclick="toggleVolPanel()" style="background:none;border:none;color:#666;font-size:0.7rem;cursor:pointer;padding:2px 4px;" title="Volume">▼</button>
+      <div id="vol-panel" style="display:none;position:absolute;top:100%;right:0;background:#181825;border:1px solid #444;border-radius:6px;padding:10px 14px;min-width:160px;z-index:50;pointer-events:auto;">
+        <label style="color:#999;font-size:0.7rem;display:flex;align-items:center;gap:6px;margin-bottom:8px;">🎵 BGM<input type="range" id="vol-bgm" min="0" max="100" value="45" style="flex:1;accent-color:#e74c3c;height:4px;" oninput="setBgmVol(this.value)"></label>
+        <label style="color:#999;font-size:0.7rem;display:flex;align-items:center;gap:6px;">⚡ SFX<input type="range" id="vol-sfx" min="0" max="100" value="60" style="flex:1;accent-color:#3498db;height:4px;" oninput="setSfxVol(this.value)"></label>
+      </div>
+    </div>
   </div>
 </div>
 

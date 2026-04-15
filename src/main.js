@@ -58,7 +58,7 @@ function getAudio() {
   if (!audioCtx) {
     audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     sfxMaster = audioCtx.createGain();
-    sfxMaster.gain.value = 0.6; // SFX master volume (< 1.0 so BGM stays audible)
+    sfxMaster.gain.value = sfxVol; // SFX master volume — driven by slider
     sfxMaster.connect(audioCtx.destination);
   }
   return audioCtx;
@@ -345,8 +345,12 @@ const MAP_TRACKS = {
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
-const MUSIC_VOL = 0.45;
-const MENU_VOL = 0.30;
+// Volume levels — persisted per-slider in localStorage.
+let bgmVol = 0.45;
+let sfxVol = 0.60;
+try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) bgmVol = +v; } catch (_) {}
+try { const v = localStorage.getItem('survivors_sfx_vol'); if (v !== null) sfxVol = +v; } catch (_) {}
+const MENU_VOL_RATIO = 0.67; // menu music plays at 67% of bgm slider
 
 let bgMusic = null;
 let bgMusicGain = null;
@@ -361,7 +365,41 @@ function updateMuteBtn() {
   const b = document.getElementById('mute-btn');
   if (b) b.textContent = musicMuted ? '🔇' : '🔊';
 }
+function initVolSliders() {
+  const bs = document.getElementById('vol-bgm');
+  const ss = document.getElementById('vol-sfx');
+  if (bs) bs.value = Math.round(bgmVol * 100);
+  if (ss) ss.value = Math.round(sfxVol * 100);
+}
 updateMuteBtn();
+initVolSliders();
+
+function setBgmVol(v) {
+  bgmVol = Math.max(0, Math.min(1, v / 100));
+  try { localStorage.setItem('survivors_bgm_vol', bgmVol.toFixed(2)); } catch (_) {}
+  if (!musicMuted) {
+    try {
+      const ac = getAudio();
+      if (bgMusicGain) {
+        bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+        bgMusicGain.gain.linearRampToValueAtTime(bgmVol, ac.currentTime + 0.1);
+      }
+      if (menuMusicGain) {
+        menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
+        menuMusicGain.gain.linearRampToValueAtTime(bgmVol * MENU_VOL_RATIO, ac.currentTime + 0.1);
+      }
+    } catch (_) {}
+  }
+}
+function setSfxVol(v) {
+  sfxVol = Math.max(0, Math.min(1, v / 100));
+  try { localStorage.setItem('survivors_sfx_vol', sfxVol.toFixed(2)); } catch (_) {}
+  if (sfxMaster) sfxMaster.gain.value = sfxVol;
+}
+function toggleVolPanel() {
+  const p = document.getElementById('vol-panel');
+  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+}
 
 // Menu music — plays on the start/death screen. Fades out when game
 // starts, fades back in on return. Barn's E dorian 78 BPM ambient.
@@ -380,7 +418,7 @@ function startMenuMusic() {
     mediaSrc.connect(menuMusicGain);
     menuMusicGain.connect(ac.destination);
     menuMusic.play().catch(() => {});
-    const target = musicMuted ? 0 : MENU_VOL;
+    const target = musicMuted ? 0 : bgmVol * MENU_VOL_RATIO;
     menuMusicGain.gain.setValueAtTime(0, ac.currentTime);
     menuMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
     menuMusicStarted = true;
@@ -404,7 +442,7 @@ function fadeInMenuMusic() {
     const ac = getAudio();
     if (ac.state === 'suspended') ac.resume();
     menuMusic.play().catch(() => {});
-    const target = musicMuted ? 0 : MENU_VOL;
+    const target = musicMuted ? 0 : bgmVol * MENU_VOL_RATIO;
     menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
     menuMusicGain.gain.setValueAtTime(menuMusicGain.gain.value, ac.currentTime);
     menuMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
@@ -441,7 +479,7 @@ function startMusic() {
     bgMusic.currentTime = 0;
     bgMusic.play().catch(() => {});
     // fade in over 2s (skip if muted)
-    const target = musicMuted ? 0 : MUSIC_VOL;
+    const target = musicMuted ? 0 : bgmVol;
     bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
     bgMusicGain.gain.setValueAtTime(0, ac.currentTime);
     bgMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
@@ -469,11 +507,11 @@ function toggleMuteMusic() {
     const ac = getAudio();
     if (bgMusicGain) {
       bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      bgMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : MUSIC_VOL, ac.currentTime + 0.3);
+      bgMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : bgmVol, ac.currentTime + 0.3);
     }
     if (menuMusicGain) {
       menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
-      menuMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : MENU_VOL, ac.currentTime + 0.3);
+      menuMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : bgmVol * MENU_VOL_RATIO, ac.currentTime + 0.3);
     }
   } catch (_) {}
 }
@@ -1353,6 +1391,9 @@ window.hidePrestigeShop = hidePrestigeShop;
 window.purchaseUnlock = purchaseUnlock;
 window.toggleCosmeticEquip = toggleCosmeticEquip;
 window.toggleMute = toggleMuteMusic;
+window.setBgmVol = setBgmVol;
+window.setSfxVol = setSfxVol;
+window.toggleVolPanel = toggleVolPanel;
 window.showBestiary = showBestiary;
 window.hideBestiary = hideBestiary;
 
