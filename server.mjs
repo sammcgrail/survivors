@@ -85,6 +85,8 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
     activeTrail: prestige ? prestige.activeTrail : null,
   };
   if (prestige) applyUnlocks(p, prestige.unlocks);
+  // Headstart prestige bumps level; scale xp threshold to match.
+  for (let i = 1; i < p.level; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
   return p;
 }
 
@@ -298,6 +300,12 @@ wss.on('connection', (ws) => {
         arena: game.arena,
         map: { id: game.mapId, obstacles: game.obstacles },
       }));
+      // Headstart prestige: queue level-up choice for the bonus level so
+      // the player picks a perk on join. Processed next tick when
+      // game.players is rebuilt from the players Map.
+      for (let i = 1; i < player.level; i++) {
+        game.events.push({ type: 'levelUp', level: i + 1, pid });
+      }
       return;
     }
     if (!player) return;
@@ -318,6 +326,10 @@ wss.on('connection', (ws) => {
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
       const prestige = sanitizePrestige(msg.prestige);
       Object.assign(player, makePlayer(pid, player.name, weapon, game.rng, MAPS[game.mapId].spawns[0], prestige));
+      // Headstart: queue level-up choices on respawn too.
+      for (let i = 1; i < player.level; i++) {
+        game.events.push({ type: 'levelUp', level: i + 1, pid });
+      }
     } else if (msg.type === 'choose') {
       // Reply to a pending levelup. choiceId must be one of the three the
       // server offered; otherwise drop silently (catch fat-finger races).

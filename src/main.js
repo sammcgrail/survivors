@@ -453,6 +453,13 @@ function initGame() {
 
   applyPrestigeUnlocks(p);
 
+  // Headstart prestige bumps level before the game starts. Scale xp
+  // thresholds to match and queue a level-up choice for the bonus level.
+  const prestigeLevels = p.level - 1;
+  if (prestigeLevels > 0) {
+    for (let i = 0; i < prestigeLevels; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
+  }
+
   return {
     player: p,
     players: [p], // sim modules iterate g.players; SP is just a 1-elem list
@@ -1795,6 +1802,11 @@ function startGame() {
   document.getElementById('level-up').style.display = 'none';
   paused = false;
   game = initGame();
+  // Headstart prestige: queue level-up choices for bonus levels so the
+  // player picks a perk immediately on game start.
+  for (let i = 1; i < game.player.level; i++) {
+    game.events.push({ type: EVT.LEVEL_UP, level: i + 1, pid: game.player.id });
+  }
   const nameEl = document.getElementById('name-input');
   if (nameEl && nameEl.value.trim()) game.playerName = nameEl.value.trim();
   startMusic();
