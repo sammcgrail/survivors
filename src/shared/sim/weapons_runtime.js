@@ -5,8 +5,25 @@
 import { EVT, emit } from './events.js';
 import { damageEnemy } from './damage.js';
 
+// Random-N enemies inside a circular range, drawn via Fisher-Yates so
+// the choice tracks g.rng deterministically. Used by lightning_field +
+// thunder_god's field tick.
+function randomEnemiesInRange(g, x, y, radius, count) {
+  const inRange = [];
+  for (const e of g.enemies) {
+    const dx = e.x - x, dy = e.y - y;
+    if (dx * dx + dy * dy < radius * radius) inRange.push(e);
+  }
+  for (let i = inRange.length - 1; i > 0; i--) {
+    const j = g.rng.int(i + 1);
+    [inRange[i], inRange[j]] = [inRange[j], inRange[i]];
+  }
+  return inRange.slice(0, count);
+}
+
 // --- one-shot fire dispatch (called when w.timer hits 0) ---
-// breath, orbit, shield, lightning_field don't "fire" — always-on.
+// breath/orbit/shield/lightning_field/thunder_god/meteor_orbit/fortress
+// have always-on ticks too — see updateWeapons below.
 function fireWeapon(g, w, p) {
   if (w.type === 'spit')         fireSpit(g, w, p);
   else if (w.type === 'charge')  fireCharge(g, w, p);
@@ -14,7 +31,7 @@ function fireWeapon(g, w, p) {
   else if (w.type === 'meteor')  fireMeteor(g, w, p);
   else if (w.type === 'dragon_storm') fireDragonStorm(g, w, p);
   else if (w.type === 'thunder_god')  fireThunderGod(g, w, p);
-  else if (w.type === 'meteor_orbit') fireMeteorOrbit(g, w, p);
+  else if (w.type === 'meteor_orbit') fireMeteor(g, w, p);
   else if (w.type === 'fortress')     fireCharge(g, w, p);
 }
 
@@ -84,12 +101,7 @@ function fireChain(g, w, p) {
   const chainPoints = [{ x: p.x, y: p.y }];
   for (const t of targets) {
     chainPoints.push({ x: t.x, y: t.y });
-    for (let j = g.enemies.length - 1; j >= 0; j--) {
-      if (g.enemies[j] === t) {
-        damageEnemy(g, g.enemies[j], w.damage * p.damageMulti, p.id);
-        break;
-      }
-    }
+    damageEnemy(g, t, w.damage * p.damageMulti, p.id);
   }
   g.chainEffects.push({ points: chainPoints, life: 0.2, color: w.color });
 }
@@ -137,7 +149,8 @@ function fireDragonStorm(g, w, p) {
 }
 
 // Iterates every alive player and their weapons. Cooldowns + fire
-// dispatch + always-on per-type ticks (orbit/shield/lightning_field).
+// dispatch + always-on per-type ticks (orbit, shield, lightning_field,
+// meteor_orbit, fortress, thunder_god field).
 export function updateWeapons(g, dt) {
   for (const p of g.players) {
     if (!p.alive) continue;
@@ -209,23 +222,9 @@ function tickShield(g, w, p, dt) {
 }
 
 function tickLightningField(g, w, p) {
-  const inRange = [];
-  for (const e of g.enemies) {
-    const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
-    if (d2 < w.radius * w.radius) inRange.push(e);
-  }
-  for (let z = inRange.length - 1; z > 0; z--) {
-    const r = g.rng.int(z + 1);
-    [inRange[z], inRange[r]] = [inRange[r], inRange[z]];
-  }
-  const targets = inRange.slice(0, w.zapCount);
+  const targets = randomEnemiesInRange(g, p.x, p.y, w.radius, w.zapCount);
   for (const t of targets) {
-    for (let j = g.enemies.length - 1; j >= 0; j--) {
-      if (g.enemies[j] === t) {
-        damageEnemy(g, g.enemies[j], w.damage * p.damageMulti, p.id);
-        break;
-      }
-    }
+    damageEnemy(g, t, w.damage * p.damageMulti, p.id);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'lightning_field', pid: p.id });
@@ -290,48 +289,32 @@ function fireThunderGod(g, w, p) {
 }
 
 function tickThunderField(g, w, p) {
-  const inRange = [];
-  for (const e of g.enemies) {
-    const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
-    if (d2 < w.fieldRadius * w.fieldRadius) inRange.push(e);
-  }
-  if (inRange.length === 0) return;
   // Every `overchargeEvery`th fire hits everyone in range at 2x and
   // stuns — a rhythmic crowd-wipe that makes the weapon feel climactic.
   const overcharge = w.fireCount > 0 && w.fireCount % w.overchargeEvery === 0;
   if (overcharge) {
-    for (const e of inRange) {
+    let any = false;
+    for (const e of g.enemies) {
+      const dx = e.x - p.x, dy = e.y - p.y;
+      if (dx * dx + dy * dy >= w.fieldRadius * w.fieldRadius) continue;
+      any = true;
       damageEnemy(g, e, w.fieldDamage * 2 * p.damageMulti, p.id);
       e.stunTimer = Math.max(e.stunTimer || 0, 0.3);
     }
-    emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god_overcharge', pid: p.id });
+    if (any) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god_overcharge', pid: p.id });
     return;
   }
-  for (let z = inRange.length - 1; z > 0; z--) {
-    const r = g.rng.int(z + 1);
-    [inRange[z], inRange[r]] = [inRange[r], inRange[z]];
-  }
-  const targets = inRange.slice(0, w.zapCount);
+  const targets = randomEnemiesInRange(g, p.x, p.y, w.fieldRadius, w.zapCount);
   for (const t of targets) {
     damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
   }
-  emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god', pid: p.id });
+  if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god', pid: p.id });
 }
 
 // --- Meteor Orbit ---
-function fireMeteorOrbit(g, w, p) {
-  if (g.enemies.length === 0) return;
-  const target = g.enemies[g.rng.int(g.enemies.length)];
-  g.meteorEffects.push({
-    x: target.x, y: target.y,
-    radius: w.blastRadius,
-    damage: w.damage * p.damageMulti,
-    life: 0.5, phase: 'warn',
-    color: w.color, owner: p.id,
-  });
-  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius });
-}
+// Big meteor on cooldown is identical to fireMeteor — same field names
+// (damage, blastRadius). Mini-meteors are per-blade-kill in tickMeteorOrbit.
 
 function tickMeteorOrbit(g, w, p, dt) {
   w.phase = (w.phase || 0) + w.rotSpeed * dt;
