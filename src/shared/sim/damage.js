@@ -35,23 +35,17 @@ export function damageEnemy(g, e, dmg, killerId) {
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
       spawnHeart(g, e.x, e.y, 15);
     }
-    emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name, radius: e.radius, killer: killerId });
-    // Death shockwave — small expanding ring at the kill site. Sized
-    // by enemy class so a boss death feels different from a swarm
-    // death. Pushed onto meteorEffects so the existing render path
-    // handles it in both SP and MP (server snapshot ships these).
-    const ringR = e.name === 'boss' ? 220
-               : e.name === 'elite' || e.name === 'spawner' ? 120
-               : e.name === 'brute' || e.name === 'tank' ? 70
-               : 35;
-    g.meteorEffects.push({
+    // Death VFX is driven entirely by the ENEMY_KILLED event in
+    // applySimEvent now — per-enemy personality bursts replace the
+    // old uniform meteor-ring so kills don't all read like a meteor
+    // explosion. Velocity / motion direction lets the renderer
+    // shape an asymmetric burst (forward shred for fast enemies,
+    // chunky downward debris for tanks, etc).
+    emit(g, EVT.ENEMY_KILLED, {
       x: e.x, y: e.y,
-      radius: ringR,
-      damage: 0,                // visual-only — applied via damageEnemy already
-      life: 0.35,
-      phase: 'explode',
-      color: e.color,
-      owner: -1,                // not attributable to any player
+      color: e.color, name: e.name, radius: e.radius,
+      vx: e.vx, vy: e.vy,
+      killer: killerId,
     });
     e.dying = 0.2; // 200ms death animation
     g.kills++;
