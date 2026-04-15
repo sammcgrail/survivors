@@ -256,6 +256,11 @@ function gameSnapshot() {
     gems: game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y), xp: gem.xp })),
     projectiles: game.projectiles.map(pr => ({
       x: r1(pr.x), y: r1(pr.y), radius: pr.radius, owner: pr.owner,
+      // Color + velocity ride along so the shared projectile render
+      // can draw trail sprites and per-bullet glow without an
+      // owner-id lookup at draw time.
+      color: pr.color,
+      vx: r1(pr.vx), vy: r1(pr.vy),
     })),
     chainEffects: game.chainEffects.map(c => ({
       points: c.points.map(pt => ({ x: r1(pt.x), y: r1(pt.y) })),

@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects } from './shared/render.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -29,10 +29,6 @@ const spriteSheet = new Image();
 spriteSheet.src = 'sprites.png';
 let spritesReady = false;
 spriteSheet.onload = () => { spritesReady = true; };
-
-// Most enemy names match their sprite name; only ghost diverges (uses
-// skull sprite). Server doesn't broadcast `sprite`, so we derive it.
-const ENEMY_SPRITES = { ghost: 'skull' };
 
 const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
@@ -920,50 +916,10 @@ function render(dt) {
     }
   }
 
-  // --- enemies ---
-  for (const e of state.enemies) {
-    if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
-    markSeen(e.name, state.wave); // bestiary discovery
-
-    const spriteScale = e.radius / 8;
-    const spriteName = ENEMY_SPRITES[e.name] || e.name;
-
-    if (e.hitFlash > 0) {
-      ctx.fillStyle = '#fff';
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (!drawSprite(spriteName, e.x, e.y, spriteScale)) {
-      ctx.fillStyle = e.color;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (e.hp < e.maxHp) {
-      drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
-    }
-  }
-
-  // --- projectiles ---
-  for (const proj of state.projectiles) {
-    if (proj.x < cx - 30 || proj.x > cx + W + 30 || proj.y < cy - 30 || proj.y > cy + H + 30) continue;
-
-    // Find owner color
-    let projColor = '#9b59b6';
-    const owner = state.players.find(p => p.id === proj.owner);
-    if (owner) projColor = owner.color;
-
-    ctx.shadowColor = projColor;
-    ctx.shadowBlur = 10;
-    if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
-      ctx.fillStyle = projColor;
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, proj.radius || 5, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-  }
+  drawEnemies(ctx, state.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, state.wave));
+  // Server now ships proj.color + vx/vy on the snapshot, so MP gets the
+  // same trail + ember treatment SP has had — no more flat circles.
+  drawProjectiles(ctx, state.projectiles, drawSprite, particles, cx, cy, W, H);
 
   drawChainEffects(ctx, state.chainEffects || []);
   drawMeteorEffects(ctx, state.meteorEffects || []);

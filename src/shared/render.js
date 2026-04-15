@@ -81,6 +81,107 @@ export function drawParticles(ctx, particles) {
   ctx.globalAlpha = 1;
 }
 
+// Most enemy `name` values match their sprite name. Ghost is the only
+// outlier (uses the skull sprite). Used by drawEnemies when an enemy
+// snapshot lacks an explicit `sprite` field (server doesn't ship it).
+const ENEMY_NAME_TO_SPRITE = { ghost: 'skull' };
+
+// Render a list of enemies — handles dying-animation shrink + fade,
+// hit-flash white overlay, sprite + colored-circle fallback, and the
+// HP bar. Viewport-culled by (cx,cy,W,H) so off-screen enemies skip.
+//
+// Optional `onSeen(name)` is called once per visible non-dying enemy
+// — SP wires this to the bestiary discovery hook so playing
+// continuously builds out the catalog.
+export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
+  for (const e of enemies) {
+    if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
+    const spriteName = e.sprite || ENEMY_NAME_TO_SPRITE[e.name] || e.name;
+
+    if (e.dying !== undefined) {
+      const t = e.dying / 0.2;
+      const dyingScale = (0.3 + t * 0.7) * (e.radius / 8);
+      if (!drawSprite(spriteName, e.x, e.y, dyingScale, t)) {
+        const prev = ctx.globalAlpha;
+        ctx.globalAlpha = t;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(e.x, e.y, e.radius * (0.3 + t * 0.7), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = prev;
+      }
+      continue;
+    }
+
+    if (onSeen) onSeen(e.name);
+
+    if (!drawSprite(spriteName, e.x, e.y, e.radius / 8)) {
+      ctx.fillStyle = e.color;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (e.hitFlash > 0) {
+      ctx.fillStyle = `rgba(255,255,255,${Math.min(e.hitFlash * 5, 0.6)})`;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.radius * 0.8, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    if (e.hp < e.maxHp) {
+      drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
+    }
+  }
+}
+
+// Render a list of projectiles — 4-step trail sprites + main projectile
+// sprite with shadow glow, colored-circle fallback. If `particles` is
+// passed, drops occasional embers behind each projectile so the trail
+// reads through the sprite at high speed.
+export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy, W, H) {
+  for (const proj of projectiles) {
+    if (proj.x < cx - 30 || proj.x > cx + W + 30 || proj.y < cy - 30 || proj.y > cy + H + 30) continue;
+    const speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
+    if (speed > 0) {
+      const nx = -proj.vx / speed;
+      const ny = -proj.vy / speed;
+      for (let t = 1; t <= 4; t++) {
+        const alpha = 0.3 - t * 0.06;
+        const tScale = (1 - t * 0.15) * 0.7;
+        const tx = proj.x + nx * t * 6;
+        const ty = proj.y + ny * t * 6;
+        if (!drawSprite('spitTrail', tx, ty, tScale, alpha)) {
+          ctx.globalAlpha = alpha;
+          ctx.fillStyle = proj.color;
+          ctx.beginPath();
+          ctx.arc(tx, ty, proj.radius * (1 - t * 0.15), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+      }
+    }
+    ctx.shadowColor = proj.color;
+    ctx.shadowBlur = 10;
+    if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
+      ctx.fillStyle = proj.color;
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+    if (particles && Math.random() < 0.4) {
+      particles.push({
+        x: proj.x + (Math.random() - 0.5) * 4,
+        y: proj.y + (Math.random() - 0.5) * 4,
+        vx: 0, vy: 0,
+        life: 0.25, maxLife: 0.25,
+        radius: 1.5 + Math.random(),
+        color: proj.color,
+      });
+    }
+  }
+}
+
 // Chain-lightning effects — two passes per bolt (thick translucent
 // outer glow + thin bright inner core), two jagged midpoints per
 // segment so the bolts read as proper electric arcs. Used for chain
