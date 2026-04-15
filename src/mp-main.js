@@ -25,6 +25,64 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
+// Minimap overlay — fixed bottom-right, MP-only spatial awareness for
+// 8-player games. Pure client; reads from currState which renderWorld
+// is already drawing from.
+const mmCanvas = document.createElement('canvas');
+const MM = 140;
+mmCanvas.width = mmCanvas.height = MM;
+Object.assign(mmCanvas.style, {
+  position: 'fixed', bottom: '12px', right: '12px',
+  width: MM + 'px', height: MM + 'px',
+  borderRadius: '4px', pointerEvents: 'none', zIndex: '50',
+});
+document.body.appendChild(mmCanvas);
+const mmCtx = mmCanvas.getContext('2d');
+
+function drawMinimap() {
+  if (!currState) return;
+  const { players = [], enemies = [], gems = [] } = currState;
+  const aw = (arena && arena.w) || 3000;
+  const ah = (arena && arena.h) || 3000;
+  const sx = MM / aw, sy = MM / ah;
+
+  mmCtx.clearRect(0, 0, MM, MM);
+  mmCtx.fillStyle = 'rgba(0,0,0,0.55)';
+  mmCtx.fillRect(0, 0, MM, MM);
+
+  mmCtx.fillStyle = '#f1c40f';
+  for (const g of gems) mmCtx.fillRect(g.x * sx - 0.5, g.y * sy - 0.5, 1, 1);
+
+  mmCtx.fillStyle = '#888';
+  for (const e of enemies) {
+    mmCtx.beginPath();
+    mmCtx.arc(e.x * sx, e.y * sy, 1.5, 0, Math.PI * 2);
+    mmCtx.fill();
+  }
+
+  for (const p of players) {
+    if (!p.alive) continue;
+    const mx = p.x * sx, my = p.y * sy;
+    const isYou = p.id === myId;
+    const r = isYou ? 4 : 3;
+    mmCtx.fillStyle = p.color || '#ffffff';
+    mmCtx.beginPath();
+    mmCtx.arc(mx, my, r, 0, Math.PI * 2);
+    mmCtx.fill();
+    if (isYou) {
+      mmCtx.strokeStyle = '#ffffff';
+      mmCtx.lineWidth = 1;
+      mmCtx.beginPath();
+      mmCtx.arc(mx, my, r + 2, 0, Math.PI * 2);
+      mmCtx.stroke();
+    }
+  }
+
+  mmCtx.strokeStyle = 'rgba(255,255,255,0.3)';
+  mmCtx.lineWidth = 1;
+  mmCtx.strokeRect(0.5, 0.5, MM - 1, MM - 1);
+}
+
 // --- sprite sheet ---
 const spriteSheet = new Image();
 spriteSheet.src = 'sprites.png';
@@ -840,6 +898,8 @@ function render(dt) {
       if (xpFill) xpFill.style.width = `${Math.min(100, (me.xp / me.xpToLevel) * 100)}%`;
     }
   }
+
+  drawMinimap();
 }
 
 // ============================================================
