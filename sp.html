@@ -328,6 +328,29 @@ canvas { touch-action: none; }
   <button onclick="hidePrestigeShop()">CLOSE</button>
 </div>
 
+<script>
+// Shuffle weapon card order so spit isn't always first (prevents
+// default-click bias). Both start-screen and respawn selects get
+// shuffled. The first card after shuffle becomes the selected default.
+document.addEventListener('DOMContentLoaded', () => {
+  for (const sel of document.querySelectorAll('.weapon-select')) {
+    const cards = [...sel.children];
+    for (let i = cards.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      sel.appendChild(cards[j]);
+      [cards[i], cards[j]] = [cards[j], cards[i]];
+    }
+    // Select the first card after shuffle
+    cards.forEach(c => c.classList.remove('selected'));
+    const first = sel.querySelector('.weapon-card');
+    if (first) {
+      first.classList.add('selected');
+      const w = first.dataset.weapon;
+      if (typeof selectWeapon === 'function') selectWeapon(w);
+    }
+  }
+});
+</script>
 <script src="bundle.js"></script>
 </body>
 </html>
