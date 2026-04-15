@@ -568,9 +568,10 @@ export function drawHeartDrops(ctx, heartDrops, drawSprite, cx, cy, W, H) {
 }
 
 // Player body — skin glow + shadow + sprite with skin-tint overlay,
-// fallback circle. Caller handles name/HP/decorations since those
-// differ between SP (single player + facing) and MP (name + isMe
-// arrow + level badge).
+// fallback circle. Auto-flickers on iframes when p.iframes > 0 and
+// flashes shadow white for the hit feedback. Caller handles name/
+// HP/decorations since those differ between SP (single player +
+// facing) and MP (name + isMe arrow + level badge).
 //
 // `opts` fields:
 //   skin, alpha, radius, glowColor, fallbackFill, strokeOnFallback
@@ -580,18 +581,21 @@ export function drawPlayerBody(ctx, p, drawSprite, time, opts = {}) {
     alpha = 1,
     radius = 14,
     glowColor = '#3498db',
-    shadowColor = glowColor,
-    shadowBlur,
     fallbackFill = '#eee',
     strokeOnFallback = true,
   } = opts;
+  const iframes = p.iframes || 0;
+  const flickerHide = iframes > 0 && Math.floor(iframes * 10) % 2;
+  const effAlpha = flickerHide ? alpha * 0.4 : alpha;
 
-  ctx.shadowColor = shadowColor;
-  ctx.shadowBlur = shadowBlur !== undefined ? shadowBlur : (skin === 'skin_shadow' ? 25 : 15);
+  ctx.shadowColor = iframes > 0 ? '#fff' : glowColor;
+  ctx.shadowBlur = opts.shadowBlur !== undefined
+    ? opts.shadowBlur
+    : (skin === 'skin_shadow' ? 25 : 15);
 
-  drawSkinAura(ctx, p.x, p.y, radius, skin, time, alpha);
+  drawSkinAura(ctx, p.x, p.y, radius, skin, time, effAlpha);
 
-  const drawn = drawSprite('player', p.x, p.y, 2, alpha);
+  const drawn = drawSprite('player', p.x, p.y, 2, effAlpha);
   if (drawn && skin) {
     const tintColor = skin === 'skin_gold' ? 'rgba(241, 196, 15, 0.35)'
                     : skin === 'skin_shadow' ? 'rgba(100, 30, 150, 0.4)'
@@ -605,6 +609,8 @@ export function drawPlayerBody(ctx, p, drawSprite, time, opts = {}) {
     }
   }
   if (!drawn) {
+    const prev = ctx.globalAlpha;
+    ctx.globalAlpha = effAlpha;
     ctx.fillStyle = fallbackFill;
     ctx.beginPath();
     ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -614,8 +620,34 @@ export function drawPlayerBody(ctx, p, drawSprite, time, opts = {}) {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
+    ctx.globalAlpha = prev;
   }
   ctx.shadowBlur = 0;
+}
+
+// Facing indicator — small triangle pointing in p.facing direction.
+// No-op when facing is missing (peer at rest, or pre-snapshot SP
+// ticks). Auto-matches the iframe flicker from drawPlayerBody so the
+// indicator fades on the same frames as the body.
+export function drawFacingIndicator(ctx, p, color, radius = 14) {
+  if (!p.facing) return;
+  const fd = Math.sqrt(p.facing.x ** 2 + p.facing.y ** 2);
+  if (fd < 0.01) return;
+  const iframes = p.iframes || 0;
+  const flickerHide = iframes > 0 && Math.floor(iframes * 10) % 2;
+  const fx = p.facing.x / fd;
+  const fy = p.facing.y / fd;
+  const perpX = -fy;
+  const perpY = fx;
+  ctx.fillStyle = color;
+  ctx.globalAlpha = flickerHide ? 0.4 : 1;
+  ctx.beginPath();
+  ctx.moveTo(p.x + fx * (radius + 6), p.y + fy * (radius + 6));
+  ctx.lineTo(p.x + fx * radius - perpX * 4, p.y + fy * radius - perpY * 4);
+  ctx.lineTo(p.x + fx * radius + perpX * 4, p.y + fy * radius + perpY * 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.globalAlpha = 1;
 }
 
 // Single entry point for the shared middle of the render pipeline.

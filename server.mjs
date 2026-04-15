@@ -244,6 +244,12 @@ function gameSnapshot() {
       // applies them once. Only ship when non-default to save bytes.
       ...(p.sizeMulti && p.sizeMulti !== 1 ? { sizeMulti: r2(p.sizeMulti) } : {}),
       ...(p.projectileBonus ? { projectileBonus: p.projectileBonus } : {}),
+      // Facing + iframes drive shared visuals: direction triangle +
+      // damage-flicker alpha. Both ship only when meaningful to save
+      // bytes on the resting-state path.
+      ...(p.facing && (p.facing.x || p.facing.y)
+        ? { facing: { x: r2(p.facing.x), y: r2(p.facing.y) } } : {}),
+      ...(p.iframes > 0 ? { iframes: r2(p.iframes) } : {}),
       weapons: p.weapons.map(snapshotWeapon),
       activeSkin: p.activeSkin,
       activeTrail: p.activeTrail,

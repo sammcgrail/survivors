@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1108,44 +1108,18 @@ function render() {
 
   // --- player ---
   if (p.alive) {
-    const flickerHide = p.iframes > 0 && Math.floor(p.iframes * 10) % 2;
-    const playerAlpha = flickerHide ? 0.4 : 1.0;
     const skin = g._activeSkin;
     const glowColor = skin === 'skin_gold' ? '#f39c12'
                     : skin === 'skin_shadow' ? '#9b59b6'
                     : '#3498db';
-    const fallbackFill = skin === 'skin_gold' ? (flickerHide ? 'rgba(241,196,15,0.5)' : '#f1c40f')
-                       : skin === 'skin_shadow' ? (flickerHide ? 'rgba(100,30,150,0.5)' : '#6c3483')
-                       : (flickerHide ? 'rgba(255,255,255,0.5)' : '#eee');
+    const fallbackFill = skin === 'skin_gold' ? '#f1c40f'
+                       : skin === 'skin_shadow' ? '#6c3483'
+                       : '#eee';
 
     drawPlayerBody(ctx, p, drawSprite, g.time, {
-      skin,
-      alpha: playerAlpha,
-      radius: p.radius,
-      glowColor,
-      shadowColor: p.iframes > 0 ? '#fff' : glowColor,
-      fallbackFill,
+      skin, radius: p.radius, glowColor, fallbackFill,
     });
-
-    // facing indicator (little triangle pointing in move direction)
-    const fd = Math.sqrt(p.facing.x ** 2 + p.facing.y ** 2);
-    if (fd > 0.01) {
-      const fx = p.facing.x / fd;
-      const fy = p.facing.y / fd;
-      const tipX = p.x + fx * (p.radius + 6);
-      const tipY = p.y + fy * (p.radius + 6);
-      const perpX = -fy;
-      const perpY = fx;
-      ctx.fillStyle = glowColor;
-      ctx.globalAlpha = playerAlpha;
-      ctx.beginPath();
-      ctx.moveTo(tipX, tipY);
-      ctx.lineTo(p.x + fx * p.radius - perpX * 4, p.y + fy * p.radius - perpY * 4);
-      ctx.lineTo(p.x + fx * p.radius + perpX * 4, p.y + fy * p.radius + perpY * 4);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+    drawFacingIndicator(ctx, p, glowColor, p.radius);
 
     // name tag above player
     ctx.fillStyle = '#fff';
