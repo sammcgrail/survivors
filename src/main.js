@@ -172,7 +172,33 @@ let keys = { up: false, down: false, left: false, right: false };
 let analogMove = { x: 0, y: 0 }; // smooth analog input from touch
 let paused = false;
 let selectedWeapon = 'spit'; // default starting weapon
-let selectedMapId = 'neon';    // default map (code-rendered abstract grid)
+let selectedMapId = 'random';  // default: random pick each game
+
+const MAP_LABELS = {
+  random:     { label: 'Random',  icon: '🎲' },
+  arena:      { label: 'Arena',   icon: '⚔️' },
+  forest:     { label: 'Forest',  icon: '🌲' },
+  ruins:      { label: 'Ruins',   icon: '🏛️' },
+  neon:       { label: 'Neon',    icon: '⚡' },
+  wilderness: { label: 'Wild',    icon: '🌿' },
+  catacombs:  { label: 'Tombs',   icon: '💀' },
+  graveyard:  { label: 'Graves',  icon: '⚰️' },
+};
+
+function renderMapPicker() {
+  const container = document.getElementById('map-picker-cards');
+  if (!container) return;
+  container.innerHTML = '';
+  const options = ['random', ...Object.keys(MAPS)];
+  for (const id of options) {
+    const meta = MAP_LABELS[id] || { label: id, icon: '🗺️' };
+    const card = document.createElement('div');
+    card.className = `map-card${selectedMapId === id ? ' map-card--selected' : ''}`;
+    card.innerHTML = `<span style="font-size:18px">${meta.icon}</span><span style="font-size:11px">${meta.label}</span>`;
+    card.addEventListener('click', () => selectMap(id));
+    container.appendChild(card);
+  }
+}
 
 function selectWeapon(type) {
   selectedWeapon = type;
@@ -181,22 +207,19 @@ function selectWeapon(type) {
     c.classList.toggle('selected', c.dataset.weapon === type);
   });
 }
-// Map dropdown handler. Persists choice across reloads via localStorage
-// so users don't have to re-pick every time. Bundle loads at end of
-// body, so the DOM lookup below is safe to run synchronously.
+// Map picker handler. Accepts 'random' or any MAPS key. Persists
+// choice in localStorage; bundle loads at end of body so DOM is ready.
 function selectMap(id) {
-  if (!MAPS[id]) return;
+  if (id !== 'random' && !MAPS[id]) return;
   selectedMapId = id;
   try { localStorage.setItem('survivors_map', id); } catch (e) {}
+  renderMapPicker();
 }
 try {
   const saved = localStorage.getItem('survivors_map');
-  if (saved && MAPS[saved]) {
-    selectedMapId = saved;
-    const el = document.getElementById('map-select');
-    if (el) el.value = saved;
-  }
+  if (saved && (saved === 'random' || MAPS[saved])) selectedMapId = saved;
 } catch (e) {}
+renderMapPicker();
 let gameStarted = false;
 
 // --- achievements ---
@@ -205,7 +228,11 @@ let sessionNewUnlocks = [];            // ids unlocked this run (drives toast qu
 
 // --- init game ---
 function initGame() {
-  const map = MAPS[selectedMapId] || MAPS.arena;
+  const mapKeys = Object.keys(MAPS);
+  const resolvedMapId = (selectedMapId === 'random' || !MAPS[selectedMapId])
+    ? mapKeys[Math.floor(Math.random() * mapKeys.length)]
+    : selectedMapId;
+  const map = MAPS[resolvedMapId];
   // rng hoisted out of the game literal so procedural obstacles can
   // share the same seed — deterministic layouts + deterministic spawns
   // off one roll.
@@ -288,7 +315,7 @@ function initGame() {
     // is consumed by sim/collision.js and rendered by the canvas pass.
     arena: { w: map.width, h: map.height },
     obstacles,
-    mapId: selectedMapId,
+    mapId: resolvedMapId,
     // Active cosmetics from prestige (read once at game start)
     _activeSkin: loadPrestige().activeSkin,
     _activeTrail: loadPrestige().activeTrail,

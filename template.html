@@ -178,6 +178,10 @@ canvas { touch-action: none; }
 .lobby-map-card--selected { border-color: #f1c40f; background: rgba(241,196,15,0.1); }
 .lmc-name { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
 .lmc-votes { font-size: 11px; color: #aaa; }
+/* SP start-screen map picker cards */
+.map-card { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 14px; border: 1px solid #333; border-radius: 5px; cursor: pointer; background: rgba(255,255,255,0.03); transition: border-color 0.15s; min-width: 64px; }
+.map-card:hover { border-color: #666; }
+.map-card--selected { border-color: #f1c40f; background: rgba(241,196,15,0.08); }
 </style>
 </head>
 <body data-mode="{{MODE}}">
@@ -267,15 +271,9 @@ canvas { touch-action: none; }
     </div>
   </div>
   <div class="sub sp-only" style="margin: 8px 0 4px; color:#999;">choose your map</div>
-  <select id="map-select" class="sp-only" onchange="selectMap(this.value)">
-    <option value="neon" selected>Neon Grid (abstract)</option>
-    <option value="arena">The Arena (open field)</option>
-    <option value="forest">Dark Forest (trees)</option>
-    <option value="ruins">Ancient Ruins (pillars + walls)</option>
-    <option value="graveyard">Forsaken Graveyard (tombs)</option>
-    <option value="wilderness">Wilderness (procedural trees)</option>
-    <option value="catacombs">Catacombs (procedural corridor)</option>
-  </select>
+  <div id="map-picker" class="sp-only" style="margin: 4px 0 8px; display: flex; flex-direction: column; align-items: center; gap: 8px;">
+    <div id="map-picker-cards" style="display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; max-width: 90vw;"></div>
+  </div>
   <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
     <button class="shop-btn sp-only" onclick="showPrestigeShop()">SHOP</button>
     <button class="bestiary-btn" onclick="showBestiary()">📖 BESTIARY</button>
