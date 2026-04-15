@@ -703,29 +703,108 @@ export function applySimEvent(evt, client) {
     }
 
     case 'bossSpawn':
-      // Boss arrival — ominous sfx, big shake, deep red burst at
-      // spawn so everyone knows where THE DEMON landed.
+      // Boss arrival — 3-stage so it reads as a real moment, not a
+      // single puff. Stage 1: ground dust rings outward (near-black
+      // debris at low speed, long life) — "something heavy just
+      // landed." Stage 2: crimson eruption outward (existing shape).
+      // Stage 3: slow embers rising — lingering aftermath.
       sfx('boss_telegraph');
-      shake(0.35);
+      shake(0.45);
+      flash(0.08);
+      // Stage 1 — inward-converging debris ring. Particles start on a
+      // 60-100u circle moving toward center, arriving ~0.15s later as
+      // the center erupts. Reads as "ground cracking inward."
+      for (let i = 0; i < 14; i++) {
+        const a = (Math.PI * 2 * i) / 14 + Math.random() * 0.3;
+        const r0 = 60 + Math.random() * 40;
+        const inward = 280 + Math.random() * 80;
+        client.particles.push({
+          x: evt.x + Math.cos(a) * r0,
+          y: evt.y + Math.sin(a) * r0,
+          vx: -Math.cos(a) * inward,
+          vy: -Math.sin(a) * inward,
+          life: 0.22, maxLife: 0.22,
+          radius: 2 + Math.random() * 1.5,
+          color: '#3a1010',
+        });
+      }
+      // Stage 2 — crimson erupt outward (existing shape).
       for (let i = 0; i < 24; i++) {
         pushFx(client.particles, evt.x, evt.y, '#d63031', {
-          speedMin: 80, speedMax: 220,
+          speedMin: 120, speedMax: 260,
           lifeMin: 0.5, lifeMax: 0.9,
           radiusMin: 2, radiusMax: 4,
         });
       }
-      for (let i = 0; i < 8; i++) {
-        pushFx(client.particles, evt.x, evt.y, '#7b1212', {
-          speedMin: 30, speedMax: 100,
-          lifeMin: 0.7, lifeMax: 1.1,
-          radiusMin: 3, radiusMax: 5,
+      // Stage 3 — slow rising embers (upward bias via negative vy).
+      for (let i = 0; i < 10; i++) {
+        const vx = (Math.random() - 0.5) * 50;
+        const vy = -30 - Math.random() * 60;
+        client.particles.push({
+          x: evt.x + (Math.random() - 0.5) * 30,
+          y: evt.y + (Math.random() - 0.5) * 20,
+          vx, vy,
+          life: 0.9, maxLife: 0.9,
+          radius: 2 + Math.random() * 2.5,
+          color: Math.random() < 0.5 ? '#f39c12' : '#7b1212',
         });
       }
       break;
 
     case 'evolution':
-      if (isMe) shake(0.5);
-      spawn(evt.x, evt.y, '#f39c12', 20);
+      // Evolution — 3-stage: (1) inward-sucking source particles
+      // converging on the center, (2) bright outward flash bloom,
+      // (3) lingering gold aura orbit around the player. Reads as
+      // "power gathers → explodes outward → settles into a glow"
+      // instead of a single 20-particle puff.
+      if (isMe) { shake(0.5); flash(0.2); }
+      // Stage 1 — 16 gold motes converging inward from a ring at ~60u.
+      for (let i = 0; i < 16; i++) {
+        const a = (Math.PI * 2 * i) / 16 + Math.random() * 0.2;
+        const r0 = 55 + Math.random() * 25;
+        const inward = 300 + Math.random() * 80;
+        client.particles.push({
+          x: evt.x + Math.cos(a) * r0,
+          y: evt.y + Math.sin(a) * r0,
+          vx: -Math.cos(a) * inward,
+          vy: -Math.sin(a) * inward,
+          life: 0.2, maxLife: 0.2,
+          radius: 1.8 + Math.random(),
+          color: '#ffd27f',
+        });
+      }
+      // Stage 2 — big bright outward bloom at center.
+      for (let i = 0; i < 24; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#ffd27f', {
+          speedMin: 180, speedMax: 340,
+          lifeMin: 0.25, lifeMax: 0.45,
+          radiusMin: 2, radiusMax: 3.5,
+        });
+      }
+      for (let i = 0; i < 8; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#ffffff', {
+          speedMin: 120, speedMax: 260,
+          lifeMin: 0.15, lifeMax: 0.3,
+          radiusMin: 1.4, radiusMax: 2.4,
+        });
+      }
+      // Stage 3 — lingering gold embers that orbit outward slowly and
+      // fade over ~1.2s, so the player visibly glows for a moment
+      // after the bloom.
+      for (let i = 0; i < 12; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const speed = 30 + Math.random() * 50;
+        client.particles.push({
+          x: evt.x,
+          y: evt.y,
+          vx: Math.cos(a) * speed,
+          vy: Math.sin(a) * speed,
+          life: 1.0 + Math.random() * 0.3,
+          maxLife: 1.2,
+          radius: 1.6 + Math.random() * 1.2,
+          color: '#f39c12',
+        });
+      }
       break;
 
     case 'waveSurvived':
@@ -733,11 +812,46 @@ export function applySimEvent(evt, client) {
       break;
 
     case 'consumableSpawn':
-      // Rare drop — make it loud. Upward fountain + ring flash so
-      // an off-screen player who pans over still notices it landed
-      // (server gate keeps this rare; we don't have to be subtle).
-      consumableSpawnFanfare(client.particles, evt);
+      // Rare drop — 3-stage: (1) sky beam converging down onto the
+      // landing point, (2) ring slam + upward fountain (existing
+      // fanfare), (3) lingering halo that fades slowly so the drop
+      // stays visually findable for ~1s after landing.
       sfx('powerup');
+      // Stage 1 — beam of light from above. Particles spawn at the
+      // drop location + a column extending up, falling downward in
+      // sequence so the eye reads a descending beam.
+      for (let i = 0; i < 14; i++) {
+        const t = i / 14;
+        const py = evt.y - 140 + t * 140;
+        client.particles.push({
+          x: evt.x + (Math.random() - 0.5) * 14,
+          y: py,
+          vx: (Math.random() - 0.5) * 30,
+          vy: 280 + Math.random() * 60,
+          life: 0.22 + Math.random() * 0.1,
+          maxLife: 0.32,
+          radius: 1.8 + Math.random(),
+          color: evt.color || '#f39c12',
+        });
+      }
+      // Stage 2 — the existing fanfare (ring + upward fountain).
+      consumableSpawnFanfare(client.particles, evt);
+      // Stage 3 — soft lingering halo. Slow orbit motion + long life
+      // so the drop keeps glowing while it sits on the ground.
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI * 2 * i) / 10;
+        const r0 = 22;
+        const tangent = 40;
+        client.particles.push({
+          x: evt.x + Math.cos(a) * r0,
+          y: evt.y + Math.sin(a) * r0,
+          vx: -Math.sin(a) * tangent,
+          vy: Math.cos(a) * tangent,
+          life: 0.9, maxLife: 0.9,
+          radius: 1.4 + Math.random(),
+          color: evt.color || '#f39c12',
+        });
+      }
       break;
 
     case 'consumablePickup': {
