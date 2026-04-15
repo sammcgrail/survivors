@@ -160,8 +160,3 @@ export const MAPS = {
 // O(1) per check instead of comparing strings.
 export const PROJECTILE_BLOCKERS = new Set(['wall', 'pillar', 'tomb', 'neon_wall', 'neon_pillar']);
 
-// Pick a starting map. Currently fixed; later this'll be a vote /
-// rotation / lobby choice.
-export function defaultMap() {
-  return MAPS.arena;
-}

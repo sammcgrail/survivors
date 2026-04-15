@@ -5,7 +5,7 @@
 import { ENEMY_TYPES, enemyType, scaleEnemy } from '../enemyTypes.js';
 import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
-import { pushOutOfObstacles, circleRectCollision, obstacleAvoidance } from './collision.js';
+import { pushOutOfObstacles, obstacleAvoidance } from './collision.js';
 
 // Reusable zero vector for the no-obstacles path — saves an
 // allocation per enemy per tick on maps without obstacles.
