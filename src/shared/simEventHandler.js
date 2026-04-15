@@ -427,7 +427,29 @@ export function applySimEvent(evt, client) {
         x: evt.x, y: evt.y, text: '+' + evt.xp,
         color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
       });
-      spawn(evt.x, evt.y, '#3498db', 3);
+      // Inward spiral: 6 blue motes spawn on a 16u ring and converge
+      // on the pickup point, arriving in ~0.12s. Reads as "gem
+      // absorbed into you" instead of a radial puff going the wrong
+      // direction. Tier-2 pickups (boss/elite gems) get the same
+      // shape with brighter gold, matching the minimap color coding.
+      {
+        const tier2 = (evt.xp || 0) >= 80;
+        const core = tier2 ? '#f1c40f' : '#5dade2';
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.25;
+          const r0 = 14 + Math.random() * 6;
+          const inward = 140 + Math.random() * 40;
+          client.particles.push({
+            x: evt.x + Math.cos(a) * r0,
+            y: evt.y + Math.sin(a) * r0,
+            vx: -Math.cos(a) * inward,
+            vy: -Math.sin(a) * inward,
+            life: 0.14, maxLife: 0.14,
+            radius: 1.4 + Math.random() * 0.5,
+            color: core,
+          });
+        }
+      }
       break;
 
     case 'heartPickup':
@@ -438,7 +460,22 @@ export function applySimEvent(evt, client) {
           color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
         });
       }
-      spawn(evt.x, evt.y, '#e74c3c', 4);
+      // Inward spiral (green/red mix) — same grammar as gem pickup so
+      // pickups across the game share one visual vocabulary.
+      for (let i = 0; i < 6; i++) {
+        const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.25;
+        const r0 = 14 + Math.random() * 6;
+        const inward = 130 + Math.random() * 40;
+        client.particles.push({
+          x: evt.x + Math.cos(a) * r0,
+          y: evt.y + Math.sin(a) * r0,
+          vx: -Math.cos(a) * inward,
+          vy: -Math.sin(a) * inward,
+          life: 0.15, maxLife: 0.15,
+          radius: 1.4 + Math.random() * 0.5,
+          color: i % 2 === 0 ? '#2ecc71' : '#e74c3c',
+        });
+      }
       break;
 
     case 'enemyHit':

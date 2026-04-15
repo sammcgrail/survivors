@@ -1152,8 +1152,42 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   // prod / MP. Caller supplies `onPhase(label)` which closes the
   // previous bucket each time it's invoked.
   const mark = opts.onPhase || null;
+  // Gem magnet trail — while a gem is inside any player's magnetRange,
+  // it's visibly flying toward them. Dropping a small trail particle
+  // behind the gem at ~8 per second reads as "in-flight" without the
+  // client having to track per-gem velocity. Gated to onscreen gems
+  // (viewport cull above) so offscreen magnet-sucks don't allocate.
+  const alivePlayers = view.players ? view.players.filter(p => p.alive) : [];
   for (const gem of view.gems) {
     if (gem.x < cx - 20 || gem.x > cx + W + 20 || gem.y < cy - 20 || gem.y > cy + H + 20) continue;
+    if (particles && alivePlayers.length > 0 && Math.random() < 0.13) {
+      // Nearest alive player — if within that player's magnetRange,
+      // spawn a trail particle at the gem that drifts back toward the
+      // gem's motion origin. magnetRange defaults apply when not
+      // present on snapshot.
+      let best = null, bestD2 = Infinity;
+      for (const p of alivePlayers) {
+        const dx = p.x - gem.x, dy = p.y - gem.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) { best = p; bestD2 = d2; }
+      }
+      const magR = (best && best.magnetRange) || 80;
+      if (best && bestD2 < magR * magR) {
+        const dx = best.x - gem.x, dy = best.y - gem.y;
+        const d = Math.sqrt(bestD2) || 1;
+        // Trail points BACKWARD along the flight vector so it streams
+        // behind the gem as it moves toward the player.
+        particles.push({
+          x: gem.x - (dx / d) * 4,
+          y: gem.y - (dy / d) * 4,
+          vx: -(dx / d) * 18 + (Math.random() - 0.5) * 14,
+          vy: -(dy / d) * 18 + (Math.random() - 0.5) * 14,
+          life: 0.3, maxLife: 0.3,
+          radius: 1.2 + Math.random() * 0.6,
+          color: '#5dade2',
+        });
+      }
+    }
     drawGem(ctx, gem, drawSprite);
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
