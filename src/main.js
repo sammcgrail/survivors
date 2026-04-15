@@ -24,6 +24,7 @@ import { synthesizeView } from './shared/view.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
+import { saveRunEntry } from './shared/runHistory.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -544,6 +545,7 @@ function saveBestRun(run) {
 }
 
 function showDeathScreen(g) {
+  const history = saveRunEntry(g);
   fadeOutMusic();
   fadeInMenuMusic();
   track({ type: 'death', wave: g.wave, kills: g.kills, weapons: g.player.weapons.map(w => w.type) });
@@ -699,6 +701,30 @@ function showDeathScreen(g) {
     badge.title = `${def.label}: ${def.desc}${allAch[def.id] ? '' : ' (locked)'}`;
     badge.textContent = allAch[def.id] ? def.icon : '🔒';
     achEl.appendChild(badge);
+  }
+
+  // Run history panel — current run is index 0 (just saved by saveRunEntry above).
+  let histEl = document.getElementById('ds-history');
+  if (!histEl) {
+    histEl = document.createElement('div');
+    histEl.id = 'ds-history';
+    achEl.after(histEl);
+  }
+  histEl.innerHTML = '<div class="ds-history-title">Recent Runs</div>';
+  for (const run of history) {
+    const min = Math.floor(run.time / 60);
+    const sec = (run.time % 60 | 0).toString().padStart(2, '0');
+    const weaponIcons = run.weapons.map(t => WEAPON_ICONS[t] ?? '⚔️').join(' ');
+    const row = document.createElement('div');
+    row.className = 'ds-history-row';
+    row.innerHTML = `
+      <span class="dhr-wave">W${run.wave}</span>
+      <span class="dhr-kills">${run.kills}k</span>
+      <span class="dhr-level">Lv${run.level}</span>
+      <span class="dhr-time">${min}:${sec}</span>
+      <span class="dhr-weapons">${weaponIcons}</span>
+    `;
+    histEl.appendChild(row);
   }
 
   document.getElementById('death-screen').style.display = 'flex';

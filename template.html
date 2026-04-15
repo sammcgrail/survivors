@@ -161,6 +161,16 @@ canvas { touch-action: none; }
 .ds-ach-badge { font-size: 20px; cursor: default; }
 .ds-ach-badge--locked { opacity: 0.25; filter: grayscale(1); }
 
+/* run history panel on death screen */
+#ds-history { margin-top: 14px; width: 100%; }
+.ds-history-title { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+.ds-history-row { display: flex; gap: 10px; align-items: center; font-size: 12px; font-family: monospace; padding: 3px 0; border-top: 1px solid rgba(255,255,255,0.05); color: #bbb; }
+.ds-history-row:first-of-type { border-top: none; }
+.dhr-wave { color: #f1c40f; width: 32px; }
+.dhr-kills { width: 44px; }
+.dhr-level { width: 32px; color: #aaa; }
+.dhr-time { width: 44px; color: #aaa; }
+.dhr-weapons { flex: 1; }
 /* MP lobby map-vote overlay */
 #mp-lobby { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #fff; font-family: monospace; display: none; }
 .lobby-map-card { padding: 12px 20px; border: 1px solid #444; border-radius: 6px; cursor: pointer; text-align: center; min-width: 100px; background: rgba(255,255,255,0.05); transition: border-color 0.15s; }
