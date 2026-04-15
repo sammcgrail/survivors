@@ -11,6 +11,7 @@ import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
+import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -265,105 +266,18 @@ const trailState = new Map();
 
 // Drain a batch of sim events shipped on the state snapshot. Mirrors
 // SP's handleSimEvent but scoped to what makes sense as a peer
-// observer — shake + death screen only fire when the event pid
-// matches mine; level-up menu stays server-routed via the separate
-// 'levelup' message.
-function handleServerEvent(evt) {
-  const isMe = evt.pid === myId;
-  switch (evt.type) {
-    case 'enemyHit':
-      if (evt.dmg >= 5) {
-        sfx('hit');
-        const crit = evt.dmg >= 50;
-        floatingTexts.push({
-          x: evt.x + (Math.random() - 0.5) * 10,
-          y: evt.y - (evt.radius || 10) - 4,
-          text: crit ? Math.floor(evt.dmg) + '!' : String(Math.floor(evt.dmg)),
-          color: crit ? '#f39c12' : '#f1c40f',
-          life: crit ? 0.7 : 0.5, maxLife: crit ? 0.7 : 0.5, vy: -40,
-        });
-        if (crit) spawnParticles(evt.x, evt.y, '#f39c12', 6);
-      }
-      break;
-    case 'enemyKilled': {
-      sfx('kill');
-      const r = evt.radius || 10;
-      const big = r >= 18, huge = r >= 30;
-      spawnParticles(evt.x, evt.y, evt.color, huge ? 40 : big ? 20 : Math.max(8, Math.round(r * 1.2)));
-      if (big) spawnParticles(evt.x, evt.y, '#ffffff', huge ? 15 : 6);
-      if (huge) screenShake = Math.max(screenShake, 0.4);
-      else if (big) screenShake = Math.max(screenShake, 0.15);
-      break;
-    }
-    case 'playerHit':
-      if (isMe) {
-        screenShake = Math.max(screenShake, 0.15);
-        sfx('playerhit');
-      }
-      spawnParticles(evt.x, evt.y, '#e74c3c', 5);
-      break;
-    case 'playerDeath':
-      if (isMe) sfx('death');
-      break;
-    case 'gemPickup':
-      if (isMe) sfx('xp');
-      floatingTexts.push({
-        x: evt.x, y: evt.y, text: '+' + evt.xp,
-        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
-      });
-      spawnParticles(evt.x, evt.y, '#3498db', 3);
-      break;
-    case 'heartPickup':
-      if (isMe) sfx('heal');
-      if (evt.healed > 0) {
-        floatingTexts.push({
-          x: evt.x, y: evt.y, text: '+' + Math.floor(evt.healed) + ' HP',
-          color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
-        });
-      }
-      spawnParticles(evt.x, evt.y, '#e74c3c', 4);
-      break;
-    case 'levelUp':
-      if (isMe) sfx('levelup');
-      break;
-    case 'weaponFire':
-      if (!isMe) return;
-      if (evt.weapon === 'spit')              sfx('spit');
-      else if (evt.weapon === 'chain')        sfx('chain');
-      else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
-      else if (evt.weapon === 'thunder_god')  sfx('chain');
-      break;
-    case 'chargeBurst':
-      if (isMe) { screenShake = Math.max(screenShake, 0.1); sfx('charge'); }
-      spawnParticles(evt.x, evt.y, evt.color, 8);
-      break;
-    case 'shieldHum':
-      if (isMe) sfx('shield_hum');
-      break;
-    case 'chainZap':
-      if (isMe) sfx('zap');
-      break;
-    case 'meteorExplode':
-      if (isMe) { screenShake = Math.max(screenShake, 0.1); sfx('meteor'); }
-      spawnParticles(evt.x, evt.y, evt.color, 12);
-      break;
-    case 'bossStep':
-      sfx('boss_step');
-      break;
-    case 'bossTelegraph':
-      spawnParticles(evt.x, evt.y, '#d63031', 12);
-      sfx('boss_telegraph');
-      break;
-    case 'hiveBurst':
-      spawnParticles(evt.x, evt.y, '#fdcb6e', 8);
-      sfx('hive_burst');
-      break;
-    case 'evolution':
-      if (isMe) screenShake = Math.max(screenShake, 0.5);
-      spawnParticles(evt.x, evt.y, '#f39c12', 20);
-      break;
-  }
-}
+// MP event-client shim — drains state.events via the shared
+// applySimEvent. No onLevelUp override since the server routes
+// level-up choices via a separate 'levelup' message.
+const mpEventClient = {
+  particles,
+  floatingTexts,
+  sfx,
+  shake(v) { screenShake = Math.max(screenShake, v); },
+  isMe: (pid) => pid === myId,
+  // onPlayerDeath: DOM flip handled in processStateChanges for now
+  // (needs the `me` snapshot object that event alone doesn't carry).
+};
 
 // Only tracked for the death-screen DOM flip — every other change
 // signal comes through the event channel now.
@@ -443,10 +357,10 @@ function connectWS() {
       interpAlpha = 0;
       arena = msg.arena || arena;
 
-      // Drain sim events shipped with the snapshot. These fire once
-      // per event per client and drive sfx, particles, floating text,
-      // screen shake — same channel SP consumes via handleSimEvent.
-      if (msg.events) for (const evt of msg.events) handleServerEvent(evt);
+      // Drain sim events shipped with the snapshot. Same channel SP
+      // consumes — shared applySimEvent handles both modes via the
+      // client shim (mpEventClient).
+      if (msg.events) for (const evt of msg.events) applySimEvent(evt, mpEventClient);
 
       // Death screen trigger still lives here since it's a DOM flip,
       // not a transient effect. Level-up menu also stays — server
