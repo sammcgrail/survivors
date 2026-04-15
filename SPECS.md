@@ -729,9 +729,124 @@ Evolutions appear in the level-up choice pool only when prerequisites are met. T
 
 | Feature | Priority | Effort | Dependencies |
 |---------|----------|--------|-------------|
-| 1. MP/SP Parity | P0 | 10-12h | None |
-| 2. Maps System | P1 | 8-10h | None (but benefits from Feature 1 being done first so MP gets maps too) |
+| 1. MP/SP Parity | P0 | 10-12h | None | ✅ Shipped (PRs #33-36) |
+| 2. Maps System | P1 | 8-10h | None | ✅ Shipped (PR #37) |
 | 3. Prestige / Dragon Scales | P2 | 10-14h | None |
-| 4. Weapon Evolutions | P2 | 8-12h | Feature 1 (for MP evo detection to use per-player stacks) |
+| 4. Weapon Evolutions | P2 | 8-12h | Feature 1 | In progress (tiny) |
+| 5. Enemy Flocking | P1 | 4-6h | None — pure sim change |
 
 Feature 1 should be done first — it unblocks all MP-visible features. Features 2-4 can be parallelized after that.
+
+---
+
+## Feature 5: Enemy Flocking System
+
+### Overview
+
+All non-special enemies (blob, fast, tank, swarm, brute, elite) use identical movement logic — beeline toward nearest player at their speed value (`enemies.js:131-133`). Only ghost (orbit) and boss (stalk/charge) have unique AI. This makes enemy behavior feel samey despite different stats, and causes same-type enemies to clump into overlapping balls since they all path identically.
+
+A Craig Reynolds Boids-style flocking system adds three steering forces per enemy per tick, with per-type parameters that give each enemy a distinct movement personality. The existing spatial-hash repulsion (`updateRepulsion`, enemies.js:166-206) already does O(N) neighbor lookups and can be extended for flock queries.
+
+### Steering Forces
+
+Each tick, every flocking enemy computes three vectors from its **nearby same-type neighbors** (within `perceptionRadius`):
+
+| Force | What it does | Vector computation |
+|-------|-------------|-------------------|
+| **Separation** | Steer away from nearby flock-mates to avoid piling up | Sum of `(myPos - neighborPos) / distance` for each neighbor within separation radius |
+| **Alignment** | Match heading of nearby flock-mates so groups sweep in formation | Average velocity (heading × speed) of neighbors |
+| **Cohesion** | Steer toward center of mass of nearby flock-mates | `(flockCenter - myPos)` normalized |
+
+The final velocity blends these with the existing "chase nearest player" vector:
+
+```
+steering = chase * chaseWeight
+         + separation * sepWeight
+         + alignment * alignWeight
+         + cohesion * cohWeight
+velocity = normalize(steering) * speed
+```
+
+### Per-Type Parameters
+
+Each enemy type gets a `flock` config object in `enemyTypes.js`:
+
+```js
+// Added to each ENEMY_TYPES entry
+flock: {
+  perceptionRadius: 120,  // how far to look for same-type neighbors
+  sepWeight: 1.0,         // separation force multiplier
+  alignWeight: 0.5,       // alignment force multiplier
+  cohWeight: 0.3,         // cohesion force multiplier
+  chaseWeight: 1.0,       // player-chase force multiplier
+  sepRadius: 30,          // minimum desired spacing from flock-mates
+}
+```
+
+| Type | Behavior goal | sepW | alignW | cohW | chaseW | perceptionR | sepR |
+|------|--------------|------|--------|------|--------|-------------|------|
+| `swarm` | Tight swirling packs — dangerous in groups, easy to AoE | 0.5 | 1.2 | 1.0 | 0.8 | 100 | 15 |
+| `blob` | Classic horde — moderate clumping, steady advance | 0.8 | 0.5 | 0.3 | 1.0 | 120 | 25 |
+| `fast` | Scattered flankers — spread wide, attack from angles | 1.5 | 0.3 | 0.1 | 1.2 | 150 | 40 |
+| `tank` | Spread formation — hard to AoE, steady pressure | 1.8 | 0.4 | 0.2 | 0.8 | 140 | 50 |
+| `brute` | Lone chargers — ignore other brutes, beeline player | 2.0 | 0.0 | 0.0 | 1.5 | 80 | 60 |
+| `elite` | Small tactical squads — moderate formation | 1.0 | 0.8 | 0.6 | 1.0 | 130 | 35 |
+| `ghost` | Keeps existing orbit AI — flocking disabled | — | — | — | — | — | — |
+| `boss` | Keeps existing stalk/charge AI — flocking disabled | — | — | — | — | — | — |
+| `spawner` | Slow drifters — very loose, stay away from each other | 2.0 | 0.1 | 0.0 | 0.6 | 100 | 50 |
+
+### Implementation Plan
+
+#### File: `src/shared/sim/enemies.js`
+
+1. **Extend spatial hash to track enemy type.** The existing `updateRepulsion` builds a spatial hash with cell size 50. Reuse this hash (or build once, use twice) for flock neighbor queries. The hash bucket already stores indices into `g.enemies`, so type lookup is `g.enemies[j].name`.
+
+2. **New function `computeFlockSteering(g, e, neighbors)`:**
+   - Input: game state, the enemy, list of neighbor indices from spatial hash
+   - Filters to same-type neighbors within `perceptionRadius`
+   - Computes separation, alignment, cohesion vectors
+   - Returns combined steering vector (not yet normalized)
+
+3. **Modify `updateEnemyTick` (line 116-160):**
+   - Before the movement block (line 128-135), compute flock steering for the enemy
+   - Replace the simple chase logic with the weighted blend
+   - Ghost and boss skip flocking (keep existing AI)
+   - Normalize final steering vector, multiply by speed × dt
+
+4. **Merge repulsion into flocking.** The current `updateRepulsion` pass is type-blind push-apart. Once separation is per-type and properly tuned, the brute-force repulsion pass can be removed or reduced to a lightweight overlap-only correction (preventing actual sprite overlap without affecting steering).
+
+#### File: `src/shared/enemyTypes.js`
+
+5. **Add `flock` config to each `ENEMY_TYPES` entry.** Default values for any type without explicit config: `{ perceptionRadius: 120, sepWeight: 1.0, alignWeight: 0.5, cohWeight: 0.3, chaseWeight: 1.0, sepRadius: 30 }`.
+
+6. **`scaleEnemy` copies flock params** from base type to spawned instance (already spreads `...base`, so this is automatic).
+
+### Performance Considerations
+
+- **Spatial hash reuse:** Build the hash once per tick in `updateEnemies`, pass it to both the flock steering pass and the repulsion/overlap correction pass. Current hash build is ~0.2ms for 200 enemies.
+- **Same-type filter:** For each enemy, only iterate neighbors in the 9-cell window (typically 5-15 enemies) and skip different types. This is O(N × K) where K is average neighbors per cell — much cheaper than O(N²).
+- **Skip when solo:** If an enemy has zero same-type neighbors within perception radius, fall back to pure chase (no wasted vector math).
+- **Normalize once:** Compute all three force vectors as simple sums, blend with weights, then normalize the final result once. Avoids 3 separate sqrt calls per enemy.
+
+### Emergent Behaviors to Expect
+
+- **Swarm pincer attacks:** High alignment + cohesion means swarm packs will arc around obstacles together rather than getting stuck in a line. They'll naturally split into sub-groups that approach from different angles.
+- **Tank walls:** High separation means tanks spread into a line perpendicular to the player, creating a "wall" that's hard to dodge through.
+- **Fast flanking:** Low cohesion + high separation means fast enemies scatter wide and come from unexpected directions — players can't just kite in one direction.
+- **Brute isolation:** Near-zero flocking means brutes path independently, arriving at staggered times — each one is a mini-event rather than a clump.
+
+### Balance Tuning
+
+All weights are in `enemyTypes.js` as plain numbers — no code changes needed to adjust. Start with the values above, playtest, and tune. Key knobs:
+- If enemies feel too scattered: increase `cohWeight`
+- If enemies stack up: increase `sepWeight` or `sepRadius`
+- If enemies circle forever without attacking: increase `chaseWeight`
+- If a type feels identical to another: differentiate their `alignWeight` (formation vs chaos)
+
+### Estimated Complexity
+
+**Medium.** The core flocking math is ~40-50 lines. Spatial hash is already built. Per-type params are data. Main work is integrating the steering blend into the existing movement code without breaking ghost/boss AI, and tuning the weights to feel good. Total: 4-6 hours including playtesting.
+
+### Dependencies
+
+None — pure sim change in `enemies.js` + `enemyTypes.js`. Works in SP and MP automatically since both run `tickSim`.
