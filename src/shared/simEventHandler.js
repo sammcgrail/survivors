@@ -920,5 +920,55 @@ export function applySimEvent(evt, client) {
       }
       break;
     }
+
+    case 'statusExpired': {
+      // Status wears off — one-time expiry VFX that closes the loop so
+      // players register "that enemy just stopped being frozen" even
+      // when they're looking elsewhere on screen. Small + fast; no
+      // screen shake, no sfx (too spammy at high enemy counts).
+      const { statusType, x, y } = evt;
+      if (statusType === 'freeze') {
+        // Ice shatter — 6 bright shards flying outward + a quick ring.
+        for (let i = 0; i < 6; i++) {
+          const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
+          const speed = 90 + Math.random() * 110;
+          client.particles.push({
+            x, y,
+            vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+            life: 0.3, maxLife: 0.3,
+            radius: 1.8 + Math.random(),
+            color: Math.random() < 0.5 ? '#e6f5fb' : '#74b9ff',
+          });
+        }
+      } else if (statusType === 'burn') {
+        // Smoke dissipation — 4 dark particles drifting up + fading.
+        for (let i = 0; i < 4; i++) {
+          client.particles.push({
+            x: x + (Math.random() - 0.5) * 8,
+            y: y + (Math.random() - 0.5) * 4,
+            vx: (Math.random() - 0.5) * 25,
+            vy: -50 - Math.random() * 30,
+            life: 0.5, maxLife: 0.5,
+            radius: 2 + Math.random() * 1.5,
+            color: '#4a3020',
+          });
+        }
+      } else if (statusType === 'slow') {
+        // Chill ripple — 8 small blue motes orbiting outward over 0.3s,
+        // reads as "the cold wearing off."
+        for (let i = 0; i < 8; i++) {
+          const a = (Math.PI * 2 * i) / 8;
+          const speed = 60;
+          client.particles.push({
+            x, y,
+            vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
+            life: 0.28, maxLife: 0.28,
+            radius: 1.3,
+            color: '#74b9ff',
+          });
+        }
+      }
+      break;
+    }
   }
 }

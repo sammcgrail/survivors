@@ -118,7 +118,7 @@ const ENEMY_NAME_TO_SPRITE = { ghost: 'skull' };
 // Optional `onSeen(name)` is called once per visible non-dying enemy
 // — SP wires this to the bestiary discovery hook so playing
 // continuously builds out the catalog.
-export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
+export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen, particles) {
   const now = typeof performance !== 'undefined' ? performance.now() : 0;
   for (const e of enemies) {
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
@@ -154,7 +154,7 @@ export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
     // the battlefield can tell which enemies are slowed/burning/
     // frozen at a glance instead of having to remember.
     if (e.statusEffects && e.statusEffects.length > 0) {
-      drawStatusTint(ctx, e);
+      drawStatusTint(ctx, e, particles);
     }
 
     if (e.hp < e.maxHp) {
@@ -304,7 +304,7 @@ function shadeHex(hex, pct) {
 // orange (sin-driven so it reads as flames), slow gets a steady blue
 // glow, freeze gets a cyan-white frost shell + 4 ice shards on the
 // rim. Multiple statuses stack — burn over slow over freeze.
-function drawStatusTint(ctx, e) {
+function drawStatusTint(ctx, e, particles) {
   for (const s of e.statusEffects) {
     if (s.type === 'burn') {
       const flick = 0.3 + Math.sin(performance.now() / 80 + e.x * 0.05) * 0.15;
@@ -312,6 +312,23 @@ function drawStatusTint(ctx, e) {
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius * 0.95, 0, Math.PI * 2);
       ctx.fill();
+      // Continuous rising embers — small chance per frame per burning
+      // enemy so the fire visibly emits smoke over the whole burn
+      // duration, not just the apply pop. Capped by probability so a
+      // mass-burn doesn't flood the particle buffer.
+      if (particles && Math.random() < 0.15) {
+        const ex = e.x + (Math.random() - 0.5) * e.radius * 1.2;
+        const ey = e.y + (Math.random() - 0.5) * e.radius * 0.4;
+        particles.push({
+          x: ex, y: ey,
+          vx: (Math.random() - 0.5) * 20,
+          vy: -40 - Math.random() * 30,
+          life: 0.5 + Math.random() * 0.3,
+          maxLife: 0.8,
+          radius: 1.4 + Math.random(),
+          color: Math.random() < 0.6 ? '#f39c12' : '#e74c3c',
+        });
+      }
     } else if (s.type === 'slow') {
       ctx.fillStyle = 'rgba(52, 152, 219, 0.25)';
       ctx.beginPath();
@@ -1145,7 +1162,7 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   drawChargeTrailWake(ctx, view.chargeTrails || [], particles, view.time || 0, viewport);
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
   if (mark) mark('auras');
-  drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
+  drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen, particles);
   if (mark) mark('enemies');
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
   drawEnemyProjectiles(ctx, view.enemyProjectiles || [], particles, cx, cy, W, H, view.time || 0);
