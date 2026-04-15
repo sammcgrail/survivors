@@ -41,7 +41,7 @@ const mmCtx = mmCanvas.getContext('2d');
 
 function drawMinimap() {
   if (!currState) return;
-  const { players = [], enemies = [], gems = [] } = currState;
+  const { players = [], enemies = [], gems = [], consumables = [] } = currState;
   const aw = (arena && arena.w) || 3000;
   const ah = (arena && arena.h) || 3000;
   const sx = MM / aw, sy = MM / ah;
@@ -58,6 +58,28 @@ function drawMinimap() {
     mmCtx.beginPath();
     mmCtx.arc(e.x * sx, e.y * sy, 1.5, 0, Math.PI * 2);
     mmCtx.fill();
+  }
+
+  // Consumables — rare drops (boss 50%, elite 6%, brute 4%). Pulse
+  // with a halo so players actually spot them across the map; use
+  // the consumable color so bomb/shield/magnet are distinguishable
+  // at a glance.
+  if (consumables.length > 0) {
+    const pulse = 0.6 + Math.sin(performance.now() / 200) * 0.4;
+    for (const c of consumables) {
+      const cx = c.x * sx, cy = c.y * sy;
+      mmCtx.fillStyle = c.color || '#f39c12';
+      mmCtx.beginPath();
+      mmCtx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+      mmCtx.fill();
+      mmCtx.strokeStyle = c.color || '#f39c12';
+      mmCtx.globalAlpha = pulse;
+      mmCtx.lineWidth = 1;
+      mmCtx.beginPath();
+      mmCtx.arc(cx, cy, 5, 0, Math.PI * 2);
+      mmCtx.stroke();
+      mmCtx.globalAlpha = 1;
+    }
   }
 
   for (const p of players) {
