@@ -119,6 +119,29 @@ canvas { touch-action: none; }
 .scales-total { color: #888; font-size: 0.7rem; }
 .shop-btn { background: #2c2c3e; border: 1px solid #f39c12; color: #f39c12; padding: 8px 20px; font-family: inherit; font-size: 0.8rem; border-radius: 6px; cursor: pointer; margin: 6px 4px; }
 .shop-btn:hover { background: #3a3a50; }
+.bestiary-btn { background: #2c2c3e; border: 1px solid #9b59b6; color: #c39bd3; padding: 8px 20px; font-family: inherit; font-size: 0.8rem; border-radius: 6px; cursor: pointer; margin: 6px 4px; }
+.bestiary-btn:hover { background: #3a3a50; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.92); display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 35; padding: 24px; overflow-y: auto; }
+.modal-content { background: #181825; border: 1px solid #333; border-radius: 8px; padding: 20px; max-width: 720px; width: 100%; max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+.modal-header h2 { color: #c39bd3; font-family: 'Orbitron', sans-serif; font-weight: 900; letter-spacing: 4px; font-size: 1.4rem; text-shadow: 0 0 20px rgba(155,89,182,0.5); margin: 0; flex: 1; }
+.bestiary-progress { color: #777; font-size: 0.8rem; }
+.modal-close { background: none; border: none; color: #888; font-size: 1.6rem; cursor: pointer; padding: 0 8px; line-height: 1; }
+.modal-close:hover { color: #eee; }
+
+.bestiary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.beast-card { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 12px; text-align: center; transition: border-color 0.15s; }
+.beast-card.unseen { opacity: 0.5; border-style: dashed; }
+.beast-card .beast-swatch { width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 8px; box-shadow: 0 0 16px currentColor; }
+.beast-card .beast-swatch.unseen { background: #222 !important; box-shadow: none; color: #333 !important; }
+.beast-card .beast-name { color: #eee; font-weight: 700; letter-spacing: 2px; font-size: 0.85rem; margin-bottom: 4px; }
+.beast-card .beast-wave { color: #9b59b6; font-size: 0.65rem; margin-bottom: 6px; }
+.beast-card .beast-stats { color: #888; font-size: 0.7rem; font-family: monospace; margin-bottom: 6px; }
+.beast-card .beast-desc { color: #aaa; font-size: 0.7rem; line-height: 1.4; }
+.beast-card.unseen .beast-name,
+.beast-card.unseen .beast-stats,
+.beast-card.unseen .beast-desc { color: #555; }
 </style>
 </head>
 <body data-mode="sp">
@@ -209,6 +232,7 @@ canvas { touch-action: none; }
   </select>
   <div style="margin-top:16px; display:flex; gap:8px; align-items:center;">
     <button class="shop-btn sp-only" onclick="showPrestigeShop()">SHOP</button>
+    <button class="bestiary-btn" onclick="showBestiary()">📖 BESTIARY</button>
     <button onclick="startGame()">PLAY</button>
   </div>
   <div class="sub" style="margin-top:16px">WASD to move · auto-attack · survive</div>
@@ -274,7 +298,19 @@ canvas { touch-action: none; }
   <div id="death-scales" class="sp-only" style="margin-bottom:12px; text-align:center;"></div>
   <div style="display:flex; gap:8px; align-items:center;">
     <button class="shop-btn sp-only" onclick="showPrestigeShop()">SHOP</button>
+    <button class="bestiary-btn" onclick="showBestiary()">📖 BESTIARY</button>
     <button onclick="startGame()">RETRY</button>
+  </div>
+</div>
+
+<div id="bestiary" class="modal-overlay">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>📖 BESTIARY</h2>
+      <span id="bestiary-progress" class="bestiary-progress"></span>
+      <button class="modal-close" onclick="hideBestiary()">×</button>
+    </div>
+    <div class="bestiary-grid" id="bestiary-grid"></div>
   </div>
 </div>
 
