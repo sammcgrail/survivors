@@ -20,6 +20,7 @@ export const EVT = {
   CHARGE_BURST:        'chargeBurst',
   HIVE_BURST:          'hiveBurst',
   EVOLUTION:           'evolution',
+  WAVE_SURVIVED:       'waveSurvived',
 };
 
 export function emit(g, type, payload) {
