@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras } from './shared/render.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -722,20 +722,7 @@ function render(dt) {
     drawGem(ctx, gem, drawSprite);
   }
 
-  // --- heart drops ---
-  for (const h of (state.heartDrops || [])) {
-    if (h.x < cx - 20 || h.x > cx + W + 20 || h.y < cy - 20 || h.y > cy + H + 20) continue;
-    const bob = Math.sin(h.bobPhase) * 2;
-    const fadeAlpha = h.life < 2 ? Math.max(0.2, h.life / 2) : 1;
-    if (!drawSprite('heart', h.x, h.y + bob, 0.8, fadeAlpha)) {
-      ctx.fillStyle = '#e74c3c';
-      ctx.globalAlpha = fadeAlpha;
-      ctx.beginPath();
-      ctx.arc(h.x, h.y + bob, h.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-  }
+  drawHeartDrops(ctx, state.heartDrops || [], drawSprite, cx, cy, W, H);
 
   drawWeaponAuras(ctx, state.players, state.time || 0);
 
@@ -755,41 +742,18 @@ function render(dt) {
     if (pl.x < cx - 60 || pl.x > cx + W + 60 || pl.y < cy - 60 || pl.y > cy + H + 60) continue;
     const playerRadius = 14;
     const skin = pl.activeSkin;
-
-    drawSkinAura(ctx, pl.x, pl.y, playerRadius, skin, gameTime);
-
-    // Glow color tracks skin.
     const glowColor = skin === 'skin_gold' ? '#f39c12'
                     : skin === 'skin_shadow' ? '#9b59b6'
                     : (isMe ? '#3498db' : pl.color);
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = skin === 'skin_shadow' ? 25 : (isMe ? 15 : 8);
 
-    // Player sprite/circle
-    const spriteDrawn = drawSprite('player', pl.x, pl.y, 2);
-    if (spriteDrawn && skin) {
-      // Skin tint overlay.
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-atop';
-      const tintColor = skin === 'skin_gold' ? 'rgba(241, 196, 15, 0.35)'
-                      : 'rgba(100, 30, 150, 0.4)';
-      ctx.fillStyle = tintColor;
-      ctx.fillRect(pl.x - 16, pl.y - 16, 32, 32);
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.restore();
-    }
-    if (!spriteDrawn) {
-      ctx.fillStyle = pl.color;
-      ctx.beginPath();
-      ctx.arc(pl.x, pl.y, playerRadius, 0, Math.PI * 2);
-      ctx.fill();
-      if (isMe) {
-        ctx.strokeStyle = '#3498db';
-        ctx.lineWidth = 2;
-        ctx.stroke();
-      }
-    }
-    ctx.shadowBlur = 0;
+    drawPlayerBody(ctx, drawSprite, pl, gameTime, {
+      skin,
+      radius: playerRadius,
+      glowColor,
+      shadowBlur: skin === 'skin_shadow' ? 25 : (isMe ? 15 : 8),
+      fallbackFill: pl.color,
+      strokeOnFallback: isMe,
+    });
 
     // Fire trail particles. Spawned local-only so we don't have to add
     // a particle channel to the WS protocol — visible to whoever's
