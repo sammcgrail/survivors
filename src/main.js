@@ -397,7 +397,7 @@ let keys = { up: false, down: false, left: false, right: false };
 let analogMove = { x: 0, y: 0 }; // smooth analog input from touch
 let paused = false;
 let selectedWeapon = 'spit'; // default starting weapon
-let selectedMapId = 'arena';   // default map (open field, no obstacles)
+let selectedMapId = 'neon';    // default map (code-rendered abstract grid)
 
 function selectWeapon(type) {
   selectedWeapon = type;
