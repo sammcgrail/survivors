@@ -667,6 +667,110 @@ export function drawWeaponAuras(ctx, players, time, viewport) {
           ctx.stroke();
         }
       }
+
+      if (w.type === 'inferno_wheel') {
+        const phase = w.phase || 0;
+        const orbitR = w.radius * sm;
+        const bladeR = w.bladeRadius * sm;
+        const count = w.bladeCount + pb;
+        for (let b = 0; b < count; b++) {
+          const angle = phase + (b * Math.PI * 2 / count);
+          const bx = p.x + Math.cos(angle) * orbitR;
+          const by = p.y + Math.sin(angle) * orbitR;
+          // Trailing ember arc behind the blade — three decaying
+          // after-images so the blade's path reads as swept fire.
+          for (let t = 1; t <= 3; t++) {
+            const ta = angle - t * 0.18;
+            const tx = p.x + Math.cos(ta) * orbitR;
+            const ty = p.y + Math.sin(ta) * orbitR;
+            ctx.globalAlpha = 0.35 / t;
+            ctx.fillStyle = t === 1 ? '#f39c12' : '#e74c3c';
+            ctx.beginPath();
+            ctx.arc(tx, ty, bladeR * (0.7 - t * 0.15), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          // Blade body — layered glow + hot core. No gradient object
+          // per blade (fillStyle rgba is cheaper than createRadialGradient
+          // and the profile flagged gradients as acceptable but still
+          // worth avoiding in a multi-blade loop).
+          ctx.fillStyle = 'rgba(231, 76, 60, 0.45)';
+          ctx.beginPath();
+          ctx.arc(bx, by, bladeR, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(243, 156, 18, 0.75)';
+          ctx.beginPath();
+          ctx.arc(bx, by, bladeR * 0.65, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = 'rgba(255, 220, 150, 0.9)';
+          ctx.beginPath();
+          ctx.arc(bx, by, bladeR * 0.3 + Math.sin(time * 9 + b) * 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (w.type === 'tesla_aegis') {
+        const ph = w.phase || 0;
+        const pp = w.pulsePhase || 0;
+        const pc = w.pulseCount || 0;
+        // Overcharge tells: next pulse (pc+1) is the 4th → show brighter
+        // shell + rapid-flicker arcs. Mirrors thunder_god's tell pattern.
+        const overchargeReady = (pc + 1) % 4 === 0;
+        const r = w.shieldRadius * sm * (1 + Math.sin(ph) * 0.08);
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.6, p.x, p.y, r);
+        if (overchargeReady) {
+          grad.addColorStop(0,   'rgba(200, 230, 255, 0.05)');
+          grad.addColorStop(0.6, 'rgba(255, 255, 255, 0.2)');
+          grad.addColorStop(1,   'rgba(178, 220, 255, 0.45)');
+        } else {
+          grad.addColorStop(0,   'rgba(116, 185, 255, 0)');
+          grad.addColorStop(0.7, 'rgba(116, 185, 255, 0.15)');
+          grad.addColorStop(1,   'rgba(178, 220, 255, 0.3)');
+        }
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = overchargeReady ? 'rgba(255, 255, 255, 0.95)' : 'rgba(178, 220, 255, 0.85)';
+        ctx.lineWidth = overchargeReady ? 3 : 2;
+        ctx.setLineDash([6, 5]);
+        ctx.lineDashOffset = -ph * 6;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.lineDashOffset = 0;
+        // Pulse preview ring — expands outward as pulseTimer counts
+        // down, giving players a tell for when the next zap fires.
+        const pulseFrac = 1 - Math.min(1, Math.max(0, (w.pulseTimer || 0) / w.pulseCooldown));
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.35 * (1 - pulseFrac)})`;
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * (0.5 + pulseFrac * 0.55), 0, Math.PI * 2);
+        ctx.stroke();
+        // Ambient arcs — denser when overcharge is next so the shield
+        // visibly crackles during the telegraph window.
+        const arcChance = overchargeReady ? 0.9 : 0.5;
+        if (Math.random() < arcChance) {
+          const a1 = Math.random() * Math.PI * 2;
+          const a2 = a1 + (Math.random() - 0.5) * 0.7;
+          const r1 = r * (0.3 + Math.random() * 0.6);
+          const r2 = r * (0.3 + Math.random() * 0.6);
+          ctx.strokeStyle = 'rgba(220, 240, 255, 0.6)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(p.x + Math.cos(a1) * r1, p.y + Math.sin(a1) * r1);
+          ctx.lineTo(p.x + Math.cos(a2) * r2, p.y + Math.sin(a2) * r2);
+          ctx.stroke();
+        }
+        ctx.fillStyle = '#eaf6ff';
+        for (let i = 0; i < 4; i++) {
+          const a = pp * 0.25 + (Math.PI * 2 / 4) * i;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
     }
   }
 }

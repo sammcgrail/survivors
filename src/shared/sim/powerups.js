@@ -70,6 +70,26 @@ export const POWERUPS = [
       emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'fortress', pid: p.id });
     }
   },
+  // Cross-pair evolutions: these overlap source weapons with existing
+  // evolutions (breath also evolves into dragon_storm; orbit into
+  // meteor_orbit). Players pick which path at the level-up screen —
+  // only one can apply since each consumes both sources.
+  { id: 'evo_inferno_wheel', name: 'INFERNO WHEEL', desc: 'Breath + Orbit fuse into rotating flame blades that apply burn', icon: '🔥',
+    max: 1, requiresEvo: ['breath_up', 'orbit_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'breath' && w.type !== 'orbit');
+      p.weapons.push(createWeapon('inferno_wheel'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'inferno_wheel', pid: p.id });
+    }
+  },
+  { id: 'evo_tesla_aegis', name: 'TESLA AEGIS', desc: 'Chain + Shield fuse into a knockback shield that pulse-zaps with slow', icon: '🌩️',
+    max: 1, requiresEvo: ['chain_up', 'shield_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'chain' && w.type !== 'shield');
+      p.weapons.push(createWeapon('tesla_aegis'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'tesla_aegis', pid: p.id });
+    }
+  },
 ];
 
 // Filter the catalog to entries the player can pick right now, given

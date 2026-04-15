@@ -204,6 +204,8 @@ export function updateWeapons(g, dt) {
       if (w.type === 'meteor_orbit') tickMeteorOrbit(g, w, p, dt);
       if (w.type === 'fortress') tickFortressShield(g, w, p, dt);
       if (w.type === 'thunder_god' && w.timer >= w.cooldown - 0.01) tickThunderField(g, w, p);
+      if (w.type === 'inferno_wheel') tickInfernoWheel(g, w, p, dt);
+      if (w.type === 'tesla_aegis') tickTeslaAegis(g, w, p, dt);
     }
   }
 }
@@ -434,6 +436,122 @@ function fortressShockwave(g, w, p) {
     color: w.color, owner: p.id,
   });
   emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: w.shockwaveRadius, pid: p.id });
+}
+
+// --- Inferno Wheel ---
+// Breath + Orbit fusion. Orbit-style rotating blades with a much larger
+// contact radius (so it reads as fire, not a precise blade) and a burn
+// on every hit. Damage scaling matches orbit (× dt × 8) so it tunes the
+// same way.
+function tickInfernoWheel(g, w, p, dt) {
+  w.phase = (w.phase || 0) + w.rotSpeed * dt;
+  const effectiveOrbitR = w.radius * (p.sizeMulti || 1);
+  const effectiveBladeR = w.bladeRadius * (p.sizeMulti || 1);
+  const bladeCount = w.bladeCount + (p.projectileBonus || 0);
+  for (let b = 0; b < bladeCount; b++) {
+    const angle = w.phase + (b * Math.PI * 2 / bladeCount);
+    const bx = p.x + Math.cos(angle) * effectiveOrbitR;
+    const by = p.y + Math.sin(angle) * effectiveOrbitR;
+    for (let j = g.enemies.length - 1; j >= 0; j--) {
+      const e = g.enemies[j];
+      const dx = bx - e.x, dy = by - e.y;
+      if (dx * dx + dy * dy < (effectiveBladeR + e.radius) ** 2) {
+        damageEnemy(g, e, w.bladeDamage * p.damageMulti * dt * 8, p.id);
+        applyStatus(g, e, { type: 'burn', remaining: w.burnDuration, magnitude: w.burnDps, tickRate: 0.5 });
+      }
+    }
+  }
+}
+
+// --- Tesla Aegis ---
+// Chain + Shield fusion. Always-on knockback shield that also pulses a
+// chain zap every pulseCooldown. Shield tick mirrors tickFortressShield;
+// pulse mirrors fireChain but with a slow status on every link. The
+// pulseTimer is independent of w.timer so the shield's `cooldown:99999`
+// never blocks the pulse cadence.
+function tickTeslaAegis(g, w, p, dt) {
+  w.phase = (w.phase || 0) + dt * 4;
+  w.pulsePhase = (w.pulsePhase || 0) + dt * 6;
+
+  const effectiveRadius = w.shieldRadius * (p.sizeMulti || 1);
+  let hit = false;
+  for (const e of g.enemies) {
+    const edx = e.x - p.x, edy = e.y - p.y;
+    const dist = Math.hypot(edx, edy);
+    if (dist < effectiveRadius + e.radius && dist > 1) {
+      hit = true;
+      const nx = edx / dist, ny = edy / dist;
+      e.x += nx * w.knockback * dt;
+      e.y += ny * w.knockback * dt;
+      damageEnemy(g, e, w.shieldDamage * p.damageMulti * dt * 2, p.id);
+    }
+  }
+  if (hit) {
+    w._humTimer = (w._humTimer || 0) - dt;
+    if (w._humTimer <= 0) {
+      emit(g, EVT.SHIELD_HUM);
+      w._humTimer = 0.4;
+    }
+  }
+
+  w.pulseTimer = (w.pulseTimer || 0) - dt;
+  if (w.pulseTimer <= 0) {
+    w.pulseTimer = w.pulseCooldown;
+    fireTeslaAegisPulse(g, w, p);
+  }
+}
+
+function fireTeslaAegisPulse(g, w, p) {
+  w.pulseCount = (w.pulseCount || 0) + 1;
+  const overcharge = w.pulseCount > 0 && w.pulseCount % w.overchargeEvery === 0;
+  if (overcharge) {
+    const expandR = w.overchargeExpandR * (p.sizeMulti || 1);
+    for (const e of g.enemies) {
+      const dx = e.x - p.x, dy = e.y - p.y;
+      if (dx * dx + dy * dy >= expandR * expandR) continue;
+      damageEnemy(g, e, w.chainDamage * 2 * p.damageMulti, p.id);
+      e.stunTimer = Math.max(e.stunTimer || 0, w.overchargeStun);
+      applyStatus(g, e, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
+    }
+    // Expanding ring read — reuse the meteor 'explode' phase since it
+    // already draws a ring that fades out, and it carries its own
+    // color field so it reads blue here instead of the usual orange.
+    g.meteorEffects.push({
+      x: p.x, y: p.y, radius: expandR,
+      damage: 0, life: w.overchargeExpandLife, phase: 'explode',
+      color: w.color, owner: p.id,
+    });
+    emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis_overcharge', pid: p.id });
+    return;
+  }
+
+  const effectiveRange = w.chainRange * (p.sizeMulti || 1);
+  const chainCount = w.chains + (p.projectileBonus || 0);
+  const hitSet = new Set();
+  let prevX = p.x, prevY = p.y;
+  const points = [{ x: p.x, y: p.y }];
+  let nextRange = effectiveRange;
+  for (let i = 0; i < chainCount; i++) {
+    let nearest = null, nearestDist = nextRange;
+    for (const e of g.enemies) {
+      if (hitSet.has(e)) continue;
+      const d = Math.hypot(e.x - prevX, e.y - prevY);
+      if (d < nearestDist) { nearest = e; nearestDist = d; }
+    }
+    if (!nearest) break;
+    hitSet.add(nearest);
+    damageEnemy(g, nearest, w.chainDamage * p.damageMulti, p.id);
+    applyStatus(g, nearest, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
+    points.push({ x: nearest.x, y: nearest.y });
+    prevX = nearest.x; prevY = nearest.y;
+    // Tighter falloff after the first hop so chains wrap the shield
+    // rather than reaching across the screen.
+    nextRange = w.chainRange * 0.6;
+  }
+  if (points.length > 1) {
+    g.chainEffects.push({ points, life: 0.2, color: w.color });
+    emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis', pid: p.id });
+  }
 }
 
 // --- chain + meteor effect lifetimes ---

@@ -258,12 +258,15 @@ suite('Weapon DPS Math', () => {
 
   test('all weapon types create valid objects', () => {
     const types = ['spit', 'breath', 'charge', 'orbit', 'chain', 'meteor',
-      'shield', 'lightning_field', 'dragon_storm', 'thunder_god', 'meteor_orbit', 'fortress'];
+      'shield', 'lightning_field', 'dragon_storm', 'thunder_god', 'meteor_orbit', 'fortress',
+      'inferno_wheel', 'tesla_aegis'];
     for (const t of types) {
       const w = createWeapon(t);
       assert(w !== null, `${t} should create a weapon`);
       assert(w.type === t, `${t} type should match`);
-      assert(typeof w.damage === 'number' && w.damage > 0, `${t} should have positive damage`);
+      // inferno_wheel + tesla_aegis split damage across bladeDamage / chainDamage / shieldDamage
+      const d = w.damage ?? w.bladeDamage ?? w.chainDamage ?? w.shieldDamage;
+      assert(typeof d === 'number' && d > 0, `${t} should have positive damage`);
     }
   });
 
@@ -288,6 +291,95 @@ suite('Weapon DPS Math', () => {
       const maxDmg = Math.max(...hits.map(h => h.dmg));
       assert(maxDmg >= 28, `max hit damage ${maxDmg} should be ~30 (15 * 2.0)`);
     }
+  });
+});
+
+suite('Cross-pair Evolutions', () => {
+  test('inferno_wheel applies burn on blade contact', () => {
+    const g = makeGame({ playerOverrides: { weapons: [createWeapon('inferno_wheel')] } });
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'tank'), 1, rng);
+    // Place the enemy at the 0-angle blade start position (radius 85)
+    e.x = g.player.x + 85;
+    e.y = g.player.y;
+    e.hp = 9999; e.maxHp = 9999;
+    g.enemies.push(e);
+    tickN(g, 30); // 0.5s — blade sweeps onto the enemy
+    assert(e.statusEffects && e.statusEffects.some(s => s.type === 'burn'),
+      'enemy under inferno blade should have burn status');
+    assert(e.hp < 9999, 'enemy should take blade damage');
+  });
+
+  test('tesla_aegis shield damages + knocks back contact', () => {
+    const g = makeGame({ playerOverrides: { weapons: [createWeapon('tesla_aegis')] } });
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'blob'), 1, rng);
+    e.x = g.player.x + 40; // inside 90u shield radius
+    e.y = g.player.y;
+    e.hp = 9999; e.maxHp = 9999;
+    g.enemies.push(e);
+    const startX = e.x, startHp = e.hp;
+    tickN(g, 10);
+    assert(e.x > startX, 'enemy inside shield should be knocked outward');
+    assert(e.hp < startHp, 'enemy inside shield should take damage');
+  });
+
+  test('tesla_aegis chain pulse applies slow', () => {
+    const g = makeGame({ playerOverrides: { weapons: [createWeapon('tesla_aegis')] } });
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'blob'), 1, rng);
+    // Place outside shield (90) but inside chain range (200)
+    e.x = g.player.x + 150;
+    e.y = g.player.y;
+    e.hp = 9999; e.maxHp = 9999;
+    g.enemies.push(e);
+    tickN(g, 40); // 0.66s — at least one pulse should have fired
+    assert(e.statusEffects && e.statusEffects.some(s => s.type === 'slow'),
+      'enemy pulse-chained by tesla_aegis should be slowed');
+  });
+
+  test('tesla_aegis overcharge stuns on 4th pulse', () => {
+    const g = makeGame({ playerOverrides: { weapons: [createWeapon('tesla_aegis')] } });
+    const rng = createRng(1);
+    // Enemies inside the overcharge expand radius (150) but outside the
+    // shield (90) so we isolate the overcharge stun from any shield
+    // contact effects.
+    for (let i = 0; i < 4; i++) {
+      const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'blob'), 1, rng);
+      e.x = g.player.x + 110 + i * 5;
+      e.y = g.player.y + i * 5;
+      e.hp = 9999; e.maxHp = 9999;
+      g.enemies.push(e);
+    }
+    // First pulse on tick 1; then every 30 ticks. 4th pulse (overcharge)
+    // fires ~tick 91. stun lasts 0.3s (~18 ticks) so we check just after.
+    tickN(g, 95);
+    const stunned = g.enemies.some(e => (e.stunTimer || 0) > 0);
+    assert(stunned, 'at least one enemy should be stunned from overcharge pulse');
+    const w = g.player.weapons[0];
+    assert(w.pulseCount >= 4, `pulseCount should be >= 4, got ${w.pulseCount}`);
+  });
+
+  test('evolution status stacks refresh (burn + inferno_wheel)', () => {
+    const g = makeGame({ playerOverrides: { weapons: [createWeapon('inferno_wheel')] } });
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'tank'), 1, rng);
+    e.x = g.player.x + 85;
+    e.y = g.player.y;
+    e.hp = 9999; e.maxHp = 9999;
+    g.enemies.push(e);
+    tickN(g, 10);
+    const burn = e.statusEffects && e.statusEffects.find(s => s.type === 'burn');
+    assert(burn, 'burn applied');
+    const firstRemaining = burn.remaining;
+    // Let some time pass — burn remaining should decrement; then re-apply
+    tickN(g, 5);
+    // Re-application should refresh to max(existing, new) — fresh blade
+    // contact pushes remaining back toward full duration.
+    const burn2 = e.statusEffects.find(s => s.type === 'burn');
+    assert(burn2.remaining > 0, 'burn should still be active after refresh');
+    assert(burn2.remaining >= firstRemaining - 0.5,
+      `refresh should keep remaining high (first=${firstRemaining} now=${burn2.remaining})`);
   });
 });
 
