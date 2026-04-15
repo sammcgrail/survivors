@@ -8,6 +8,7 @@ export const WEAPON_ICONS = {
   dragon_storm: '🐉',
   thunder_god: '⚡', meteor_orbit: '🔥', fortress: '🏰',
   inferno_wheel: '🔥', tesla_aegis: '🌩️',
+  void_anchor: '🌑',
 };
 
 export function createWeapon(type) {
@@ -132,6 +133,13 @@ export function createWeapon(type) {
       overchargeStun: 0.3, overchargeExpandR: 150, overchargeExpandLife: 0.25,
       phase: 0, pulsePhase: 0,
       color: '#74b9ff',
+    };
+    case 'void_anchor': return {
+      type: 'void_anchor', cooldown: 3.5, timer: 0,
+      baseDamage: 45, impactDamage: 110,
+      pullRadius: 200, pullStrength: 220,
+      impactRadius: 85,
+      color: '#6c5ce7',
     };
     default: return null;
   }

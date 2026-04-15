@@ -82,6 +82,14 @@ export const POWERUPS = [
       emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'inferno_wheel', pid: p.id });
     }
   },
+  { id: 'evo_void_anchor', name: 'VOID ANCHOR', desc: 'Meteor + Chain fuse into a gravitational pull that crushes enemies on impact', icon: '🌑',
+    max: 1, requiresEvo: ['meteor_up', 'chain_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'meteor' && w.type !== 'chain');
+      p.weapons.push(createWeapon('void_anchor'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'void_anchor', pid: p.id });
+    }
+  },
   { id: 'evo_tesla_aegis', name: 'TESLA AEGIS', desc: 'Chain + Shield fuse into a knockback shield that pulse-zaps with slow', icon: '🌩️',
     max: 1, requiresEvo: ['chain_up', 'shield_up'],
     apply(g, p) {

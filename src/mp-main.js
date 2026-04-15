@@ -13,7 +13,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
@@ -986,6 +986,7 @@ function render(dt) {
   drawChargeTrail(ctx, state.players);
   drawChainEffects(ctx, state.chainEffects || []);
   drawMeteorEffects(ctx, state.meteorEffects || []);
+  drawPendingPulls(ctx, state.pendingPulls);
 
   // --- players ---
   for (const pl of state.players) {

@@ -9,7 +9,7 @@
 // - gems pull last since they only react to player position
 // - chain/meteor effect lifetimes drain after everything that emitted them
 import { updateWaves } from './waves.js';
-import { updateWeapons, updateAuras, updateChainEffects, updateMeteorEffects, updateChargeTrails } from './weapons_runtime.js';
+import { updateWeapons, updateAuras, updateChainEffects, updateMeteorEffects, updateChargeTrails, updatePendingPulls } from './weapons_runtime.js';
 import { updateProjectiles } from './projectiles.js';
 import { updateEnemies } from './enemies.js';
 import { buildSpatialHash, checkBulletEnemyCollisions, checkEnemyPlayerCollisions } from './collision.js';
@@ -32,6 +32,7 @@ export function tickSim(g, dt) {
   const enemyHash = buildSpatialHash(g.enemies);
   checkBulletEnemyCollisions(g, enemyHash);
   checkEnemyPlayerCollisions(g, enemyHash);
+  updatePendingPulls(g, dt);
   updateEnemyProjectiles(g, dt);
   updateGems(g, dt);
   updateHearts(g, dt);

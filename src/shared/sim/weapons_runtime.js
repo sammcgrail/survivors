@@ -34,6 +34,7 @@ function fireWeapon(g, w, p) {
   else if (w.type === 'thunder_god')  fireThunderGod(g, w, p);
   else if (w.type === 'meteor_orbit') fireMeteor(g, w, p);
   else if (w.type === 'fortress')     fireCharge(g, w, p);
+  else if (w.type === 'void_anchor')  fireVoidAnchor(g, w, p);
 }
 
 function fireSpit(g, w, p) {
@@ -551,6 +552,54 @@ function fireTeslaAegisPulse(g, w, p) {
   if (points.length > 1) {
     g.chainEffects.push({ points, life: 0.2, color: w.color });
     emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis', pid: p.id });
+  }
+}
+
+// --- Void Anchor ---
+function fireVoidAnchor(g, w, p) {
+  emit(g, EVT.WEAPON_FIRE, { weapon: 'void_anchor', pid: p.id });
+  const pullR = w.pullRadius * (p.sizeMulti || 1);
+  const nearest = g.enemies
+    .filter(e => Math.hypot(e.x - p.x, e.y - p.y) < pullR)
+    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  if (nearest) damageEnemy(g, nearest, w.baseDamage * p.damageMulti, p.id);
+  if (!g.pendingPulls) g.pendingPulls = [];
+  g.pendingPulls.push({
+    x: p.x, y: p.y,
+    radius: pullR,
+    strength: w.pullStrength,
+    duration: 0.55,
+    elapsed: 0,
+  });
+  const impactR = w.impactRadius * (p.sizeMulti || 1);
+  g.meteorEffects.push({
+    x: p.x, y: p.y,
+    radius: impactR,
+    damage: w.impactDamage * p.damageMulti,
+    life: 0.7, warnLife: 0.7,
+    phase: 'warn',
+    color: w.color,
+    owner: p.id,
+  });
+  emit(g, EVT.METEOR_WARN, { x: p.x, y: p.y, radius: impactR });
+}
+
+export function updatePendingPulls(g, dt) {
+  if (!g.pendingPulls || g.pendingPulls.length === 0) return;
+  for (let i = g.pendingPulls.length - 1; i >= 0; i--) {
+    const pull = g.pendingPulls[i];
+    pull.elapsed += dt;
+    const r2 = pull.radius * pull.radius;
+    for (const e of g.enemies) {
+      const dx = pull.x - e.x;
+      const dy = pull.y - e.y;
+      if (dx * dx + dy * dy > r2) continue;
+      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const force = pull.strength * dt;
+      e.x += (dx / d) * force;
+      e.y += (dy / d) * force;
+    }
+    if (pull.elapsed >= pull.duration) g.pendingPulls.splice(i, 1);
   }
 }
 
