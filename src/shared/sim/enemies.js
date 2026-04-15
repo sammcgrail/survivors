@@ -268,7 +268,7 @@ function updateEnemyTick(g, dt, hash) {
         if (p.hp <= 0) {
           p.hp = 0;
           p.alive = false;
-          emit(g, EVT.PLAYER_DEATH, { by: e.name, pid: p.id });
+          emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: e.name, pid: p.id });
         }
       }
     }
