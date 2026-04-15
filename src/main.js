@@ -647,6 +647,7 @@ function handleSimEvent(evt) {
       if (evt.weapon === 'spit')              sfx('spit');
       else if (evt.weapon === 'chain')        sfx('chain');
       else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
+      else if (evt.weapon === 'thunder_god')  sfx('chain');
       break;
     case EVT.CHARGE_BURST:
       g.screenShake = 0.1;
@@ -1064,6 +1065,93 @@ function render() {
       ctx.arc(p.x, p.y, w.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.setLineDash([]);
+    }
+
+    // Thunder God — electric field + overcharge white-flash pulse.
+    if (w.type === 'thunder_god') {
+      const overchargeReady = w.fireCount > 0 && (w.fireCount + 1) % w.overchargeEvery === 0;
+      const a = 0.05 + Math.sin(g.time * 8) * 0.025;
+      ctx.fillStyle = overchargeReady ? `rgba(255, 255, 255, ${a * 2})` : `rgba(0, 210, 211, ${a})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, w.fieldRadius, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = overchargeReady ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 210, 211, 0.3)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, w.fieldRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+
+    // Meteor Orbit — flame blades with trailing sparks.
+    if (w.type === 'meteor_orbit') {
+      for (let b = 0; b < w.bladeCount; b++) {
+        const angle = (w.phase || 0) + (b * Math.PI * 2 / w.bladeCount);
+        const bx = p.x + Math.cos(angle) * w.radius;
+        const by = p.y + Math.sin(angle) * w.radius;
+        // Trailing sparks behind the blade.
+        for (let t = 1; t <= 3; t++) {
+          const trailAngle = angle - t * 0.1;
+          const tx = p.x + Math.cos(trailAngle) * w.radius;
+          const ty = p.y + Math.sin(trailAngle) * w.radius;
+          ctx.globalAlpha = 0.3 / t;
+          ctx.fillStyle = '#ff6348';
+          ctx.beginPath();
+          ctx.arc(tx, ty, 4 - t, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+        ctx.save();
+        ctx.translate(bx, by);
+        ctx.rotate(angle + Math.PI / 2);
+        ctx.fillStyle = w.color;
+        ctx.shadowColor = w.color;
+        ctx.shadowBlur = 10;
+        ctx.beginPath();
+        ctx.moveTo(0, -14);
+        ctx.lineTo(6, 6);
+        ctx.lineTo(-6, 6);
+        ctx.closePath();
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.restore();
+      }
+    }
+
+    // Fortress — hex shield + charge trail.
+    if (w.type === 'fortress') {
+      const pulse = 1 + Math.sin(w.phase || 0) * 0.08;
+      const r = w.shieldRadius * pulse;
+      const grad = ctx.createRadialGradient(p.x, p.y, r * 0.7, p.x, p.y, r);
+      grad.addColorStop(0, 'rgba(116, 185, 255, 0)');
+      grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.18)');
+      grad.addColorStop(1, 'rgba(116, 185, 255, 0.35)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+      ctx.fill();
+      // Hex ring — 6 stroked sides rotating with phase, reads as fortress plate.
+      ctx.strokeStyle = 'rgba(116, 185, 255, 0.8)';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      for (let h = 0; h < 6; h++) {
+        const a = (w.phase || 0) * 0.3 + (Math.PI * 2 / 6) * h;
+        const x = p.x + Math.cos(a) * r;
+        const y = p.y + Math.sin(a) * r;
+        if (h === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.stroke();
+      // Charge trail while active.
+      if (w.active) {
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+        ctx.lineTo(p.x - w.chargeDx * 80, p.y - w.chargeDy * 80);
+        ctx.stroke();
+      }
     }
   }
 
