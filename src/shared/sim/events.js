@@ -19,6 +19,7 @@ export const EVT = {
   BOSS_TELEGRAPH:      'bossTelegraph',
   CHARGE_BURST:        'chargeBurst',
   HIVE_BURST:          'hiveBurst',
+  BOSS_SPAWN:          'bossSpawn',
   EVOLUTION:           'evolution',
   WAVE_SURVIVED:       'waveSurvived',
   CONSUMABLE_SPAWN:    'consumableSpawn',

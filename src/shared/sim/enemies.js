@@ -56,6 +56,9 @@ export function spawnEnemy(g) {
   // start its life clipped through a wall.
   if (g.obstacles && g.obstacles.length > 0) pushOutOfObstacles(e, g.obstacles);
   g.enemies.push(e);
+  // Boss arrival is a moment — emit so clients can play the
+  // ominous sfx + telegraph particles + screen shake.
+  if (e.name === 'boss') emit(g, EVT.BOSS_SPAWN, { x: e.x, y: e.y });
 }
 
 // Returns the alive player with the smallest distance to (ex, ey), plus
