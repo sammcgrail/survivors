@@ -38,17 +38,37 @@ export const ENEMY_TYPES = [
   { name: 'elite',  hp: 300, speed: 45,  radius: 20, color: '#6c5ce7', damage: 25, xp: 80, sprite: 'elite',   flock: F(130, 2.0, 0.4, 0.2, 1.5, 45), shootCooldown: 2.0, shootDamage: 12, shootSpeed: 180, shootRange: 350, statusResist: 0.5 },
   { name: 'spawner',hp: 100, speed: 15,  radius: 22, color: '#fdcb6e', damage: 10, xp: 50, sprite: 'spawner', flock: F(100, 2.5, 0.1, 0.0, 0.8, 60), statusResist: 0.3 },
   { name: 'boss',   hp: 2000,speed: 35,  radius: 40, color: '#d63031', damage: 50, xp: 500,sprite: 'boss', shootCooldown: 3.0, shootDamage: 20, shootSpeed: 160, shootRange: 450, statusResist: 0.5 },
+  // New variety pass 2026-04-15 (bench follow-up). Each adds one
+  // distinct mechanic the existing roster didn't cover — poison DoT
+  // on hit, split-on-death, explode-on-death, heal-nearby.
+  // poisoner: sparser swarm-sized chaser that applies a long, strong
+  // burn on contact. Rewards kiting hard — take one hit and you're
+  // ticking for 4s. No sprite yet, falls back to teal circle.
+  { name: 'poisoner', hp: 22, speed: 70, radius: 9,  color: '#16a085', damage: 4,  xp: 14, flock: F(110, 2.0, 0.4, 0.1, 1.5, 28), poisonOnHit: { dps: 6, duration: 4 } },
+  // splitter: medium enemy that bursts into 3 swarmlings on death.
+  // turns a single frontline target into a swarm problem — rewards
+  // AoE finishes, punishes single-target spit pierce.
+  { name: 'splitter', hp: 45, speed: 50, radius: 13, color: '#27ae60', damage: 10, xp: 22, flock: F(120, 1.8, 0.3, 0.1, 1.4, 40), splitOn: { name: 'swarm', count: 3, radius: 28 } },
+  // bomber: tank-sized charger with a meteor-shaped death blast.
+  // Players need to path AWAY from low-HP bombers instead of finishing
+  // them at point-blank. Telegraph shake on low HP would be a v2.
+  { name: 'bomber',   hp: 65, speed: 55, radius: 15, color: '#e17055', damage: 14, xp: 32, flock: F(130, 2.2, 0.2, 0.1, 1.4, 45), explodeOn: { radius: 55, damage: 22 } },
+  // healer: elite-tier support that restores HP to any enemy within
+  // healRadius every healInterval. Priority target — a healer in a
+  // pack turns a clearable fight into attrition. Starts healing only
+  // after a short delay so it doesn't heal itself out of an opener.
+  { name: 'healer',   hp: 180, speed: 38, radius: 16, color: '#00b894', damage: 8, xp: 70, flock: F(120, 2.2, 0.3, 0.1, 1.1, 42), healInterval: 1.5, healAmount: 8, healRadius: 140, statusResist: 0.3 },
 ];
 
 // Wave composition tables — weights for each enemy type per wave bracket
 export const WAVE_POOLS = [
   { maxWave: 2,  weights: { blob: 5, swarm: 3 } },
   { maxWave: 4,  weights: { blob: 4, swarm: 4, fast: 2 } },
-  { maxWave: 6,  weights: { blob: 3, swarm: 3, fast: 3, tank: 1 } },
-  { maxWave: 9,  weights: { blob: 2, swarm: 4, fast: 3, tank: 2, ghost: 2 } },
-  { maxWave: 12, weights: { blob: 1, swarm: 5, fast: 3, tank: 3, ghost: 2, brute: 1 } },
-  { maxWave: 17, weights: { blob: 1, swarm: 6, fast: 4, tank: 3, ghost: 3, brute: 2 } },
-  { maxWave: 999,weights: { swarm: 5, fast: 4, tank: 3, ghost: 4, brute: 3, elite: 1, spawner: 1 } },
+  { maxWave: 6,  weights: { blob: 3, swarm: 3, fast: 3, tank: 1, poisoner: 1 } },
+  { maxWave: 9,  weights: { blob: 2, swarm: 4, fast: 3, tank: 2, ghost: 2, poisoner: 2, splitter: 1 } },
+  { maxWave: 12, weights: { blob: 1, swarm: 5, fast: 3, tank: 3, ghost: 2, brute: 1, poisoner: 2, splitter: 2, bomber: 1 } },
+  { maxWave: 17, weights: { blob: 1, swarm: 6, fast: 4, tank: 3, ghost: 3, brute: 2, poisoner: 2, splitter: 2, bomber: 2, healer: 1 } },
+  { maxWave: 999,weights: { swarm: 5, fast: 4, tank: 3, ghost: 4, brute: 3, elite: 1, spawner: 1, poisoner: 2, splitter: 2, bomber: 2, healer: 1 } },
 ];
 
 // Special wave events — override normal spawns
@@ -112,11 +132,14 @@ export function scaleEnemy(base, wave, rng) {
     } : {}),
     orbitSign: rng.random() < 0.5 ? 1 : -1,
     // Per-AI cadence/state, initialized here so the per-tick loop never
-    // has to lazy-init: spawner birth jitter, boss charge/step timers.
+    // has to lazy-init: spawner birth jitter, boss charge/step timers,
+    // healer pulse jitter (stagger so a pack of healers doesn't tick
+    // in lockstep).
     spawnTimer: base.name === 'spawner' ? 2 + rng.random() * 2 : 0,
     chargeTimer: base.name === 'boss' ? 3 + rng.random() * 2 : 0,
     charging: 0,
     stepTimer: base.name === 'boss' ? 0.8 : 0,
+    healTimer: base.name === 'healer' ? base.healInterval * (0.5 + rng.random() * 0.5) : 0,
     // Velocity tracked for flock alignment (neighbors look at vx/vy).
     // Initialized to zero — first tick computes from chase + flock blend.
     vx: 0, vy: 0,

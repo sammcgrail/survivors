@@ -14,6 +14,7 @@ import { updateWaves } from '../src/shared/sim/waves.js';
 import { EVT } from '../src/shared/sim/events.js';
 import { MAPS, resolveMapObstacles } from '../src/shared/maps.js';
 import { generateClusterScatter, generateCorridor } from '../src/shared/mapGen.js';
+import { damageEnemy } from '../src/shared/sim/damage.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
 } from '../src/shared/constants.js';
@@ -360,6 +361,83 @@ suite('Cross-pair Evolutions', () => {
     assert(stunned, 'at least one enemy should be stunned from overcharge pulse');
     const w = g.player.weapons[0];
     assert(w.pulseCount >= 4, `pulseCount should be >= 4, got ${w.pulseCount}`);
+  });
+
+  test('poisoner contact applies player poison DoT', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'poisoner'), 1, rng);
+    e.x = g.player.x;
+    e.y = g.player.y; // overlap → contact
+    g.enemies.push(e);
+    tickN(g, 5); // contact triggers
+    assert((g.player.poisonTimer || 0) > 0, `poisonTimer should be set, got ${g.player.poisonTimer}`);
+    const startHp = g.player.hp;
+    // Move player away so contact damage stops; let poison tick alone
+    g.player.x += 200;
+    g.player.iframes = 0;
+    tickN(g, 60); // 1s, two poison ticks at 0.5s cadence
+    assert(g.player.hp < startHp, 'poison should tick down hp after contact ends');
+  });
+
+  test('splitter death spawns swarmlings', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'splitter'), 1, rng);
+    e.x = g.player.x + 60;
+    e.y = g.player.y;
+    g.enemies.push(e);
+    const startCount = g.enemies.length;
+    // damageEnemy directly to trigger death — bypasses needing a weapon
+    // hit and proves the on-death hook fires regardless of damage
+    // source.
+    damageEnemy(g, e, 9999, 0);
+    assert(e.dying !== undefined, 'splitter should be marked dying');
+    // 3 swarmlings spawned at the kill site
+    assert(g.enemies.length === startCount + 3,
+      `expected +3 enemies after splitter death, got ${g.enemies.length - startCount}`);
+    const newOnes = g.enemies.slice(startCount);
+    assert(newOnes.every(n => n.name === 'swarm'), 'split children should be swarm type');
+  });
+
+  test('bomber death queues player-targeting meteor effect', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const e = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'bomber'), 1, rng);
+    e.x = g.player.x + 30;
+    e.y = g.player.y;
+    g.enemies.push(e);
+    const startEffects = g.meteorEffects.length;
+    damageEnemy(g, e, 9999, 0);
+    assert(g.meteorEffects.length === startEffects + 1,
+      `expected +1 meteor effect after bomber death, got ${g.meteorEffects.length - startEffects}`);
+    const me = g.meteorEffects[g.meteorEffects.length - 1];
+    assert(me.targetsPlayer === true, 'bomber blast should target the player');
+    assert(me.sourceName === 'bomber', `expected sourceName=bomber, got ${me.sourceName}`);
+    // Tick past the warn window — explode should hurt the player
+    const startHp = g.player.hp;
+    g.player.iframes = 0;
+    tickN(g, 30); // 0.5s — warn (0.3s) → explode
+    assert(g.player.hp < startHp,
+      `bomber blast should hurt player (hp ${startHp} → ${g.player.hp})`);
+  });
+
+  test('healer pulses hp back into nearby damaged enemies', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const healer = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'healer'), 1, rng);
+    healer.x = g.player.x + 500;
+    healer.y = g.player.y; // far enough that contact damage isn't the test variable
+    g.enemies.push(healer);
+    // Damaged blob inside heal radius (140u)
+    const blob = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'blob'), 1, rng);
+    blob.x = healer.x + 60;
+    blob.y = healer.y;
+    blob.hp = 1;
+    g.enemies.push(blob);
+    tickN(g, 180); // 3s — should cover at least one heal pulse
+    assert(blob.hp > 1, `damaged blob near healer should regen (hp now ${blob.hp})`);
+    assert(blob.hp <= blob.maxHp, 'heal should cap at maxHp');
   });
 
   test('procedural cluster-scatter is deterministic per seed', () => {

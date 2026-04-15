@@ -8,6 +8,7 @@ import { EVT, emit } from './events.js';
 import { pushOutOfObstacles, obstacleAvoidance } from './collision.js';
 import { enemyShootingAi } from './enemyProjectiles.js';
 import { damageEnemy } from './damage.js';
+import { applyPoisonToPlayer } from './playerStatus.js';
 
 // Reusable zero vector for the no-obstacles path — saves an
 // allocation per enemy per tick on maps without obstacles.
@@ -205,6 +206,29 @@ function updateSpawnerAi(g, e, dt) {
   emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y });
 }
 
+// Healer pulse — every healInterval, restore healAmount HP to every
+// enemy within healRadius (excluding self and dying enemies). Caps at
+// each enemy's maxHp so it can't overheal. Reuses HIVE_BURST as the
+// visual cue since clients already render it as a soft particle pop;
+// the green color of the healer makes the burst read as healing
+// without needing a new event type.
+function updateHealerAi(g, e, dt) {
+  e.healTimer -= dt;
+  if (e.healTimer > 0) return;
+  e.healTimer = e.healInterval;
+  const r2 = e.healRadius * e.healRadius;
+  let healed = 0;
+  for (const other of g.enemies) {
+    if (other === e || other.dying !== undefined) continue;
+    const dx = other.x - e.x, dy = other.y - e.y;
+    if (dx * dx + dy * dy > r2) continue;
+    if (other.hp >= other.maxHp) continue;
+    other.hp = Math.min(other.maxHp, other.hp + e.healAmount);
+    healed++;
+  }
+  if (healed > 0) emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y });
+}
+
 // Boids steering: separation + alignment + cohesion vs same-type
 // neighbors inside this enemy's flock perception radius. Reads from the
 // pre-built spatial hash so we touch only ~9 cells per enemy. Returns
@@ -362,6 +386,9 @@ function updateEnemyTick(g, dt, hash) {
     // Spawner births minions on a timer — gated by stun so a stunned
     // hive doesn't keep pumping out swarmlings during the freeze.
     if (e.name === 'spawner' && (!e.stunTimer || e.stunTimer <= 0)) updateSpawnerAi(g, e, dt);
+    // Healer pulses HP back into nearby enemies — same stun gate so
+    // freeze/stun stalls support behavior, not just damage.
+    if (e.name === 'healer' && (!e.stunTimer || e.stunTimer <= 0)) updateHealerAi(g, e, dt);
 
     // Ranged attacks — elites fire aimed shots, bosses fire spreads.
     // Uses its own nearest-player lookup because the movement target
@@ -382,6 +409,11 @@ function updateEnemyTick(g, dt, hash) {
         p.hp -= dmg;
         p.iframes = 0.5;
         emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: e.name, pid: p.id });
+        // Poisoner DoT — ignores iframes (status applies even when the
+        // hit is i-framed, since the player still touched the source).
+        if (e.poisonOnHit) {
+          applyPoisonToPlayer(p, e.poisonOnHit.dps, e.poisonOnHit.duration);
+        }
         if (p.hp <= 0) {
           p.hp = 0;
           p.alive = false;
