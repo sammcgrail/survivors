@@ -313,6 +313,8 @@ function gameSnapshot() {
       if (e.weapon !== undefined) o.weapon = e.weapon;
       if (e.pid !== undefined) o.pid = e.pid;
       if (e.killer !== undefined) o.killer = e.killer;
+      if (e.vx !== undefined) o.vx = r1(e.vx);
+      if (e.vy !== undefined) o.vy = r1(e.vy);
       if (e.by !== undefined) o.by = e.by;
       if (e.xp !== undefined) o.xp = e.xp;
       if (e.healed !== undefined) o.healed = r1(e.healed);
