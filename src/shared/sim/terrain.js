@@ -29,7 +29,7 @@ export function updateTerrain(g, dt) {
       if (p.hp <= 0) {
         p.hp = 0;
         p.alive = false;
-        emit(g, EVT.PLAYER_DEATH, { by: 'cursed_ground', pid: p.id });
+        emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: 'cursed_ground', pid: p.id });
       }
     }
   }

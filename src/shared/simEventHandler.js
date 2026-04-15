@@ -54,6 +54,40 @@ function pushFx(particles, x, y, color, opts) {
   });
 }
 
+// Player death burst — fires at the dying player's position so
+// peers see the moment, not just a player going gray on the next
+// snapshot. Cause-aware palette: cursed_ground gets sickly green,
+// everything else gets a violent red explosion.
+function playerDeathBurst(particles, x, y, by) {
+  const isCurse = by === 'cursed_ground';
+  const main = isCurse ? '#7bc043' : '#e74c3c';
+  const accent = isCurse ? '#c8d635' : '#7b1212';
+  // Wide outer body burst.
+  for (let i = 0; i < 30; i++) {
+    pushFx(particles, x, y, main, {
+      speedMin: 140, speedMax: 320,
+      lifeMin: 0.35, lifeMax: 0.7,
+      radiusMin: 2.5, radiusMax: 4.5,
+    });
+  }
+  // White-hot core sparks.
+  for (let i = 0; i < 12; i++) {
+    pushFx(particles, x, y, '#ffffff', {
+      speedMin: 200, speedMax: 360,
+      lifeMin: 0.15, lifeMax: 0.3,
+      radiusMin: 1.2, radiusMax: 2.2,
+    });
+  }
+  // Lingering darker debris.
+  for (let i = 0; i < 8; i++) {
+    pushFx(particles, x, y, accent, {
+      speedMin: 50, speedMax: 140,
+      lifeMin: 0.6, lifeMax: 0.9,
+      radiusMin: 2, radiusMax: 3.5,
+    });
+  }
+}
+
 // Consumable spawn fanfare — fires once when an elite/brute/boss
 // drops a rare item. Upward fountain in the item's color + outward
 // ring flash so a player panning over later still gets the "oh!"
@@ -437,7 +471,13 @@ export function applySimEvent(evt, client) {
       break;
 
     case 'playerDeath':
-      if (isMe) sfx('death');
+      sfx('death'); // everyone hears it — someone just dropped
+      if (isMe) shake(0.45); // big jolt for the dying player
+      // Death burst at the player position so peers SEE the kill
+      // happen, not just a player going gray on the next snapshot.
+      if (evt.x !== undefined) {
+        playerDeathBurst(client.particles, evt.x, evt.y, evt.by);
+      }
       if (client.onPlayerDeath) client.onPlayerDeath(evt);
       break;
 
