@@ -321,6 +321,7 @@ window.addEventListener('beforeunload', () => {
 // --- battle music (map-aware + mute toggle) ---
 const MAP_TRACKS = {
   neon: 'neon_grid.ogg',
+  forest: 'forest_theme.ogg',
   // Other maps fall back to default battle theme.
 };
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
