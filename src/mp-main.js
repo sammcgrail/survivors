@@ -172,6 +172,65 @@ function sfx(type) {
   } catch (e) { /* audio not available */ }
 }
 
+// --- battle music (map-aware + mute toggle) ---
+const MP_MAP_TRACKS = { neon: 'neon_grid.ogg' };
+const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
+const MP_MUSIC_VOL = 0.35;
+let mpBgMusic = null;
+let mpBgMusicGain = null;
+let mpMusicFading = false;
+let mpCurrentTrack = null;
+let mpMusicMuted = false;
+try { mpMusicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
+function updateMpMuteBtn() {
+  const b = document.getElementById('mute-btn');
+  if (b) b.textContent = mpMusicMuted ? '🔇' : '🔊';
+}
+updateMpMuteBtn();
+
+function startMpMusic(mapId) {
+  try {
+    const ac = getAudio();
+    if (ac.state === 'suspended') ac.resume();
+    const src = MP_MAP_TRACKS[mapId] || MP_DEFAULT_TRACK;
+    if (mpBgMusic && mpCurrentTrack !== src) {
+      mpBgMusic.pause(); mpBgMusic = null; mpBgMusicGain = null;
+    }
+    if (!mpBgMusic) {
+      mpBgMusic = new Audio();
+      mpBgMusic.loop = true;
+      mpBgMusic.volume = 1;
+      mpBgMusic.src = src;
+      mpCurrentTrack = src;
+      const mediaSrc = ac.createMediaElementSource(mpBgMusic);
+      mpBgMusicGain = ac.createGain();
+      mpBgMusicGain.gain.value = 0;
+      mediaSrc.connect(mpBgMusicGain);
+      mpBgMusicGain.connect(ac.destination);
+    }
+    mpBgMusic.currentTime = 0;
+    mpBgMusic.play().catch(() => {});
+    const target = mpMusicMuted ? 0 : MP_MUSIC_VOL;
+    mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+    mpBgMusicGain.gain.setValueAtTime(0, ac.currentTime);
+    mpBgMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
+    mpMusicFading = false;
+  } catch (_) {}
+}
+
+function toggleMpMute() {
+  mpMusicMuted = !mpMusicMuted;
+  try { localStorage.setItem('survivors_mute', mpMusicMuted ? '1' : '0'); } catch (_) {}
+  updateMpMuteBtn();
+  if (mpBgMusicGain) {
+    try {
+      const ac = getAudio();
+      mpBgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+      mpBgMusicGain.gain.linearRampToValueAtTime(mpMusicMuted ? 0 : MP_MUSIC_VOL, ac.currentTime + 0.3);
+    } catch (_) {}
+  }
+}
+
 // --- resize ---
 function resize() {
   canvas.width = window.innerWidth;
@@ -299,6 +358,7 @@ function connectWS() {
       // Load this map's ground tileset (async — falls back to grid).
       buildBackgroundCanvas(mapId).then(c => { bgCanvas = c; }).catch(() => {});
       loadObstacleSprites();
+      startMpMusic(mapId);
       return;
     }
 
@@ -431,6 +491,7 @@ function joinGame() {
     renderStarted = true;
     requestAnimationFrame(mainLoop);
   }
+  // Music starts on first state message (when we know the mapId).
 }
 
 function respawnGame() {
@@ -1209,6 +1270,7 @@ window.addEventListener('load', () => {
 // to joinGame on first press, respawnGame after death.
 window.startGame = () => (renderStarted && prevMyAlive === false ? respawnGame() : joinGame());
 window.selectWeapon = selectWeapon;
+window.toggleMute = toggleMpMute;
 window.showBestiary = showBestiary;
 window.hideBestiary = hideBestiary;
 

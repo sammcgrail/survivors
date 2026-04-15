@@ -319,37 +319,61 @@ window.addEventListener('beforeunload', () => {
   track({ type: 'session_end', duration_ms: Date.now() - sessionStart });
 });
 
-// --- battle music ---
+// --- battle music (map-aware + mute toggle) ---
+const MAP_TRACKS = {
+  neon: 'neon_grid.ogg',
+  // Other maps fall back to default battle theme.
+};
+const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
+const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
+const MUSIC_VOL = 0.35;
+
 let bgMusic = null;
 let bgMusicGain = null;
 let musicFading = false;
+let currentTrackSrc = null;
+let musicMuted = false;
+try { musicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
+function updateMuteBtn() {
+  const b = document.getElementById('mute-btn');
+  if (b) b.textContent = musicMuted ? '🔇' : '🔊';
+}
+updateMuteBtn();
 
 function startMusic() {
   try {
     const ac = getAudio();
     if (ac.state === 'suspended') ac.resume();
+    // Pick track for current map.
+    const mapId = (game && game.mapId) || selectedMapId || 'arena';
+    const canOgg = !bgMusic || (bgMusic.canPlayType && bgMusic.canPlayType('audio/ogg; codecs=vorbis'));
+    let src = MAP_TRACKS[mapId] || (canOgg ? DEFAULT_TRACK_OGG : DEFAULT_TRACK_MP3);
+    // If track changed, tear down old audio element (createMediaElementSource
+    // binds permanently to one AudioContext, can't reassign .src safely).
+    if (bgMusic && currentTrackSrc !== src) {
+      bgMusic.pause();
+      bgMusic = null;
+      bgMusicGain = null;
+    }
     if (!bgMusic) {
-      // Safari doesn't support ogg — try mp3 fallback
       bgMusic = new Audio();
       bgMusic.loop = true;
-      bgMusic.volume = 1; // volume controlled via gain node, not element
-      if (bgMusic.canPlayType('audio/ogg; codecs=vorbis')) {
-        bgMusic.src = 'survivors_battle.ogg';
-      } else {
-        bgMusic.src = 'survivors_battle.mp3';
-      }
-      const src = ac.createMediaElementSource(bgMusic);
+      bgMusic.volume = 1; // volume via gain node
+      bgMusic.src = src;
+      currentTrackSrc = src;
+      const mediaSrc = ac.createMediaElementSource(bgMusic);
       bgMusicGain = ac.createGain();
       bgMusicGain.gain.value = 0;
-      src.connect(bgMusicGain);
+      mediaSrc.connect(bgMusicGain);
       bgMusicGain.connect(ac.destination);
     }
     bgMusic.currentTime = 0;
     bgMusic.play().catch(() => {});
-    // fade in over 2s
+    // fade in over 2s (skip if muted)
+    const target = musicMuted ? 0 : MUSIC_VOL;
     bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
     bgMusicGain.gain.setValueAtTime(0, ac.currentTime);
-    bgMusicGain.gain.linearRampToValueAtTime(0.35, ac.currentTime + 2);
+    bgMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
     musicFading = false;
   } catch (e) {}
 }
@@ -364,6 +388,19 @@ function fadeOutMusic() {
     bgMusicGain.gain.linearRampToValueAtTime(0, ac.currentTime + 1.5);
     setTimeout(() => { bgMusic.pause(); musicFading = false; }, 1600);
   } catch (e) {}
+}
+
+function toggleMuteMusic() {
+  musicMuted = !musicMuted;
+  try { localStorage.setItem('survivors_mute', musicMuted ? '1' : '0'); } catch (_) {}
+  updateMuteBtn();
+  if (bgMusicGain) {
+    try {
+      const ac = getAudio();
+      bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
+      bgMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : MUSIC_VOL, ac.currentTime + 0.3);
+    } catch (_) {}
+  }
 }
 
 // --- resize ---
@@ -1786,6 +1823,7 @@ window.showPrestigeShop = showPrestigeShop;
 window.hidePrestigeShop = hidePrestigeShop;
 window.purchaseUnlock = purchaseUnlock;
 window.toggleCosmeticEquip = toggleCosmeticEquip;
+window.toggleMute = toggleMuteMusic;
 window.showBestiary = showBestiary;
 window.hideBestiary = hideBestiary;
 
