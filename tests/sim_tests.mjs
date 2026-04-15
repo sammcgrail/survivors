@@ -12,6 +12,8 @@ import { calculateScales, applyUnlocks, sanitizePrestige, UNLOCKS } from '../src
 import { fireEnemyProjectile, enemyShootingAi, updateEnemyProjectiles } from '../src/shared/sim/enemyProjectiles.js';
 import { updateWaves } from '../src/shared/sim/waves.js';
 import { EVT } from '../src/shared/sim/events.js';
+import { MAPS, resolveMapObstacles } from '../src/shared/maps.js';
+import { generateClusterScatter, generateCorridor } from '../src/shared/mapGen.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
 } from '../src/shared/constants.js';
@@ -358,6 +360,65 @@ suite('Cross-pair Evolutions', () => {
     assert(stunned, 'at least one enemy should be stunned from overcharge pulse');
     const w = g.player.weapons[0];
     assert(w.pulseCount >= 4, `pulseCount should be >= 4, got ${w.pulseCount}`);
+  });
+
+  test('procedural cluster-scatter is deterministic per seed', () => {
+    // Same seed must produce same obstacle layout so MP clients that
+    // replay from the welcome snapshot never disagree on positions.
+    const cfg = {
+      width: 3500, height: 3500,
+      clusterCount: 8,
+      objectsPerCluster: [4, 10],
+      clusterRadius: 180,
+      objectSize: 60,
+      type: 'tree',
+      spawnSafeZone: { x: 1750, y: 1750, radius: 400 },
+    };
+    const a = generateClusterScatter(createRng(42), cfg);
+    const b = generateClusterScatter(createRng(42), cfg);
+    assert(a.length === b.length, `length mismatch: ${a.length} vs ${b.length}`);
+    for (let i = 0; i < a.length; i++) {
+      assert(a[i].x === b[i].x && a[i].y === b[i].y,
+        `obstacle ${i} differs: ${JSON.stringify(a[i])} vs ${JSON.stringify(b[i])}`);
+    }
+    // Different seeds produce different layouts
+    const c = generateClusterScatter(createRng(99), cfg);
+    const sameShape = a.length === c.length && a.every((o, i) => o.x === c[i].x && o.y === c[i].y);
+    assert(!sameShape, 'different seeds should produce different layouts');
+  });
+
+  test('procedural obstacles respect spawn safe zone', () => {
+    const cfg = {
+      width: 3500, height: 3500,
+      clusterCount: 8,
+      objectsPerCluster: [4, 10],
+      clusterRadius: 180,
+      objectSize: 60,
+      type: 'tree',
+      spawnSafeZone: { x: 1750, y: 1750, radius: 400 },
+    };
+    for (const seed of [1, 42, 99, 1234, 9999]) {
+      const obs = generateClusterScatter(createRng(seed), cfg);
+      for (const o of obs) {
+        const dx = o.x - cfg.spawnSafeZone.x;
+        const dy = o.y - cfg.spawnSafeZone.y;
+        const dist2 = dx * dx + dy * dy;
+        const safe2 = cfg.spawnSafeZone.radius * cfg.spawnSafeZone.radius;
+        assert(dist2 >= safe2,
+          `seed ${seed}: obstacle at (${o.x},${o.y}) is inside spawn safe zone (dist²=${dist2} < ${safe2})`);
+      }
+    }
+  });
+
+  test('resolveMapObstacles handles static + procedural maps', () => {
+    // Static map: forest ships a hand-placed obstacle array
+    const forest = resolveMapObstacles(MAPS.forest, createRng(1));
+    assert(Array.isArray(forest) && forest.length > 0, 'forest has static obstacles');
+    // Procedural map: wilderness generates on every resolve call
+    const w1 = resolveMapObstacles(MAPS.wilderness, createRng(42));
+    const w2 = resolveMapObstacles(MAPS.wilderness, createRng(42));
+    assert(w1.length === w2.length, 'wilderness same seed → same count');
+    assert(w1.every((o, i) => o.x === w2[i].x), 'wilderness same seed → same positions');
   });
 
   test('evolution status stacks refresh (burn + inferno_wheel)', () => {

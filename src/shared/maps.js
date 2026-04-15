@@ -12,6 +12,19 @@
 //   lava   — does NOT block movement (would feel bad) but damages on
 //            contact; tick checks separately. Currently unused — wired
 //            up when volcano map needs the gameplay hook.
+//
+// A map's `obstacles` is either a static array or the special
+// `generateObstacles(rng) => array` field — procedural maps use the
+// latter so every game starts with a fresh layout. Callers (SP main.js
+// and server.mjs) should use `resolveMapObstacles(map, rng)` instead of
+// reading `.obstacles` directly to transparently support either shape.
+
+import { generateClusterScatter, generateCorridor } from './mapGen.js';
+
+export function resolveMapObstacles(map, rng) {
+  if (map.generateObstacles) return map.generateObstacles(rng);
+  return map.obstacles;
+}
 
 export const MAPS = {
   arena: {
@@ -124,6 +137,42 @@ export const MAPS = {
       return o;
     })(),
     spawns: [{ x: 1500, y: 1500, radius: 80 }],
+  },
+
+  // Procedural: tree-dotted wilderness. Each game rolls a fresh layout
+  // via generateClusterScatter — 8 clumps, 4-10 trees each, scattered
+  // around the 3500×3500 arena with a 400u spawn-safe zone. Tree
+  // obstacles don't block projectiles so this map rewards kiting.
+  wilderness: {
+    name: 'Wilderness',
+    width: 3500, height: 3500,
+    tileset: 'forest',
+    terrainEffect: { type: 'slow', factor: 0.55 },
+    spawns: [{ x: 1750, y: 1750, radius: 300 }],
+    generateObstacles: (rng) => generateClusterScatter(rng, {
+      width: 3500, height: 3500,
+      clusterCount: 8,
+      objectsPerCluster: [4, 10],
+      clusterRadius: 180,
+      objectSize: 60,
+      type: 'tree',
+      spawnSafeZone: { x: 1750, y: 1750, radius: 400 },
+    }),
+  },
+
+  // Procedural: abandoned hallway with parallel wall slabs + scattered
+  // interior pillars. Funnels enemies into choke points; good for
+  // breath/shield/aura builds that want contact volume.
+  catacombs: {
+    name: 'Catacombs',
+    width: 3200, height: 3200,
+    tileset: 'ruins',
+    terrainEffect: { type: 'slow', factor: 0.55 },
+    spawns: [{ x: 1600, y: 1600, radius: 200 }],
+    generateObstacles: (rng) => generateCorridor(rng, {
+      width: 3200, height: 3200,
+      type: 'wall', pillarType: 'pillar', objectSize: 60,
+    }),
   },
 
   graveyard: {

@@ -15,13 +15,13 @@ import { tickSim } from './src/shared/sim/tick.js';
 import { createRng } from './src/shared/sim/rng.js';
 import { createWeapon } from './src/shared/weapons.js';
 import { POWERUPS, getAvailableChoices } from './src/shared/sim/powerups.js';
-import { MAPS } from './src/shared/maps.js';
+import { MAPS, resolveMapObstacles } from './src/shared/maps.js';
 import { pushOutOfObstacles } from './src/shared/sim/collision.js';
 import { applyUnlocks, sanitizePrestige } from './src/shared/prestige.js';
 
 // Map rotation. Tomorrow this'll be a vote / lobby choice; for now the
 // server picks a random one each session reset.
-const MAP_ROTATION = ['arena', 'forest', 'ruins', 'graveyard'];
+const MAP_ROTATION = ['arena', 'forest', 'ruins', 'graveyard', 'wilderness', 'catacombs'];
 function pickMapId(rng) {
   return MAP_ROTATION[rng.int(MAP_ROTATION.length)];
 }
@@ -123,7 +123,7 @@ function initGame() {
     rng,
     mapId,
     arena: { w: map.width, h: map.height },
-    obstacles: map.obstacles,
+    obstacles: resolveMapObstacles(map, rng),
   };
 }
 
