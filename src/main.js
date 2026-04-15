@@ -320,7 +320,7 @@ window.addEventListener('beforeunload', () => {
   track({ type: 'session_end', duration_ms: Date.now() - sessionStart });
 });
 
-// --- battle music (map-aware + mute toggle) ---
+// --- music system (menu + battle, map-aware + mute toggle) ---
 const MAP_TRACKS = {
   arena: 'arena_theme.ogg',
   neon: 'neon_grid.ogg',
@@ -328,14 +328,19 @@ const MAP_TRACKS = {
   graveyard: 'graveyard_theme.ogg',
   ruins: 'ruins_theme.ogg',
 };
+const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
 const MUSIC_VOL = 0.35;
+const MENU_VOL = 0.30;
 
 let bgMusic = null;
 let bgMusicGain = null;
 let musicFading = false;
 let currentTrackSrc = null;
+let menuMusic = null;
+let menuMusicGain = null;
+let menuMusicStarted = false;
 let musicMuted = false;
 try { musicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
 function updateMuteBtn() {
@@ -343,6 +348,54 @@ function updateMuteBtn() {
   if (b) b.textContent = musicMuted ? '🔇' : '🔊';
 }
 updateMuteBtn();
+
+// Menu music — plays on the start/death screen. Fades out when game
+// starts, fades back in on return. Barn's E dorian 78 BPM ambient.
+function startMenuMusic() {
+  if (menuMusicStarted) return;
+  try {
+    const ac = getAudio();
+    if (ac.state === 'suspended') ac.resume();
+    menuMusic = new Audio();
+    menuMusic.loop = true;
+    menuMusic.volume = 1;
+    menuMusic.src = MENU_TRACK;
+    const mediaSrc = ac.createMediaElementSource(menuMusic);
+    menuMusicGain = ac.createGain();
+    menuMusicGain.gain.value = 0;
+    mediaSrc.connect(menuMusicGain);
+    menuMusicGain.connect(ac.destination);
+    menuMusic.play().catch(() => {});
+    const target = musicMuted ? 0 : MENU_VOL;
+    menuMusicGain.gain.setValueAtTime(0, ac.currentTime);
+    menuMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
+    menuMusicStarted = true;
+  } catch (_) {}
+}
+
+function fadeOutMenuMusic() {
+  if (!menuMusic || !menuMusicGain) return;
+  try {
+    const ac = getAudio();
+    menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
+    menuMusicGain.gain.setValueAtTime(menuMusicGain.gain.value, ac.currentTime);
+    menuMusicGain.gain.linearRampToValueAtTime(0, ac.currentTime + 1.5);
+    setTimeout(() => { if (menuMusic) menuMusic.pause(); }, 1600);
+  } catch (_) {}
+}
+
+function fadeInMenuMusic() {
+  if (!menuMusic || !menuMusicGain) { startMenuMusic(); return; }
+  try {
+    const ac = getAudio();
+    if (ac.state === 'suspended') ac.resume();
+    menuMusic.play().catch(() => {});
+    const target = musicMuted ? 0 : MENU_VOL;
+    menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
+    menuMusicGain.gain.setValueAtTime(menuMusicGain.gain.value, ac.currentTime);
+    menuMusicGain.gain.linearRampToValueAtTime(target, ac.currentTime + 2);
+  } catch (_) {}
+}
 
 function startMusic() {
   try {
@@ -398,13 +451,17 @@ function toggleMuteMusic() {
   musicMuted = !musicMuted;
   try { localStorage.setItem('survivors_mute', musicMuted ? '1' : '0'); } catch (_) {}
   updateMuteBtn();
-  if (bgMusicGain) {
-    try {
-      const ac = getAudio();
+  try {
+    const ac = getAudio();
+    if (bgMusicGain) {
       bgMusicGain.gain.cancelScheduledValues(ac.currentTime);
       bgMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : MUSIC_VOL, ac.currentTime + 0.3);
-    } catch (_) {}
-  }
+    }
+    if (menuMusicGain) {
+      menuMusicGain.gain.cancelScheduledValues(ac.currentTime);
+      menuMusicGain.gain.linearRampToValueAtTime(musicMuted ? 0 : MENU_VOL, ac.currentTime + 0.3);
+    }
+  } catch (_) {}
 }
 
 // --- resize ---
@@ -426,6 +483,7 @@ let selectedMapId = 'neon';    // default map (code-rendered abstract grid)
 
 function selectWeapon(type) {
   selectedWeapon = type;
+  startMenuMusic(); // first interaction triggers audio context
   document.querySelectorAll('.weapon-card').forEach(c => {
     c.classList.toggle('selected', c.dataset.weapon === type);
   });
@@ -723,6 +781,7 @@ function saveBestRun(run) {
 
 function showDeathScreen(g) {
   fadeOutMusic();
+  fadeInMenuMusic();
   track({ type: 'death', wave: g.wave, kills: g.kills, weapons: g.player.weapons.map(w => w.type) });
   const mins = Math.floor(g.time / 60);
   const secs = Math.floor(g.time % 60);
@@ -1228,6 +1287,7 @@ function startGame() {
   }
   const nameEl = document.getElementById('name-input');
   if (nameEl && nameEl.value.trim()) game.playerName = nameEl.value.trim();
+  fadeOutMenuMusic();
   startMusic();
   track({ type: 'game_start' });
   // Load this map's ground tileset (async — render falls back to grid
@@ -1248,6 +1308,7 @@ document.addEventListener('keydown', e => {
   const startVisible = startScreen.style.display !== 'none' && startScreen.offsetParent !== null;
   const deathVisible = deathScreen.style.display === 'flex';
   if (startVisible) {
+    startMenuMusic(); // any key on start screen triggers audio
     if (e.key === '1') selectWeapon('spit');
     else if (e.key === '2') selectWeapon('breath');
     else if (e.key === '3') selectWeapon('charge');
