@@ -168,6 +168,63 @@ function drawMinimap() {
   mmCtx.strokeRect(0.5, 0.5, MM - 1, MM - 1);
 }
 
+// Kill feed — drawn in screen-space (not world-space), top-left below
+// the wave counter DOM element. Boss/elite/brute/spawner kills only.
+function drawKillFeed(ctx) {
+  if (!killFeed.length) return;
+
+  const x = 12;
+  let y = 52; // below wave counter (~32px) + gap
+  const lineH = 18;
+
+  ctx.save();
+  ctx.font = '12px monospace';
+  ctx.textAlign = 'left';
+
+  for (const entry of killFeed) {
+    const alpha = Math.min(1, entry.life / 0.8); // fade out over last 0.8s
+
+    // Colored dot representing the killer's team color.
+    ctx.globalAlpha = alpha * 0.85;
+    ctx.fillStyle = entry.color;
+    ctx.beginPath();
+    ctx.arc(x + 4, y - 4, 4, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Kill text.
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(entry.text, x + 12, y);
+
+    y += lineH;
+  }
+
+  ctx.restore();
+}
+
+// Compact kill-count scoreboard, top-right just above the minimap.
+// Only renders when there are 2+ players in the session.
+function drawScoreboard(ctx) {
+  if (!currState?.players || currState.players.length < 2) return;
+
+  const players = [...currState.players].sort((a, b) => (b.kills ?? 0) - (a.kills ?? 0));
+  const mmRight = ctx.canvas.width - 12;      // flush with right edge
+  const mmTop   = ctx.canvas.height - 12 - MM; // top of minimap
+
+  ctx.save();
+  ctx.font = '11px monospace';
+  ctx.textAlign = 'right';
+
+  let y = mmTop - players.length * 16 - 6;
+  for (const p of players) {
+    ctx.globalAlpha = p.alive ? 1.0 : 0.4;
+    ctx.fillStyle = p.color || '#ffffff';
+    ctx.fillText(`${p.name}  ${p.kills ?? 0}k`, mmRight, y);
+    y += 16;
+  }
+
+  ctx.restore();
+}
+
 // --- sprite sheet ---
 const spriteSheet = new Image();
 spriteSheet.src = 'sprites.png';
@@ -265,6 +322,12 @@ let screenShake = 0;
 // Per-player fire-trail throttle, shared helper owns the write — we
 // just own the Map so state survives between render frames.
 const trailState = new Map();
+
+// Kill feed — notable enemy kills (boss/elite/brute/spawner only).
+// Client-side, populated from enemyKilled sim events.
+let killFeed = []; // { text, color, life, maxLife }
+const KILLFEED_MAX = 6;
+const KILLFEED_LIFE = 4.0; // seconds
 
 // Drain a batch of sim events shipped on the state snapshot. Mirrors
 // SP's handleSimEvent but scoped to what makes sense as a peer
@@ -387,7 +450,33 @@ function connectWS() {
       // Drain sim events shipped with the snapshot. Same channel SP
       // consumes — shared applySimEvent handles both modes via the
       // client shim (mpEventClient).
-      if (msg.events) for (const evt of msg.events) applySimEvent(evt, mpEventClient);
+      if (msg.events) {
+        for (const evt of msg.events) {
+          // Intercept notable kills for the client-side kill feed before
+          // delegating to applySimEvent. currState is already set above so
+          // we can look up the killer by id.
+          if (evt.type === 'enemyKilled') {
+            const label = evt.name === 'boss'    ? '☠ Boss'
+                        : evt.name === 'elite'   ? '★ Elite'
+                        : evt.name === 'brute'   ? 'Brute'
+                        : evt.name === 'spawner' ? 'Spawner'
+                        : null; // skip trash mobs — too noisy
+            if (label) {
+              const killer = currState.players.find(p => p.id === evt.killer);
+              if (killer) {
+                killFeed.unshift({
+                  text: `${killer.name} killed ${label}`,
+                  color: killer.color || '#ffffff',
+                  life: KILLFEED_LIFE,
+                  maxLife: KILLFEED_LIFE,
+                });
+                if (killFeed.length > KILLFEED_MAX) killFeed.pop();
+              }
+            }
+          }
+          applySimEvent(evt, mpEventClient);
+        }
+      }
 
       // Evict trailState entries for players who have disconnected —
       // otherwise the map grows unbounded over a long-running server.
@@ -681,6 +770,12 @@ function mainLoop(ts) {
   // Update client-side effects
   updateParticles(dt);
 
+  // Tick kill feed — expire entries in place (const array, splice to evict).
+  for (let i = killFeed.length - 1; i >= 0; i--) {
+    killFeed[i].life -= dt;
+    if (killFeed[i].life <= 0) killFeed.splice(i, 1);
+  }
+
   // Render
   render(dt);
 
@@ -914,6 +1009,8 @@ function render(dt) {
   }
 
   drawMinimap();
+  drawKillFeed(ctx);
+  drawScoreboard(ctx);
 }
 
 // ============================================================
