@@ -745,6 +745,9 @@ function handleSimEvent(evt) {
       g.screenShake = 0.5;
       spawnParticles(evt.x, evt.y, '#f39c12', 20);
       break;
+    case EVT.WAVE_SURVIVED:
+      g.deathFeed.push({ text: `${g.playerName} survived wave ${evt.wave}`, time: evt.time });
+      break;
   }
 }
 

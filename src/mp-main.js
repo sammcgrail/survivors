@@ -466,6 +466,13 @@ function sendInput() {
   ws.send(JSON.stringify({ type: 'input', keys: { ...keys } }));
 }
 
+// Tracked so a second PLAY click while the first is still polling
+// doesn't spawn a parallel timer (the original code leaked one
+// setInterval per attempt for the entire session if the connection
+// kept failing).
+let pendingJoinTimer = null;
+const JOIN_TIMEOUT_MS = 10_000;
+
 function joinGame() {
   const nameInput = document.getElementById('name-input');
   const name = (nameInput.value || '').trim().slice(0, 12) || 'player';
@@ -474,17 +481,25 @@ function joinGame() {
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('death-screen').style.display = 'none';
 
-  if (!connected) {
+  const sendJoin = () => ws.send(JSON.stringify({
+    type: 'join', name: myName, weapon: selectedWeapon, prestige: prestigePayload(),
+  }));
+
+  if (connected) { sendJoin(); }
+  else {
     connectWS();
-    // Wait for connection then send join
-    const waitJoin = setInterval(() => {
+    if (pendingJoinTimer) clearInterval(pendingJoinTimer);
+    const start = Date.now();
+    pendingJoinTimer = setInterval(() => {
       if (connected && ws && ws.readyState === WebSocket.OPEN) {
-        clearInterval(waitJoin);
-        ws.send(JSON.stringify({ type: 'join', name: myName, weapon: selectedWeapon, prestige: prestigePayload() }));
+        clearInterval(pendingJoinTimer); pendingJoinTimer = null;
+        sendJoin();
+      } else if (Date.now() - start > JOIN_TIMEOUT_MS) {
+        // Give up after 10s rather than poll forever.
+        clearInterval(pendingJoinTimer); pendingJoinTimer = null;
+        console.warn('[ws] join timed out after', JOIN_TIMEOUT_MS, 'ms');
       }
     }, 100);
-  } else {
-    ws.send(JSON.stringify({ type: 'join', name: myName, weapon: selectedWeapon, prestige: prestigePayload() }));
   }
 
   if (!renderStarted) {
@@ -728,13 +743,18 @@ function render(dt) {
   }
 
   // --- render weapon auras for ALL players ---
+  // Server snapshot ships per-weapon stats (radius/bladeCount/etc) so
+  // these auras stay in sync with the actual damage zone after the
+  // player picks _up upgrades. Defaults match createWeapon() so old
+  // clients keep rendering correctly if the server is rolled back.
   const gameTime = state.time || 0;
   for (const pl of state.players) {
     if (!pl.alive) continue;
-    for (const wtype of (pl.weapons || [])) {
+    for (const w of (pl.weapons || [])) {
+      const wtype = w.type;
       if (wtype === 'breath') {
         const pulse = 1 + Math.sin(gameTime * 3) * 0.1;
-        const r = 80 * pulse;
+        const r = (w.radius || 80) * pulse;
         const grad = ctx.createRadialGradient(pl.x, pl.y, r * 0.3, pl.x, pl.y, r);
         grad.addColorStop(0, 'rgba(230, 126, 34, 0.15)');
         grad.addColorStop(0.7, 'rgba(230, 126, 34, 0.08)');
@@ -764,7 +784,7 @@ function render(dt) {
       }
       if (wtype === 'dragon_storm') {
         const pulse = 1 + Math.sin(gameTime * 4) * 0.1;
-        const r = 100 * pulse;
+        const r = (w.auraRadius || 100) * pulse;
         const grad = ctx.createRadialGradient(pl.x, pl.y, r * 0.2, pl.x, pl.y, r);
         grad.addColorStop(0, 'rgba(243, 156, 18, 0.2)');
         grad.addColorStop(0.6, 'rgba(231, 76, 60, 0.1)');
@@ -778,8 +798,8 @@ function render(dt) {
         ctx.stroke();
       }
       if (wtype === 'orbit') {
-        const bladeCount = 2;
-        const orbitRadius = 70;
+        const bladeCount = w.bladeCount || 2;
+        const orbitRadius = w.radius || 70;
         const phase = gameTime * 3;
         for (let b = 0; b < bladeCount; b++) {
           const angle = phase + (b * Math.PI * 2 / bladeCount);
@@ -802,7 +822,7 @@ function render(dt) {
         }
       }
       if (wtype === 'shield') {
-        const r = 60;
+        const r = w.radius || 35;
         const grad = ctx.createRadialGradient(pl.x, pl.y, r * 0.7, pl.x, pl.y, r);
         grad.addColorStop(0, 'rgba(52, 152, 219, 0)');
         grad.addColorStop(0.7, 'rgba(52, 152, 219, 0.15)');
@@ -816,7 +836,7 @@ function render(dt) {
         ctx.stroke();
       }
       if (wtype === 'lightning_field') {
-        const r = 100;
+        const r = w.radius || 140;
         const a = 0.04 + Math.sin(gameTime * 6) * 0.02;
         ctx.fillStyle = `rgba(241, 196, 15, ${a})`;
         ctx.beginPath();
@@ -829,7 +849,7 @@ function render(dt) {
         ctx.setLineDash([]);
       }
       if (wtype === 'thunder_god') {
-        const r = 180;
+        const r = w.fieldRadius || 180;
         const a = 0.06 + Math.sin(gameTime * 8) * 0.03;
         ctx.fillStyle = `rgba(0, 210, 211, ${a})`;
         ctx.beginPath();
@@ -842,8 +862,8 @@ function render(dt) {
         ctx.setLineDash([]);
       }
       if (wtype === 'meteor_orbit') {
-        const bladeCount = 4;
-        const orbitRadius = 90;
+        const bladeCount = w.bladeCount || 4;
+        const orbitRadius = w.radius || 90;
         const phase = gameTime * 4;
         for (let b = 0; b < bladeCount; b++) {
           const angle = phase + (b * Math.PI * 2 / bladeCount);
@@ -877,7 +897,7 @@ function render(dt) {
         }
       }
       if (wtype === 'fortress') {
-        const r = 80 * (1 + Math.sin(gameTime * 4) * 0.08);
+        const r = (w.shieldRadius || 80) * (1 + Math.sin(gameTime * 4) * 0.08);
         const grad = ctx.createRadialGradient(pl.x, pl.y, r * 0.7, pl.x, pl.y, r);
         grad.addColorStop(0, 'rgba(116, 185, 255, 0)');
         grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.18)');

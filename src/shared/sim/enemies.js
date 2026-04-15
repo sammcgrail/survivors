@@ -246,7 +246,9 @@ function updateEnemyTick(g, dt, hash) {
     // as they slide along walls toward the target.
     if (g.obstacles && g.obstacles.length > 0) pushOutOfObstacles(e, g.obstacles);
 
-    if (e.name === 'spawner') updateSpawnerAi(g, e, dt);
+    // Spawner births minions on a timer — gated by stun so a stunned
+    // hive doesn't keep pumping out swarmlings during the freeze.
+    if (e.name === 'spawner' && (!e.stunTimer || e.stunTimer <= 0)) updateSpawnerAi(g, e, dt);
 
     if (e.hitFlash > 0) e.hitFlash -= dt * 5;
 

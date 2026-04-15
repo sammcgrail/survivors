@@ -4,12 +4,15 @@
 // directly each frame, so no event needed.
 import { SPECIAL_WAVES } from '../enemyTypes.js';
 import { spawnEnemy } from './enemies.js';
+import { EVT, emit } from './events.js';
 
 export function updateWaves(g, dt) {
   if (g.waveTimer >= g.waveDuration) {
     g.wave++;
     g.waveTimer = 0;
-    g.deathFeed.push({ text: `${g.playerName} survived wave ${g.wave - 1}`, time: g.time });
+    // Emit a typed event; clients localize the deathfeed line so MP
+    // doesn't say "mp survived wave N" (g.playerName is SP-only).
+    emit(g, EVT.WAVE_SURVIVED, { wave: g.wave - 1, time: g.time });
     g.spawnRate = Math.max(0.3, 2.0 * Math.pow(0.90, g.wave - 1));
     g.waveMsg = `WAVE ${g.wave}`;
     g.waveMsgTimer = 2.0;

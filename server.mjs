@@ -162,8 +162,12 @@ function tick(dt) {
   // message with three random valid choices. Other event types are
   // server-side cosmetics; clients infer them from state diffs.
   for (const evt of game.events) {
-    if (evt.type !== 'levelUp') continue;
-    sendLevelUp(evt.pid);
+    if (evt.type === 'levelUp') sendLevelUp(evt.pid);
+    else if (evt.type === 'waveSurvived') {
+      // SP localizes this with the player's name; in MP there's no
+      // single player so use a generic line that broadcasts to all.
+      game.deathFeed.push({ text: `Wave ${evt.wave} cleared`, time: evt.time });
+    }
   }
   game.events.length = 0;
 }
@@ -192,6 +196,16 @@ function sendLevelUp(pid) {
 function r1(n) { return Math.round(n * 10) / 10; }
 function r2(n) { return Math.round(n * 100) / 100; }
 
+// Per-weapon visual fields that the MP renderer needs to keep auras in
+// sync with the actual damage zone after upgrades. Anything else (timer,
+// cooldown, damage values) stays server-side.
+const WEAPON_VIS_FIELDS = ['type', 'radius', 'bladeCount', 'fieldRadius', 'shieldRadius', 'auraRadius'];
+function snapshotWeapon(w) {
+  const o = {};
+  for (const k of WEAPON_VIS_FIELDS) if (w[k] !== undefined) o[k] = w[k];
+  return o;
+}
+
 // Build the world snapshot once per tick. `you` is per-recipient and
 // stamped at send time so we don't re-stringify the whole state N times.
 function gameSnapshot() {
@@ -207,7 +221,7 @@ function gameSnapshot() {
       hp: r1(p.hp), maxHp: p.maxHp,
       alive: p.alive, level: p.level, kills: p.kills,
       xp: p.xp, xpToLevel: p.xpToLevel,
-      weapons: p.weapons.map(w => w.type),
+      weapons: p.weapons.map(snapshotWeapon),
       activeSkin: p.activeSkin,
       activeTrail: p.activeTrail,
     })),
