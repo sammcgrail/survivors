@@ -322,7 +322,8 @@ window.addEventListener('beforeunload', () => {
 const MAP_TRACKS = {
   neon: 'neon_grid.ogg',
   forest: 'forest_theme.ogg',
-  // Other maps fall back to default battle theme.
+  graveyard: 'graveyard_theme.ogg',
+  ruins: 'ruins_theme.ogg',
 };
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
