@@ -4,6 +4,7 @@
 // ============================================================
 
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
+import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
@@ -50,277 +51,10 @@ spriteSheet.onload = () => { spritesReady = true; };
 const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
 // --- sound effects (Web Audio API) ---
-let audioCtx = null;
-let sfxMaster = null;       // master gain for all SFX — keeps them from drowning BGM
-let activeSfxCount = 0;
-const MAX_CONCURRENT_SFX = 12; // hard cap — prevents audio buffer overload
-function getAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    sfxMaster = audioCtx.createGain();
-    sfxMaster.gain.value = sfxVol; // SFX master volume — driven by slider
-    sfxMaster.connect(audioCtx.destination);
-  }
-  return audioCtx;
-}
-function getSfxDest() { return sfxMaster || getAudio() && sfxMaster; }
-
-function sfx(type) {
-  try {
-    const ac = getAudio();
-    if (activeSfxCount >= MAX_CONCURRENT_SFX) return; // drop SFX when saturated
-    const t = ac.currentTime;
-    const osc = ac.createOscillator();
-    const gain = ac.createGain();
-    const dest = getSfxDest();
-    osc.connect(gain);
-    gain.connect(dest);
-    // Track concurrent SFX so we can cap them
-    activeSfxCount++;
-    osc.onended = () => { activeSfxCount = Math.max(0, activeSfxCount - 1); };
-
-    switch (type) {
-      case 'hit': // enemy takes damage — short blip
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(220, t);
-        osc.frequency.linearRampToValueAtTime(110, t + 0.06);
-        gain.gain.setValueAtTime(0.08, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.06);
-        osc.start(t); osc.stop(t + 0.06);
-        break;
-
-      case 'kill': // enemy dies — satisfying pop
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, t);
-        osc.frequency.linearRampToValueAtTime(800, t + 0.08);
-        gain.gain.setValueAtTime(0.12, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.1);
-        osc.start(t); osc.stop(t + 0.1);
-        break;
-
-      case 'xp': // gem pickup — tiny chime
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, t);
-        osc.frequency.linearRampToValueAtTime(1320, t + 0.06);
-        gain.gain.setValueAtTime(0.06, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.08);
-        osc.start(t); osc.stop(t + 0.08);
-        break;
-
-      case 'levelup': { // level up — ascending arpeggio
-        gain.gain.setValueAtTime(0, t); // silence main osc
-        osc.start(t); osc.stop(t + 0.01);
-        const notes = [523, 659, 784, 1047]; // C5 E5 G5 C6
-        notes.forEach((freq, i) => {
-          const o = ac.createOscillator();
-          const g = ac.createGain();
-          o.connect(g); g.connect(dest);
-          o.type = 'triangle';
-          o.frequency.setValueAtTime(freq, t + i * 0.08);
-          g.gain.setValueAtTime(0.1, t + i * 0.08);
-          g.gain.linearRampToValueAtTime(0, t + i * 0.08 + 0.12);
-          o.start(t + i * 0.08);
-          o.stop(t + i * 0.08 + 0.12);
-        });
-        break;
-      }
-
-      case 'playerhit': // player takes damage — harsh buzz
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, t);
-        osc.frequency.linearRampToValueAtTime(80, t + 0.12);
-        gain.gain.setValueAtTime(0.15, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.15);
-        osc.start(t); osc.stop(t + 0.15);
-        break;
-
-      case 'death': { // player death — descending doom
-        gain.gain.setValueAtTime(0, t);
-        osc.start(t); osc.stop(t + 0.01);
-        const freqs = [440, 330, 220, 110];
-        freqs.forEach((freq, i) => {
-          const o = ac.createOscillator();
-          const g = ac.createGain();
-          o.connect(g); g.connect(dest);
-          o.type = 'sawtooth';
-          o.frequency.setValueAtTime(freq, t + i * 0.15);
-          o.frequency.linearRampToValueAtTime(freq * 0.7, t + i * 0.15 + 0.15);
-          g.gain.setValueAtTime(0.12, t + i * 0.15);
-          g.gain.linearRampToValueAtTime(0, t + i * 0.15 + 0.18);
-          o.start(t + i * 0.15);
-          o.stop(t + i * 0.15 + 0.18);
-        });
-        break;
-      }
-
-      case 'spit': // projectile fire — pew
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(600, t);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.07);
-        gain.gain.setValueAtTime(0.05, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.07);
-        osc.start(t); osc.stop(t + 0.07);
-        break;
-
-      case 'chain': // chain lightning — electric zap
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(1200, t);
-        osc.frequency.linearRampToValueAtTime(300, t + 0.05);
-        osc.frequency.linearRampToValueAtTime(900, t + 0.08);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.12);
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.12);
-        osc.start(t); osc.stop(t + 0.12);
-        break;
-
-      case 'meteor': // meteor drop — deep rumble whomp
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(60, t);
-        osc.frequency.linearRampToValueAtTime(40, t + 0.2);
-        gain.gain.setValueAtTime(0.18, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.25);
-        osc.start(t); osc.stop(t + 0.25);
-        break;
-
-      case 'dragonstorm': { // dragon storm — deep roar + high sizzle
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(100, t);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.1);
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.15);
-        osc.start(t); osc.stop(t + 0.15);
-        const o2 = ac.createOscillator();
-        const g2 = ac.createGain();
-        o2.connect(g2); g2.connect(dest);
-        o2.type = 'square';
-        o2.frequency.setValueAtTime(800, t + 0.03);
-        o2.frequency.linearRampToValueAtTime(400, t + 0.1);
-        g2.gain.setValueAtTime(0.06, t + 0.03);
-        g2.gain.linearRampToValueAtTime(0, t + 0.12);
-        o2.start(t + 0.03); o2.stop(t + 0.12);
-        break;
-      }
-
-      case 'charge': { // bull rush — woosh + impact thud
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, t);
-        osc.frequency.linearRampToValueAtTime(300, t + 0.08);
-        osc.frequency.linearRampToValueAtTime(80, t + 0.15);
-        gain.gain.setValueAtTime(0.15, t);
-        gain.gain.linearRampToValueAtTime(0.08, t + 0.08);
-        gain.gain.linearRampToValueAtTime(0, t + 0.2);
-        osc.start(t); osc.stop(t + 0.2);
-        break;
-      }
-
-      case 'hive_burst': { // spawner births swarmlings — organic squelchy burst
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(180, t);
-        osc.frequency.linearRampToValueAtTime(90, t + 0.08);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.12);
-        osc.frequency.linearRampToValueAtTime(60, t + 0.2);
-        gain.gain.setValueAtTime(0.12, t);
-        gain.gain.linearRampToValueAtTime(0.08, t + 0.08);
-        gain.gain.linearRampToValueAtTime(0, t + 0.2);
-        osc.start(t); osc.stop(t + 0.2);
-        // high squelch layer
-        const hb2 = ac.createOscillator();
-        const hg2 = ac.createGain();
-        hb2.connect(hg2); hg2.connect(dest);
-        hb2.type = 'square';
-        hb2.frequency.setValueAtTime(500, t + 0.02);
-        hb2.frequency.linearRampToValueAtTime(250, t + 0.1);
-        hb2.frequency.linearRampToValueAtTime(600, t + 0.15);
-        hg2.gain.setValueAtTime(0.04, t + 0.02);
-        hg2.gain.linearRampToValueAtTime(0, t + 0.18);
-        hb2.start(t + 0.02); hb2.stop(t + 0.18);
-        break;
-      }
-
-      case 'boss_telegraph': { // boss about to charge — rising growl warning
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(60, t);
-        osc.frequency.linearRampToValueAtTime(180, t + 0.25);
-        gain.gain.setValueAtTime(0.05, t);
-        gain.gain.linearRampToValueAtTime(0.18, t + 0.2);
-        gain.gain.linearRampToValueAtTime(0, t + 0.3);
-        osc.start(t); osc.stop(t + 0.3);
-        // high screech overtone
-        const bt2 = ac.createOscillator();
-        const bg2 = ac.createGain();
-        bt2.connect(bg2); bg2.connect(dest);
-        bt2.type = 'square';
-        bt2.frequency.setValueAtTime(300, t + 0.1);
-        bt2.frequency.linearRampToValueAtTime(600, t + 0.25);
-        bg2.gain.setValueAtTime(0.03, t + 0.1);
-        bg2.gain.linearRampToValueAtTime(0.08, t + 0.22);
-        bg2.gain.linearRampToValueAtTime(0, t + 0.3);
-        bt2.start(t + 0.1); bt2.stop(t + 0.3);
-        break;
-      }
-
-      case 'boss_step': { // boss footstep — heavy thud
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(50, t);
-        osc.frequency.linearRampToValueAtTime(30, t + 0.1);
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.12);
-        osc.start(t); osc.stop(t + 0.12);
-        break;
-      }
-
-      case 'shield_hum': { // barrier shield pulse — resonant hum
-        osc.type = 'triangle';
-        osc.frequency.setValueAtTime(220, t);
-        osc.frequency.linearRampToValueAtTime(260, t + 0.06);
-        osc.frequency.linearRampToValueAtTime(220, t + 0.12);
-        gain.gain.setValueAtTime(0.05, t);
-        gain.gain.linearRampToValueAtTime(0.08, t + 0.04);
-        gain.gain.linearRampToValueAtTime(0, t + 0.12);
-        osc.start(t); osc.stop(t + 0.12);
-        break;
-      }
-
-      case 'heal': { // health pickup — warm ascending chime
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(523, t);
-        osc.frequency.linearRampToValueAtTime(784, t + 0.1);
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.linearRampToValueAtTime(0.06, t + 0.08);
-        gain.gain.linearRampToValueAtTime(0, t + 0.15);
-        osc.start(t); osc.stop(t + 0.15);
-        const ho2 = ac.createOscillator();
-        const hg2 = ac.createGain();
-        ho2.connect(hg2); hg2.connect(dest);
-        ho2.type = 'sine';
-        ho2.frequency.setValueAtTime(659, t + 0.05);
-        ho2.frequency.linearRampToValueAtTime(1047, t + 0.15);
-        hg2.gain.setValueAtTime(0.06, t + 0.05);
-        hg2.gain.linearRampToValueAtTime(0, t + 0.2);
-        ho2.start(t + 0.05); ho2.stop(t + 0.2);
-        break;
-      }
-
-      case 'zap': { // lightning field strike — sharp crackling zap
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(2000, t);
-        osc.frequency.linearRampToValueAtTime(600, t + 0.03);
-        osc.frequency.linearRampToValueAtTime(1800, t + 0.05);
-        osc.frequency.linearRampToValueAtTime(400, t + 0.08);
-        gain.gain.setValueAtTime(0.07, t);
-        gain.gain.linearRampToValueAtTime(0.04, t + 0.03);
-        gain.gain.linearRampToValueAtTime(0.06, t + 0.05);
-        gain.gain.linearRampToValueAtTime(0, t + 0.08);
-        osc.start(t); osc.stop(t + 0.08);
-        break;
-      }
-
-      default:
-        gain.gain.setValueAtTime(0, t);
-        osc.start(t); osc.stop(t + 0.01);
-    }
-  } catch (e) { /* audio not available, that's fine */ }
-}
+// sfx() + audio context + master gain live in shared/sfx.js so MP
+// gets the same switch (was missing several cases). getAudio is
+// imported under that name so the existing BGM call sites don't
+// have to change.
 
 // --- analytics (fire-and-forget, never blocks gameplay) ---
 const ANALYTICS_URL = 'https://survivors-analytics.sammcgrail.workers.dev';
@@ -345,11 +79,10 @@ const MAP_TRACKS = {
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
-// Volume levels — persisted per-slider in localStorage.
+// BGM volume — persisted per-slider in localStorage. SFX volume
+// lives in shared/sfx.js (since the gain node is created there).
 let bgmVol = 0.45;
-let sfxVol = 0.60;
 try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) bgmVol = +v; } catch (_) {}
-try { const v = localStorage.getItem('survivors_sfx_vol'); if (v !== null) sfxVol = +v; } catch (_) {}
 const MENU_VOL_RATIO = 0.67; // menu music plays at 67% of bgm slider
 
 let bgMusic = null;
@@ -369,7 +102,7 @@ function initVolSliders() {
   const bs = document.getElementById('vol-bgm');
   const ss = document.getElementById('vol-sfx');
   if (bs) bs.value = Math.round(bgmVol * 100);
-  if (ss) ss.value = Math.round(sfxVol * 100);
+  if (ss) ss.value = Math.round(getSfxVol() * 100);
 }
 updateMuteBtn();
 initVolSliders();
@@ -392,9 +125,8 @@ function setBgmVol(v) {
   }
 }
 function setSfxVol(v) {
-  sfxVol = Math.max(0, Math.min(1, v / 100));
-  try { localStorage.setItem('survivors_sfx_vol', sfxVol.toFixed(2)); } catch (_) {}
-  if (sfxMaster) sfxMaster.gain.value = sfxVol;
+  // Slider is 0..100; shared module owns persistence + gain wiring.
+  _setSfxVol(Math.max(0, Math.min(1, v / 100)));
 }
 function toggleVolPanel() {
   const p = document.getElementById('vol-panel');

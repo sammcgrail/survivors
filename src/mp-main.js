@@ -5,6 +5,7 @@
 // ============================================================
 
 import { WEAPON_ICONS } from './shared/weapons.js';
+import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
@@ -151,161 +152,17 @@ spriteSheet.onload = () => { spritesReady = true; };
 
 const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
-// --- sound effects (Web Audio API) ---
-let audioCtx = null;
-let sfxMaster = null;
-let activeSfxCount = 0;
-const MAX_CONCURRENT_SFX = 12;
-function getAudio() {
-  if (!audioCtx) {
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-    sfxMaster = audioCtx.createGain();
-    sfxMaster.gain.value = mpSfxVol;
-    sfxMaster.connect(audioCtx.destination);
-  }
-  return audioCtx;
-}
-function getSfxDest() { return sfxMaster || getAudio() && sfxMaster; }
-
-function sfx(type) {
-  try {
-    const ac = getAudio();
-    if (activeSfxCount >= MAX_CONCURRENT_SFX) return;
-    const t = ac.currentTime;
-    const osc = ac.createOscillator();
-    const gain = ac.createGain();
-    const dest = getSfxDest();
-    osc.connect(gain);
-    gain.connect(dest);
-    activeSfxCount++;
-    osc.onended = () => { activeSfxCount = Math.max(0, activeSfxCount - 1); };
-
-    switch (type) {
-      case 'hit':
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(220, t);
-        osc.frequency.linearRampToValueAtTime(110, t + 0.06);
-        gain.gain.setValueAtTime(0.08, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.06);
-        osc.start(t); osc.stop(t + 0.06);
-        break;
-      case 'kill':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(400, t);
-        osc.frequency.linearRampToValueAtTime(800, t + 0.08);
-        gain.gain.setValueAtTime(0.12, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.1);
-        osc.start(t); osc.stop(t + 0.1);
-        break;
-      case 'xp':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, t);
-        osc.frequency.linearRampToValueAtTime(1320, t + 0.06);
-        gain.gain.setValueAtTime(0.06, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.08);
-        osc.start(t); osc.stop(t + 0.08);
-        break;
-      case 'levelup': {
-        gain.gain.setValueAtTime(0, t);
-        osc.start(t); osc.stop(t + 0.01);
-        const notes = [523, 659, 784, 1047];
-        notes.forEach((freq, i) => {
-          const o = ac.createOscillator();
-          const g = ac.createGain();
-          o.connect(g); g.connect(dest);
-          o.type = 'triangle';
-          o.frequency.setValueAtTime(freq, t + i * 0.08);
-          g.gain.setValueAtTime(0.1, t + i * 0.08);
-          g.gain.linearRampToValueAtTime(0, t + i * 0.08 + 0.12);
-          o.start(t + i * 0.08);
-          o.stop(t + i * 0.08 + 0.12);
-        });
-        break;
-      }
-      case 'playerhit':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(150, t);
-        osc.frequency.linearRampToValueAtTime(80, t + 0.12);
-        gain.gain.setValueAtTime(0.15, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.15);
-        osc.start(t); osc.stop(t + 0.15);
-        break;
-      case 'death': {
-        gain.gain.setValueAtTime(0, t);
-        osc.start(t); osc.stop(t + 0.01);
-        const freqs = [440, 330, 220, 110];
-        freqs.forEach((freq, i) => {
-          const o = ac.createOscillator();
-          const g = ac.createGain();
-          o.connect(g); g.connect(dest);
-          o.type = 'sawtooth';
-          o.frequency.setValueAtTime(freq, t + i * 0.15);
-          o.frequency.linearRampToValueAtTime(freq * 0.7, t + i * 0.15 + 0.15);
-          g.gain.setValueAtTime(0.12, t + i * 0.15);
-          g.gain.linearRampToValueAtTime(0, t + i * 0.15 + 0.18);
-          o.start(t + i * 0.15);
-          o.stop(t + i * 0.15 + 0.18);
-        });
-        break;
-      }
-      case 'spit':
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(600, t);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.07);
-        gain.gain.setValueAtTime(0.05, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.07);
-        osc.start(t); osc.stop(t + 0.07);
-        break;
-      case 'chain':
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(1200, t);
-        osc.frequency.linearRampToValueAtTime(300, t + 0.05);
-        osc.frequency.linearRampToValueAtTime(900, t + 0.08);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.12);
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.12);
-        osc.start(t); osc.stop(t + 0.12);
-        break;
-      case 'meteor':
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(60, t);
-        osc.frequency.linearRampToValueAtTime(40, t + 0.2);
-        gain.gain.setValueAtTime(0.18, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.25);
-        osc.start(t); osc.stop(t + 0.25);
-        break;
-      case 'dragonstorm': {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(100, t);
-        osc.frequency.linearRampToValueAtTime(200, t + 0.1);
-        gain.gain.setValueAtTime(0.1, t);
-        gain.gain.linearRampToValueAtTime(0, t + 0.15);
-        osc.start(t); osc.stop(t + 0.15);
-        const o2 = ac.createOscillator();
-        const g2 = ac.createGain();
-        o2.connect(g2); g2.connect(dest);
-        o2.type = 'square';
-        o2.frequency.setValueAtTime(800, t + 0.03);
-        o2.frequency.linearRampToValueAtTime(400, t + 0.1);
-        g2.gain.setValueAtTime(0.06, t + 0.03);
-        g2.gain.linearRampToValueAtTime(0, t + 0.12);
-        o2.start(t + 0.03); o2.stop(t + 0.12);
-        break;
-      }
-      default:
-        gain.gain.setValueAtTime(0, t);
-        osc.start(t); osc.stop(t + 0.01);
-    }
-  } catch (e) { /* audio not available */ }
-}
-
+// sfx() + audio context + master gain live in shared/sfx.js. MP
+// gains the sfx types it was previously missing (charge, hive_burst,
+// shield_hum, zap, heal, boss_step, boss_telegraph) since the
+// switch is now one source of truth.
+//
 // --- battle music (map-aware + mute toggle) ---
 const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg' };
 const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
+// SFX vol lives in the shared module now — only BGM stays local.
 let mpBgmVol = 0.45;
-let mpSfxVol = 0.60;
 try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) mpBgmVol = +v; } catch (_) {}
-try { const v = localStorage.getItem('survivors_sfx_vol'); if (v !== null) mpSfxVol = +v; } catch (_) {}
 let mpBgMusic = null;
 let mpBgMusicGain = null;
 let mpMusicFading = false;
@@ -320,7 +177,7 @@ function initMpVolSliders() {
   const bs = document.getElementById('vol-bgm');
   const ss = document.getElementById('vol-sfx');
   if (bs) bs.value = Math.round(mpBgmVol * 100);
-  if (ss) ss.value = Math.round(mpSfxVol * 100);
+  if (ss) ss.value = Math.round(getSfxVol() * 100);
 }
 updateMpMuteBtn();
 initMpVolSliders();
@@ -337,9 +194,8 @@ function setBgmVol(v) {
   }
 }
 function setSfxVol(v) {
-  mpSfxVol = Math.max(0, Math.min(1, v / 100));
-  try { localStorage.setItem('survivors_sfx_vol', mpSfxVol.toFixed(2)); } catch (_) {}
-  if (sfxMaster) sfxMaster.gain.value = mpSfxVol;
+  // Slider is 0..100; shared module owns persistence + gain wiring.
+  _setSfxVol(Math.max(0, Math.min(1, v / 100)));
 }
 function toggleVolPanel() {
   const p = document.getElementById('vol-panel');
