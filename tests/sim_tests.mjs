@@ -217,7 +217,7 @@ suite('Weapon DPS Math', () => {
   test('spit base DPS = damage / cooldown', () => {
     const w = createWeapon('spit');
     const dps = w.damage / w.cooldown;
-    assertClose(dps, 18.75, 0.01, 'spit DPS should be 15/0.8=18.75');
+    assertClose(dps, 25, 0.01, 'spit DPS should be 20/0.8=25 (post balance pass)');
   });
 
   test('breath fires continuously (low cooldown)', () => {
