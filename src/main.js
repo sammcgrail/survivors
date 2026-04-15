@@ -15,6 +15,7 @@ import { escapeHTML } from './shared/htmlEscape.js';
 import { MAPS } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
+import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -918,19 +919,7 @@ function render() {
   // --- map obstacles ---
   for (const obs of g.obstacles) {
     if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
-    if (obs.type === 'wall' || obs.type === 'tomb') {
-      ctx.fillStyle = '#1a1a2e';
-      ctx.strokeStyle = '#333';
-    } else if (obs.type === 'pillar') {
-      ctx.fillStyle = '#2a1a1e';
-      ctx.strokeStyle = '#533';
-    } else if (obs.type === 'tree') {
-      ctx.fillStyle = 'rgba(46, 100, 60, 0.5)';
-      ctx.strokeStyle = 'rgba(46, 204, 113, 0.5)';
-    }
-    ctx.lineWidth = 2;
-    ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
-    ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+    drawObstacle(ctx, obs);
   }
 
   // --- gems (sprites) ---
@@ -1659,6 +1648,7 @@ function startGame() {
   // Load this map's ground tileset (async — render falls back to grid
   // until it resolves).
   buildBackgroundCanvas(game.mapId).then(c => { if (game) game.bgCanvas = c; }).catch(() => {});
+  loadObstacleSprites();
   if (!gameStarted) {
     gameStarted = true;
     lastTime = 0; // reset so first frame gets zero dt
