@@ -746,7 +746,7 @@ function render(dt) {
                     : skin === 'skin_shadow' ? '#9b59b6'
                     : (isMe ? '#3498db' : pl.color);
 
-    drawPlayerBody(ctx, drawSprite, pl, gameTime, {
+    drawPlayerBody(ctx, drawSprite, pl, state.time || 0, {
       skin,
       radius: playerRadius,
       glowColor,
@@ -764,7 +764,7 @@ function render(dt) {
     // "YOU" indicator - arrow above self
     if (isMe) {
       ctx.fillStyle = '#3498db';
-      ctx.globalAlpha = 0.7 + Math.sin(gameTime * 4) * 0.3;
+      ctx.globalAlpha = 0.7 + Math.sin((state.time || 0) * 4) * 0.3;
       ctx.beginPath();
       const ay = pl.y - playerRadius - 28;
       ctx.moveTo(pl.x, ay + 6);
