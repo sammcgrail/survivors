@@ -214,7 +214,10 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
 // Enemy projectiles — hostile orbs with a menacing red/purple glow
 // and a short ghostly trail. Visually distinct from player projectiles
 // so players can read incoming fire at a glance.
-export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H) {
+//
+// `p.homing` (boss phase 3) gets an extra pulsing tracking ring so
+// players can tell "this one curves" without watching it for a beat.
+export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H, time) {
   for (const p of projectiles) {
     if (p.x < cx - 30 || p.x > cx + W + 30 || p.y < cy - 30 || p.y > cy + H + 30) continue;
     const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
@@ -228,6 +231,19 @@ export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H) 
         ctx.arc(p.x + nx * t * 5, p.y + ny * t * 5, p.radius * (1 - t * 0.2), 0, Math.PI * 2);
         ctx.fill();
       }
+      ctx.globalAlpha = 1;
+    }
+    // Homing tracking ring — pulses between r*1.4 and r*2.2 with a
+    // sin tied to time + position so adjacent homers don't pulse
+    // in sync. Outside the main body so it reads as targeting halo.
+    if (p.homing) {
+      const pulse = 1.4 + (Math.sin((time || 0) * 8 + p.x * 0.05) * 0.5 + 0.5) * 0.8;
+      ctx.strokeStyle = p.color;
+      ctx.globalAlpha = 0.45;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * pulse, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.globalAlpha = 1;
     }
     // Main body — outer glow + bright core
@@ -812,7 +828,7 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
   drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
-  drawEnemyProjectiles(ctx, view.enemyProjectiles || [], particles, cx, cy, W, H);
+  drawEnemyProjectiles(ctx, view.enemyProjectiles || [], particles, cx, cy, W, H, view.time || 0);
 }
 
 // Charge fire-wake render — lingering damage zones left behind a
