@@ -16,7 +16,8 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawChainEffects, drawMeteorEffects, drawPlayerBody, renderWorld } from './shared/render.js';
+import { synthesizeView } from './shared/view.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1038,19 +1039,10 @@ function render() {
     drawObstacle(ctx, obs);
   }
 
-  // --- gems (sprites) ---
-  for (const gem of g.gems) drawGem(ctx, gem, drawSprite);
-
-  drawHeartDrops(ctx, g.heartDrops, drawSprite, cx, cy, W, H);
-
   const p = g.player;
-  drawWeaponAuras(ctx, g.players, g.time);
-
-  drawChainEffects(ctx, g.chainEffects);
-  drawMeteorEffects(ctx, g.meteorEffects);
-
-  drawEnemies(ctx, g.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, g.wave));
-  drawProjectiles(ctx, g.projectiles, drawSprite, g.particles, cx, cy, W, H);
+  renderWorld(ctx, synthesizeView(g), drawSprite, g.particles,
+              { cx, cy, W, H },
+              { onSeen: (name) => markSeen(name, g.wave) });
 
   // --- charge effect (streak along charge vector) ---
   for (const w of p.weapons) {
@@ -1105,6 +1097,9 @@ function render() {
       ctx.restore();
     }
   }
+
+  drawChainEffects(ctx, g.chainEffects);
+  drawMeteorEffects(ctx, g.meteorEffects);
 
   // --- player ---
   if (p.alive) {

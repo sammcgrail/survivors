@@ -8,6 +8,13 @@
 // fields) and SP's facing indicator (MP doesn't ship facing). Remaining
 // MP-only: the "YOU" arrow, level badge, per-player name coloring.
 //
+// `renderWorld(ctx, view, drawSprite, particles, viewport, opts)` is
+// the single entry point for the shared middle of both pipelines —
+// gems → hearts → auras → enemies → projectiles. Callers wrap it
+// with background + obstacles before, and chain/meteor/players/
+// particles after (players diverge; chain/meteor sit after so SP's
+// charge trail can slot in between).
+//
 // Renderers treat their arguments as read-only. One carve-out is
 // drawProjectiles, which spawns ember particles into a passed-in
 // array for SP's visual trail — documented at the call site.
@@ -600,4 +607,28 @@ export function drawPlayerBody(ctx, p, drawSprite, time, opts = {}) {
     }
   }
   ctx.shadowBlur = 0;
+}
+
+// Single entry point for the shared middle of the render pipeline.
+// Draws gems → hearts → weapon auras → enemies → projectiles in the
+// order both entry points need them. Caller handles background +
+// obstacles before this and chain/meteor/players/particles after.
+//
+// `view` matches the shape declared in shared/view.js: { time,
+// players, enemies, projectiles, gems, heartDrops, ... }. SP
+// synthesizes it from `g` via synthesizeView; MP passes the server
+// snapshot directly.
+//
+// `viewport` is { cx, cy, W, H } for culling. `opts.onSeen(name)` is
+// optional — SP wires it to the bestiary discovery hook.
+export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {}) {
+  const { cx, cy, W, H } = viewport;
+  for (const gem of view.gems) {
+    if (gem.x < cx - 20 || gem.x > cx + W + 20 || gem.y < cy - 20 || gem.y > cy + H + 20) continue;
+    drawGem(ctx, gem, drawSprite);
+  }
+  drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
+  drawWeaponAuras(ctx, view.players, view.time || 0);
+  drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
+  drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
 }

@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawChainEffects, drawMeteorEffects, drawPlayerBody, renderWorld } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -719,20 +719,9 @@ function render(dt) {
     drawObstacle(ctx, obs);
   }
 
-  // --- gems ---
-  for (const gem of state.gems) {
-    if (gem.x < cx - 20 || gem.x > cx + W + 20 || gem.y < cy - 20 || gem.y > cy + H + 20) continue;
-    drawGem(ctx, gem, drawSprite);
-  }
-
-  drawHeartDrops(ctx, state.heartDrops || [], drawSprite, cx, cy, W, H);
-
-  drawWeaponAuras(ctx, state.players, state.time || 0);
-
-  drawEnemies(ctx, state.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, state.wave));
-  // Server now ships proj.color + vx/vy on the snapshot, so MP gets the
-  // same trail + ember treatment SP has had — no more flat circles.
-  drawProjectiles(ctx, state.projectiles, drawSprite, particles, cx, cy, W, H);
+  renderWorld(ctx, state, drawSprite, particles,
+              { cx, cy, W, H },
+              { onSeen: (name) => markSeen(name, state.wave) });
 
   drawChainEffects(ctx, state.chainEffects || []);
   drawMeteorEffects(ctx, state.meteorEffects || []);
