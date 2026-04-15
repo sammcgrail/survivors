@@ -727,7 +727,7 @@ function render(dt) {
 
   drawHeartDrops(ctx, state.heartDrops || [], drawSprite, cx, cy, W, H);
 
-  drawWeaponAuras(ctx, state.players, state.time || 0);
+  drawWeaponAuras(ctx, state.players, state.time || 0, { cx, cy, W, H });
 
   drawEnemies(ctx, state.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, state.wave));
   // Server now ships proj.color + vx/vy on the snapshot, so MP gets the

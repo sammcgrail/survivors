@@ -1044,7 +1044,7 @@ function render() {
   drawHeartDrops(ctx, g.heartDrops, drawSprite, cx, cy, W, H);
 
   const p = g.player;
-  drawWeaponAuras(ctx, g.players, g.time);
+  drawWeaponAuras(ctx, g.players, g.time, { cx, cy, W, H });
 
   drawChainEffects(ctx, g.chainEffects);
   drawMeteorEffects(ctx, g.meteorEffects);
