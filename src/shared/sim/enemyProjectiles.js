@@ -27,18 +27,48 @@ export function fireEnemyProjectile(g, ox, oy, tx, ty, opts) {
 }
 
 // Called from enemy AI tick — decides when each shooter fires.
+//
+// Two-phase: enemy spends `aimDuration` seconds locked onto the
+// target before firing, emitting ENEMY_AIM at windup start so the
+// client can render a telegraph. Gives players a reaction window
+// — vs the old "instant fire as soon as cooldown expires" which
+// was undodgeable.
+const AIM_DURATION = { elite: 0.4, boss: 0.55 };
+
 export function enemyShootingAi(g, e, dt, targetPlayer) {
   if (!e.shootCooldown || e.stunTimer > 0) return;
+
+  // Mid-windup: tick down the aim timer, fire when it hits zero.
+  if (e.aimTimer > 0) {
+    e.aimTimer -= dt;
+    if (e.aimTimer <= 0) {
+      releaseShot(g, e, e.aimTargetX, e.aimTargetY);
+      e.shootTimer = e.shootCooldown + g.rng.random() * (e.name === 'boss' ? 1.0 : 0.5);
+    }
+    return;
+  }
+
   e.shootTimer = (e.shootTimer || 0) - dt;
   if (e.shootTimer > 0) return;
   if (!targetPlayer || targetPlayer.dist > e.shootRange) return;
+  if (!AIM_DURATION[e.name]) return;
 
-  const px = targetPlayer.p.x, py = targetPlayer.p.y;
+  // Lock target + start windup. Aim coords stay frozen even if
+  // the player moves during windup — that's the dodge window.
+  e.aimTimer = AIM_DURATION[e.name];
+  e.aimTargetX = targetPlayer.p.x;
+  e.aimTargetY = targetPlayer.p.y;
+  emit(g, EVT.ENEMY_AIM, {
+    x: e.x, y: e.y,
+    tx: e.aimTargetX, ty: e.aimTargetY,
+    name: e.name,
+    duration: e.aimTimer,
+  });
+}
 
+function releaseShot(g, e, tx, ty) {
   if (e.name === 'elite') {
-    // Elite: single aimed shot
-    e.shootTimer = e.shootCooldown + g.rng.random() * 0.5;
-    fireEnemyProjectile(g, e.x, e.y, px, py, {
+    fireEnemyProjectile(g, e.x, e.y, tx, ty, {
       speed: e.shootSpeed || 180,
       damage: e.shootDamage || 12,
       radius: 5,
@@ -46,18 +76,15 @@ export function enemyShootingAi(g, e, dt, targetPlayer) {
       range: e.shootRange,
       source: e.name,
     });
-    emit(g, EVT.ENEMY_SHOOT, { x: e.x, y: e.y, name: e.name });
   } else if (e.name === 'boss') {
-    // Boss: 3-shot spread burst
-    e.shootTimer = e.shootCooldown + g.rng.random() * 1.0;
-    const dx = px - e.x, dy = py - e.y;
+    const dx = tx - e.x, dy = ty - e.y;
     const baseAngle = Math.atan2(dy, dx);
-    const spread = 0.25; // ~14 degrees per side
+    const spread = 0.25;
     for (let s = -1; s <= 1; s++) {
       const a = baseAngle + s * spread;
-      const tx = e.x + Math.cos(a) * 500;
-      const ty = e.y + Math.sin(a) * 500;
-      fireEnemyProjectile(g, e.x, e.y, tx, ty, {
+      const sx = e.x + Math.cos(a) * 500;
+      const sy = e.y + Math.sin(a) * 500;
+      fireEnemyProjectile(g, e.x, e.y, sx, sy, {
         speed: e.shootSpeed || 160,
         damage: e.shootDamage || 20,
         radius: 7,
@@ -66,8 +93,8 @@ export function enemyShootingAi(g, e, dt, targetPlayer) {
         source: e.name,
       });
     }
-    emit(g, EVT.ENEMY_SHOOT, { x: e.x, y: e.y, name: e.name });
   }
+  emit(g, EVT.ENEMY_SHOOT, { x: e.x, y: e.y, name: e.name });
 }
 
 // Move enemy projectiles, check wall collisions, check player collisions.
