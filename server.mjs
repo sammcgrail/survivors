@@ -198,11 +198,17 @@ function r2(n) { return Math.round(n * 100) / 100; }
 
 // Per-weapon visual fields that the MP renderer needs to keep auras in
 // sync with the actual damage zone after upgrades. Anything else (timer,
-// cooldown, damage values) stays server-side.
-const WEAPON_VIS_FIELDS = ['type', 'radius', 'bladeCount', 'fieldRadius', 'shieldRadius', 'auraRadius'];
-function snapshotWeapon(w) {
-  const o = {};
-  for (const k of WEAPON_VIS_FIELDS) if (w[k] !== undefined) o[k] = w[k];
+// cooldown, damage values) stays server-side. Pre-multiplies sizeMulti
+// + projectileBonus so MP gets effective values directly.
+function snapshotWeapon(w, p) {
+  const sm = p.sizeMulti || 1;
+  const pb = p.projectileBonus || 0;
+  const o = { type: w.type };
+  if (w.radius !== undefined)       o.radius = w.radius * sm;
+  if (w.fieldRadius !== undefined)  o.fieldRadius = w.fieldRadius * sm;
+  if (w.shieldRadius !== undefined) o.shieldRadius = w.shieldRadius * sm;
+  if (w.auraRadius !== undefined)   o.auraRadius = w.auraRadius * sm;
+  if (w.bladeCount !== undefined)   o.bladeCount = w.bladeCount + pb;
   return o;
 }
 
@@ -221,7 +227,7 @@ function gameSnapshot() {
       hp: r1(p.hp), maxHp: p.maxHp,
       alive: p.alive, level: p.level, kills: p.kills,
       xp: p.xp, xpToLevel: p.xpToLevel,
-      weapons: p.weapons.map(snapshotWeapon),
+      weapons: p.weapons.map(w => snapshotWeapon(w, p)),
       activeSkin: p.activeSkin,
       activeTrail: p.activeTrail,
     })),

@@ -5,6 +5,11 @@
 import { EVT, emit } from './events.js';
 import { damageEnemy } from './damage.js';
 
+// Universal upgrade helpers — applied at fire/tick time so the base
+// `w.*` values stay clean and snapshots can ship them as-is.
+const sizeMul = (p) => p.sizeMulti || 1;
+const projBonus = (p) => p.projectileBonus || 0;
+
 // Random-N enemies inside a circular range, drawn via Fisher-Yates so
 // the choice tracks g.rng deterministically. Used by lightning_field +
 // thunder_god's field tick.
@@ -46,8 +51,9 @@ function fireSpit(g, w, p) {
   const dx = nearest.x - p.x, dy = nearest.y - p.y;
   const d = Math.hypot(dx, dy);
   const nx = dx / d, ny = dy / d;
-  for (let i = 0; i < w.count; i++) {
-    const spread = w.count > 1 ? (i - (w.count - 1) / 2) * 0.15 : 0;
+  const count = w.count + projBonus(p);
+  for (let i = 0; i < count; i++) {
+    const spread = count > 1 ? (i - (count - 1) / 2) * 0.15 : 0;
     const cos = Math.cos(spread), sin = Math.sin(spread);
     const fx = nx * cos - ny * sin;
     const fy = nx * sin + ny * cos;
@@ -88,7 +94,8 @@ function fireChain(g, w, p) {
   emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', pid: p.id });
   const targets = [inRange[0]];
   const hit = new Set([inRange[0]]);
-  for (let c = 0; c < w.chains && targets.length > 0; c++) {
+  const chainCount = w.chains + projBonus(p);
+  for (let c = 0; c < chainCount && targets.length > 0; c++) {
     const last = targets[targets.length - 1];
     let best = null, bestDist = w.chainRange;
     for (const e of g.enemies) {
@@ -109,16 +116,17 @@ function fireChain(g, w, p) {
 function fireMeteor(g, w, p) {
   if (g.enemies.length === 0) return;
   const target = g.enemies[g.rng.int(g.enemies.length)];
+  const blastR = w.blastRadius * sizeMul(p);
   g.meteorEffects.push({
     x: target.x, y: target.y,
-    radius: w.blastRadius,
+    radius: blastR,
     damage: w.damage * p.damageMulti,
     life: 0.5,
     phase: 'warn',
     color: w.color,
     owner: p.id,
   });
-  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius });
+  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: blastR });
 }
 
 function fireDragonStorm(g, w, p) {
@@ -133,8 +141,9 @@ function fireDragonStorm(g, w, p) {
   if (!nearest) return;
   const dx = nearest.x - p.x, dy = nearest.y - p.y;
   const d = Math.hypot(dx, dy);
-  for (let i = 0; i < w.count; i++) {
-    const spread = (i - (w.count - 1) / 2) * 0.2;
+  const count = w.count + projBonus(p);
+  for (let i = 0; i < count; i++) {
+    const spread = (i - (count - 1) / 2) * 0.2;
     const cos = Math.cos(spread), sin = Math.sin(spread);
     const fx = (dx / d) * cos - (dy / d) * sin;
     const fy = (dx / d) * sin + (dy / d) * cos;
@@ -183,10 +192,12 @@ export function updateWeapons(g, dt) {
 
 function tickOrbit(g, w, p, dt) {
   w.phase = (w.phase || 0) + w.rotSpeed * dt;
-  for (let b = 0; b < w.bladeCount; b++) {
-    const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
-    const bx = p.x + Math.cos(angle) * w.radius;
-    const by = p.y + Math.sin(angle) * w.radius;
+  const blades = w.bladeCount + projBonus(p);
+  const r = w.radius * sizeMul(p);
+  for (let b = 0; b < blades; b++) {
+    const angle = w.phase + (b * Math.PI * 2 / blades);
+    const bx = p.x + Math.cos(angle) * r;
+    const by = p.y + Math.sin(angle) * r;
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
@@ -199,12 +210,13 @@ function tickOrbit(g, w, p, dt) {
 
 function tickShield(g, w, p, dt) {
   w.phase = (w.phase || 0) + dt * 4;
+  const r = w.radius * sizeMul(p);
   let hit = false;
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const edx = e.x - p.x, edy = e.y - p.y;
     const dist = Math.hypot(edx, edy);
-    if (dist < w.radius + e.radius && dist > 1) {
+    if (dist < r + e.radius && dist > 1) {
       hit = true;
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
@@ -222,7 +234,7 @@ function tickShield(g, w, p, dt) {
 }
 
 function tickLightningField(g, w, p) {
-  const targets = randomEnemiesInRange(g, p.x, p.y, w.radius, w.zapCount);
+  const targets = randomEnemiesInRange(g, p.x, p.y, w.radius * sizeMul(p), w.zapCount + projBonus(p));
   for (const t of targets) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
@@ -246,11 +258,12 @@ export function updateAuras(g, dt) {
 }
 
 function tickBreathAura(g, w, p, dt) {
+  const r = w.radius * sizeMul(p);
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const edx = p.x - e.x, edy = p.y - e.y;
     const dist = Math.hypot(edx, edy);
-    if (dist < w.radius + e.radius) {
+    if (dist < r + e.radius) {
       damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id);
     }
   }
@@ -270,10 +283,11 @@ function tickChargeSweep(g, w, p, dt) {
 }
 
 function tickDragonStormAura(g, w, p, dt) {
+  const r = w.auraRadius * sizeMul(p);
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const dx = p.x - e.x, dy = p.y - e.y;
-    if (dx * dx + dy * dy < (w.auraRadius + e.radius) ** 2) {
+    if (dx * dx + dy * dy < (r + e.radius) ** 2) {
       damageEnemy(g, e, w.auraDamage * p.damageMulti * dt, p.id);
     }
   }
@@ -292,11 +306,12 @@ function tickThunderField(g, w, p) {
   // Every `overchargeEvery`th fire hits everyone in range at 2x and
   // stuns — a rhythmic crowd-wipe that makes the weapon feel climactic.
   const overcharge = w.fireCount > 0 && w.fireCount % w.overchargeEvery === 0;
+  const fieldR = w.fieldRadius * sizeMul(p);
   if (overcharge) {
     let any = false;
     for (const e of g.enemies) {
       const dx = e.x - p.x, dy = e.y - p.y;
-      if (dx * dx + dy * dy >= w.fieldRadius * w.fieldRadius) continue;
+      if (dx * dx + dy * dy >= fieldR * fieldR) continue;
       any = true;
       damageEnemy(g, e, w.fieldDamage * 2 * p.damageMulti, p.id);
       e.stunTimer = Math.max(e.stunTimer || 0, 0.3);
@@ -304,7 +319,7 @@ function tickThunderField(g, w, p) {
     if (any) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god_overcharge', pid: p.id });
     return;
   }
-  const targets = randomEnemiesInRange(g, p.x, p.y, w.fieldRadius, w.zapCount);
+  const targets = randomEnemiesInRange(g, p.x, p.y, fieldR, w.zapCount + projBonus(p));
   for (const t of targets) {
     damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
@@ -318,10 +333,12 @@ function tickThunderField(g, w, p) {
 
 function tickMeteorOrbit(g, w, p, dt) {
   w.phase = (w.phase || 0) + w.rotSpeed * dt;
-  for (let b = 0; b < w.bladeCount; b++) {
-    const angle = w.phase + (b * Math.PI * 2 / w.bladeCount);
-    const bx = p.x + Math.cos(angle) * w.radius;
-    const by = p.y + Math.sin(angle) * w.radius;
+  const blades = w.bladeCount + projBonus(p);
+  const r = w.radius * sizeMul(p);
+  for (let b = 0; b < blades; b++) {
+    const angle = w.phase + (b * Math.PI * 2 / blades);
+    const bx = p.x + Math.cos(angle) * r;
+    const by = p.y + Math.sin(angle) * r;
     for (let j = g.enemies.length - 1; j >= 0; j--) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
@@ -330,14 +347,15 @@ function tickMeteorOrbit(g, w, p, dt) {
         // Chain-reaction trigger: mini-meteor at the kill site. Queued as
         // a normal meteor with `warn` phase 0 → explode in 0.15s.
         if (killed) {
+          const miniR = w.miniMeteorRadius * sizeMul(p);
           g.meteorEffects.push({
             x: e.x, y: e.y,
-            radius: w.miniMeteorRadius,
+            radius: miniR,
             damage: w.miniMeteorDamage * p.damageMulti,
             life: 0.15, phase: 'warn',
             color: w.color, owner: p.id,
           });
-          emit(g, EVT.METEOR_WARN, { x: e.x, y: e.y, radius: w.miniMeteorRadius });
+          emit(g, EVT.METEOR_WARN, { x: e.x, y: e.y, radius: miniR });
         }
       }
     }
@@ -350,11 +368,12 @@ function tickMeteorOrbit(g, w, p, dt) {
 
 function tickFortressShield(g, w, p, dt) {
   w.phase = (w.phase || 0) + dt * 4;
+  const r = w.shieldRadius * sizeMul(p);
   let hit = false;
   for (const e of g.enemies) {
     const edx = e.x - p.x, edy = e.y - p.y;
     const dist = Math.hypot(edx, edy);
-    if (dist < w.shieldRadius + e.radius && dist > 1) {
+    if (dist < r + e.radius && dist > 1) {
       hit = true;
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
@@ -372,10 +391,11 @@ function tickFortressShield(g, w, p, dt) {
 }
 
 function fortressShockwave(g, w, p) {
+  const r = w.shockwaveRadius * sizeMul(p);
   for (const e of g.enemies) {
     const dx = e.x - p.x, dy = e.y - p.y;
     const dist = Math.hypot(dx, dy);
-    if (dist < w.shockwaveRadius + e.radius) {
+    if (dist < r + e.radius) {
       damageEnemy(g, e, w.shockwaveDamage * p.damageMulti, p.id);
       if (dist > 1) {
         const push = 200;
@@ -388,11 +408,11 @@ function fortressShockwave(g, w, p) {
   // endpoint reads well and saves a new render path.
   g.meteorEffects.push({
     x: p.x, y: p.y,
-    radius: w.shockwaveRadius,
+    radius: r,
     damage: 0, life: 0.25, phase: 'explode',
     color: w.color, owner: p.id,
   });
-  emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: w.shockwaveRadius });
+  emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: r });
 }
 
 // --- chain + meteor effect lifetimes ---

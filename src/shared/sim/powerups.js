@@ -31,6 +31,12 @@ export const POWERUPS = [
   { id: 'meteor_up', name: 'Meteor+', desc: '+50% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.5;w.damage*=1.5;} } },
   { id: 'shield_up', name: 'Barrier+', desc: '+15% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.15;w.knockback*=1.15;} } },
   { id: 'lightning_field_up', name: 'Field+', desc: '+2 zap targets & +25% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount+=2;w.radius*=1.25;} } },
+  // UNIVERSAL upgrades — apply to whatever weapons the player owns.
+  // Read at fire/tick time via (p.projectileBonus || 0), (p.sizeMulti || 1),
+  // (p.armor || 0) so old player objects stay compatible.
+  { id: 'all_projectiles', name: 'Volley', desc: '+1 to all projectile counts (spit, chain targets, zaps)', icon: '🎯', max: 2, apply(g, p) { p.projectileBonus = (p.projectileBonus || 0) + 1; } },
+  { id: 'all_size', name: 'Big Energy', desc: '+15% size to every weapon aura, blast, and orbit', icon: '🔆', max: 3, apply(g, p) { p.sizeMulti = (p.sizeMulti || 1) * 1.15; } },
+  { id: 'armor', name: 'Armor', desc: '-2 incoming damage per hit (min 1)', icon: '🛡', max: 3, apply(g, p) { p.armor = (p.armor || 0) + 2; } },
   // EVOLUTIONS: fuse two maxed base weapons into a combined form. Gated
   // by `requiresEvo` — getAvailableChoices hides the entry until both
   // source `_up` stacks hit 3. Each `apply` strips the sources and pushes
