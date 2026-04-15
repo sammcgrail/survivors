@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem } from './shared/render.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1308,78 +1308,8 @@ function render() {
     }
   }
 
-  // --- chain lightning effects ---
-  // Two passes per bolt: a thick translucent outer glow, then a thin
-  // bright inner core. Each segment gets two jagged midpoints instead
-  // of one, so the bolts read as proper electric arcs rather than
-  // simple V's.
-  for (const ce of g.chainEffects) {
-    const t = ce.life / 0.2;
-    ctx.shadowColor = ce.color;
-    for (let pass = 0; pass < 2; pass++) {
-      ctx.lineWidth = pass === 0 ? 6 : 2;
-      ctx.strokeStyle = pass === 0 ? ce.color : '#ffffff';
-      ctx.shadowBlur = pass === 0 ? 14 : 6;
-      ctx.globalAlpha = pass === 0 ? t * 0.45 : t;
-      for (let i = 0; i < ce.points.length - 1; i++) {
-        const a = ce.points[i];
-        const b = ce.points[i + 1];
-        const dx = (b.x - a.x), dy = (b.y - a.y);
-        const m1x = a.x + dx * 0.33 + (Math.random() - 0.5) * 18;
-        const m1y = a.y + dy * 0.33 + (Math.random() - 0.5) * 18;
-        const m2x = a.x + dx * 0.66 + (Math.random() - 0.5) * 18;
-        const m2y = a.y + dy * 0.66 + (Math.random() - 0.5) * 18;
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(m1x, m1y);
-        ctx.lineTo(m2x, m2y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      }
-    }
-    ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
-  }
-
-  // --- meteor effects ---
-  for (const m of g.meteorEffects) {
-    if (m.phase === 'warn') {
-      // Falling streak from off-screen down to the warn ring — sells
-      // the "something's coming" moment before the explosion.
-      const t = 1 - (m.life / 0.5);            // 0 at spawn → 1 at impact
-      const streakStart = m.y - 480 * (1 - t);  // top of streak rises
-      const grad = ctx.createLinearGradient(m.x, streakStart, m.x, m.y);
-      grad.addColorStop(0,   'rgba(255, 99, 72, 0)');
-      grad.addColorStop(0.7, 'rgba(255, 150, 80, 0.4)');
-      grad.addColorStop(1,   'rgba(255, 220, 100, 0.9)');
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 6 * t + 2;
-      ctx.beginPath();
-      ctx.moveTo(m.x, streakStart);
-      ctx.lineTo(m.x, m.y);
-      ctx.stroke();
-
-      ctx.strokeStyle = 'rgba(255, 99, 72, 0.5)';
-      ctx.lineWidth = 2;
-      ctx.setLineDash([4, 4]);
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      // pulsing center
-      ctx.fillStyle = `rgba(255, 99, 72, ${0.1 + Math.sin(m.life * 20) * 0.1})`;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius * 0.5, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      // explosion
-      const t = m.life / 0.3;
-      ctx.fillStyle = `rgba(255, 99, 72, ${t * 0.4})`;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius * (2 - t), 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
+  drawChainEffects(ctx, g.chainEffects);
+  drawMeteorEffects(ctx, g.meteorEffects);
 
   // --- enemies (sprites with shape fallback) ---
   for (const e of g.enemies) {
