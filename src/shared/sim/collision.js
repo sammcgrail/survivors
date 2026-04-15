@@ -1,3 +1,16 @@
+// Collision geometry (circle-vs-AABB) plus spatial-hash hit-checks for
+// bullet-vs-enemy and player-vs-enemy contact. The hit-test functions live
+// here so tick.js can build one hash per tick and share it between both passes.
+//
+// Circular-import note: checkBulletEnemyCollisions needs applyStatus from
+// enemies.js, which itself imports the geometry helpers below. ESM live
+// bindings make this safe — both imports are only used inside function
+// bodies, never at module-init time.
+import { damageEnemy } from './damage.js';
+import { applyStatus } from './enemies.js';
+import { EVT, emit } from './events.js';
+import { applyPoisonToPlayer } from './playerStatus.js';
+
 // Circle-vs-AABB collision used for player/enemy/projectile vs obstacle
 // checks. Pure math — no game-state references, importable anywhere.
 //
@@ -119,4 +132,115 @@ export function obstacleAvoidance(x, y, vx, vy, obstacles, lookAhead) {
     ay += perpY * sign * strength;
   }
   return { x: ax, y: ay };
+}
+
+// Spatial hash for circle-vs-circle proximity queries. Entities that share
+// a cell (or are in adjacent cells) are collision candidates; distant
+// entities are skipped entirely. Cell size matches the flock perception
+// radius so 9-cell neighbor scans cover the full interaction range.
+export const HASH_CELL = 150;
+export const HASH_KEY_STRIDE = 100000;
+
+export function buildSpatialHash(entities) {
+  const cells = new Map();
+  for (const e of entities) {
+    const cx = Math.floor(e.x / HASH_CELL);
+    const cy = Math.floor(e.y / HASH_CELL);
+    const k = cx * HASH_KEY_STRIDE + cy;
+    let bucket = cells.get(k);
+    if (!bucket) { bucket = []; cells.set(k, bucket); }
+    bucket.push(e);
+  }
+  return cells;
+}
+
+// ── Spatial-hash hit-tests ──────────────────────────────────────────────────
+// Both functions accept a pre-built enemy hash (from buildSpatialHash) so
+// tick.js can build it once and share it across both passes per tick.
+
+// Apply a projectile hit: compute damage with owner's damageMulti, call
+// damageEnemy, apply on-hit status, decrement pierce, register the enemy
+// in proj.hit so it won't be struck again by this projectile on future frames.
+function applyHit(g, s, e) {
+  const owner = g.players.find(p => p.id === s.owner);
+  const dmg = s.damage * (owner ? owner.damageMulti : 1);
+  damageEnemy(g, e, dmg, s.owner);
+  if (s.statusOnHit) applyStatus(g, e, s.statusOnHit);
+  s.pierce--;
+  if (!s.hit) s.hit = new Set();
+  s.hit.add(e);
+}
+
+// Apply enemy contact damage: armor-reduced hit, set iframes 0.5s, emit
+// PLAYER_HIT, apply poisoner DoT if any, handle death.
+function applyContactDamage(g, e, p) {
+  const dmg = Math.max(1, e.damage - (p.armor || 0));
+  p.hp -= dmg;
+  p.iframes = 0.5;
+  emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: e.name, pid: p.id });
+  if (e.poisonOnHit) applyPoisonToPlayer(p, e.poisonOnHit.dps, e.poisonOnHit.duration);
+  if (p.hp <= 0) {
+    p.hp = 0;
+    p.alive = false;
+    emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: e.name, pid: p.id });
+  }
+}
+
+// Bullet vs. enemy — O(shots × k) where k = enemies in 9 nearby cells.
+// Iterating backwards allows safe splice when pierce hits 0.
+// `seen` prevents double-testing enemies that span adjacent cells.
+// `s.hit` (per-projectile Set) prevents re-hitting the same enemy on later
+// frames while a piercing shot overlaps it — the original barronn85 fix.
+export function checkBulletEnemyCollisions(g, enemyHash) {
+  for (let si = g.projectiles.length - 1; si >= 0; si--) {
+    const s = g.projectiles[si];
+    const cx = Math.floor(s.x / HASH_CELL);
+    const cy = Math.floor(s.y / HASH_CELL);
+    const seen = new Set();
+    let consumed = false;
+    outer:
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const cell = enemyHash.get((cx + dx) * HASH_KEY_STRIDE + (cy + dy));
+        if (!cell) continue;
+        for (const e of cell) {
+          if (seen.has(e)) continue;
+          seen.add(e);
+          if (s.hit && s.hit.has(e)) continue;
+          const ex = s.x - e.x, ey = s.y - e.y;
+          if (ex * ex + ey * ey < (s.radius + e.radius) ** 2) {
+            applyHit(g, s, e);
+            if (s.pierce <= 0) { consumed = true; break outer; }
+          }
+        }
+      }
+    }
+    if (consumed) g.projectiles.splice(si, 1);
+  }
+}
+
+// Player vs. enemy — O(players × k). The `break outer` after the first hit
+// sets iframes = 0.5, preventing a player from taking two hits in one tick
+// from adjacent enemies — matches the original `p.iframes` guard behaviour.
+export function checkEnemyPlayerCollisions(g, enemyHash) {
+  for (const p of g.players) {
+    if (!p.alive || p.iframes > 0) continue;
+    const cx = Math.floor(p.x / HASH_CELL);
+    const cy = Math.floor(p.y / HASH_CELL);
+    outer:
+    for (let dx = -1; dx <= 1; dx++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        const cell = enemyHash.get((cx + dx) * HASH_KEY_STRIDE + (cy + dy));
+        if (!cell) continue;
+        for (const e of cell) {
+          if (e.dying !== undefined) continue;
+          const ex = e.x - p.x, ey = e.y - p.y;
+          if (ex * ex + ey * ey < (e.radius + p.radius) ** 2) {
+            applyContactDamage(g, e, p);
+            break outer;
+          }
+        }
+      }
+    }
+  }
 }

@@ -8,8 +8,6 @@ import { EVT, emit } from './events.js';
 import { pushOutOfObstacles, obstacleAvoidance } from './collision.js';
 import { enemyShootingAi } from './enemyProjectiles.js';
 import { damageEnemy } from './damage.js';
-import { applyPoisonToPlayer } from './playerStatus.js';
-
 // Reusable zero vector for the no-obstacles path — saves an
 // allocation per enemy per tick on maps without obstacles.
 const ZERO_VEC = { x: 0, y: 0 };
@@ -437,30 +435,8 @@ function updateEnemyTick(g, dt, hash) {
 
     if (e.hitFlash > 0) e.hitFlash -= dt * 5;
 
-    // Contact damage — hit every overlapping alive player (not just nearest).
-    for (const p of g.players) {
-      if (!p.alive || p.iframes > 0) continue;
-      const dx = p.x - e.x, dy = p.y - e.y;
-      if (dx * dx + dy * dy < (p.radius + e.radius) ** 2) {
-        const dmg = Math.max(1, e.damage - (p.armor || 0));
-        p.hp -= dmg;
-        p.iframes = 0.5;
-        emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: e.name, pid: p.id });
-        // Poisoner DoT — ignores iframes (status applies even when the
-        // hit is i-framed, since the player still touched the source).
-        if (e.poisonOnHit) {
-          applyPoisonToPlayer(p, e.poisonOnHit.dps, e.poisonOnHit.duration);
-        }
-        if (p.hp <= 0) {
-          p.hp = 0;
-          p.alive = false;
-          emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: e.name, pid: p.id });
-        }
-      }
-    }
   }
 }
-
 // Pass 2: hard overlap correction. Per-type separation in the flock pass
 // already keeps enemies spaced at preferred distances; this pass only
 // fires when sprites actually overlap (sum-of-radii) to prevent visual
@@ -520,4 +496,6 @@ export function updateEnemies(g, dt) {
       if (e.dying === undefined) pushOutOfObstacles(e, g.obstacles);
     }
   }
+  // Contact damage is handled by checkEnemyPlayerCollisions in collision.js,
+  // called from tick.js after this function with a shared spatial hash.
 }
