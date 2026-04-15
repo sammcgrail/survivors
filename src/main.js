@@ -14,7 +14,7 @@ import { tickSim } from './shared/sim/tick.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { MAPS } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
-import { loadTilePattern } from './shared/tileBackground.js';
+import { buildBackgroundCanvas } from './shared/tileBackground.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -887,11 +887,15 @@ function render() {
 
   ctx.translate(-cx, -cy);
 
-  // --- background: tiled pattern (when map has a tileset loaded) or
-  //     fallback dark grid lines ---
-  if (g.tilePattern) {
-    ctx.fillStyle = g.tilePattern;
-    ctx.fillRect(0, 0, g.arena.w, g.arena.h);
+  // --- background: pre-baked Wang-sampled tileset (when loaded) or
+  //     fallback dark grid lines. The bg canvas is at native tile
+  //     resolution; nearest-neighbor scale to world size keeps the
+  //     pixel-art crisp when zoomed in. ---
+  if (g.bgCanvas) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(g.bgCanvas, 0, 0, g.bgCanvas.width, g.bgCanvas.height,
+                  0, 0, g.arena.w, g.arena.h);
+    ctx.imageSmoothingEnabled = true;
   } else {
     const gridSize = 60;
     const startX = Math.floor(cx / gridSize) * gridSize;
@@ -1654,7 +1658,7 @@ function startGame() {
   track({ type: 'game_start' });
   // Load this map's ground tileset (async — render falls back to grid
   // until it resolves).
-  loadTilePattern(ctx, MAPS[game.mapId]?.tileset).then(p => { if (game) game.tilePattern = p; }).catch(() => {});
+  buildBackgroundCanvas(game.mapId).then(c => { if (game) game.bgCanvas = c; }).catch(() => {});
   if (!gameStarted) {
     gameStarted = true;
     lastTime = 0; // reset so first frame gets zero dt

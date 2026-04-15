@@ -7,7 +7,7 @@
 import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { escapeHTML } from './shared/htmlEscape.js';
-import { loadTilePattern } from './shared/tileBackground.js';
+import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { MAPS } from './shared/maps.js';
 
 const canvas = document.getElementById('c');
@@ -196,7 +196,7 @@ let connected = false;
 let arena = { w: 3000, h: 3000 };
 let mapId = null;
 let obstacles = [];
-let tilePattern = null;
+let bgCanvas = null;
 
 // State interpolation: store previous + current snapshots
 let prevState = null;
@@ -277,8 +277,7 @@ function connectWS() {
       obstacles = msg.map ? msg.map.obstacles : [];
       console.log(`[ws] welcome: id=${myId}, name=${myName}, map=${mapId}`);
       // Load this map's ground tileset (async — falls back to grid).
-      const tileset = MAPS[mapId]?.tileset;
-      loadTilePattern(ctx, tileset).then(p => { tilePattern = p; }).catch(() => {});
+      buildBackgroundCanvas(mapId).then(c => { bgCanvas = c; }).catch(() => {});
       return;
     }
 
@@ -595,9 +594,10 @@ function render(dt) {
 
   // --- background: tiled pattern (when map has a tileset loaded) or
   //     fallback dark grid lines ---
-  if (tilePattern) {
-    ctx.fillStyle = tilePattern;
-    ctx.fillRect(0, 0, arena.w, arena.h);
+  if (bgCanvas) {
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(bgCanvas, 0, 0, bgCanvas.width, bgCanvas.height, 0, 0, arena.w, arena.h);
+    ctx.imageSmoothingEnabled = true;
   } else {
     const gridSize = 60;
     const startX = Math.floor(cx / gridSize) * gridSize;
