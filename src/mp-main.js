@@ -524,7 +524,7 @@ function respawnGame() {
 function showDeathScreen(state, me) {
   const mins = Math.floor(state.time / 60);
   const secs = Math.floor(state.time % 60);
-  const weaponList = (me.weapons || []).map(w => WEAPON_ICONS[w] || '?').join(' ');
+  const weaponList = (me.weapons || []).map(w => WEAPON_ICONS[w.type] || '?').join(' ');
   document.getElementById('death-stats').innerHTML = `
     Survived: ${mins}:${secs.toString().padStart(2, '0')}<br>
     Level: ${me.level} · Wave: ${state.wave}<br>
@@ -857,10 +857,31 @@ function render(dt) {
   }
   if (state.specialWaveMsg && state.specialWaveMsgTimer > 0) {
     const alpha = Math.min(1, state.specialWaveMsgTimer / 0.5);
-    ctx.fillStyle = `rgba(231, 76, 60, ${alpha})`;
-    ctx.font = 'bold 18px "Chakra Petch", sans-serif';
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 36px "Orbitron", sans-serif';
     ctx.textAlign = 'center';
+    ctx.shadowColor = '#e74c3c';
+    ctx.shadowBlur = 20;
     ctx.fillText(`⚠ ${state.specialWaveMsg} ⚠`, W / 2, H * 0.3 + 44);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+  }
+  // Persistent BOSS INCOMING indicator during the last pre-boss wave.
+  // Wave 20 = THE DEMON boss; wave 19 is the final warning.
+  if (state.wave === 19) {
+    const pulse = 0.7 + Math.sin(performance.now() / 400) * 0.25;
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.fillStyle = '#e74c3c';
+    ctx.font = 'bold 28px "Orbitron", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#e74c3c';
+    ctx.shadowBlur = 16;
+    ctx.fillText('⚠ BOSS INCOMING ⚠', W / 2, H * 0.3 + 88);
+    ctx.shadowBlur = 0;
+    ctx.restore();
   }
 
   // --- death feed (bottom-left) ---
@@ -883,9 +904,9 @@ function render(dt) {
     document.getElementById('hud-time').textContent = `${mins}:${secs.toString().padStart(2, '0')}`;
     document.getElementById('hud-players').textContent = `${state.players.length} player${state.players.length !== 1 ? 's' : ''}`;
     document.getElementById('hud-kills').textContent = `${state.kills} kills`;
-    document.getElementById('hud-wave').textContent = `Wave ${state.wave}`;
+    document.getElementById('hud-wave').textContent = `Wave ${state.wave} / 20`;
     if (me) {
-      document.getElementById('hud-weapons').textContent = (me.weapons || []).map(w => WEAPON_ICONS[w] || '?').join(' ');
+      document.getElementById('hud-weapons').textContent = (me.weapons || []).map(w => WEAPON_ICONS[w.type] || '?').join(' ');
       document.getElementById('hud-level').textContent = `Lv ${me.level}`;
       const xpFill = document.getElementById('xp-fill');
       if (xpFill) xpFill.style.width = `${Math.min(100, (me.xp / me.xpToLevel) * 100)}%`;
