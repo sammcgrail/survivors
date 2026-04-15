@@ -196,27 +196,24 @@ function sendLevelUp(pid) {
 function r1(n) { return Math.round(n * 10) / 10; }
 function r2(n) { return Math.round(n * 100) / 100; }
 
-// Per-weapon visual fields that the MP renderer needs. Pre-multiplies
-// sizeMulti + projectileBonus so MP gets effective values directly.
+// Per-weapon visual fields the shared renderer needs. Ships raw base
+// values — sizeMulti + projectileBonus ride on the player snapshot
+// and the renderer applies them once, so SP (reading live `w.radius`)
+// and MP (reading the snapshot) stay in sync under Amplify/Volley.
 //
 // Live state shipped (phase, pulsePhase, fireCount, active flags) is
-// what PR 4 needs to drive the shared weapon-aura render — MP can't
-// fake `gameTime * k` once SP and MP share the same code path because
-// the SP version reads w.phase directly. Rounded to 2 decimals to
-// keep the snapshot tight (spread-effect numbers don't need 1e-15
-// precision).
-function snapshotWeapon(w, p) {
-  const sm = p.sizeMulti || 1;
-  const pb = p.projectileBonus || 0;
+// what drives the shared weapon-aura render — MP can't fake
+// `gameTime * k` once SP and MP share the same code path because the
+// SP version reads w.phase directly. 2-decimal precision keeps the
+// snapshot tight.
+function snapshotWeapon(w) {
   const o = { type: w.type };
   if (w.color !== undefined)        o.color = w.color;
-  if (w.radius !== undefined)       o.radius = w.radius * sm;
-  if (w.fieldRadius !== undefined)  o.fieldRadius = w.fieldRadius * sm;
-  if (w.shieldRadius !== undefined) o.shieldRadius = w.shieldRadius * sm;
-  if (w.auraRadius !== undefined)   o.auraRadius = w.auraRadius * sm;
-  if (w.bladeCount !== undefined)   o.bladeCount = w.bladeCount + pb;
-  // Animation state (only ship when present; saves ~10 bytes per
-  // weapon for types that don't use these fields).
+  if (w.radius !== undefined)       o.radius = w.radius;
+  if (w.fieldRadius !== undefined)  o.fieldRadius = w.fieldRadius;
+  if (w.shieldRadius !== undefined) o.shieldRadius = w.shieldRadius;
+  if (w.auraRadius !== undefined)   o.auraRadius = w.auraRadius;
+  if (w.bladeCount !== undefined)   o.bladeCount = w.bladeCount;
   if (w.phase !== undefined)        o.phase = r2(w.phase);
   if (w.pulsePhase !== undefined)   o.pulsePhase = r2(w.pulsePhase);
   if (w.fireCount !== undefined)    o.fireCount = w.fireCount;
@@ -243,7 +240,11 @@ function gameSnapshot() {
       hp: r1(p.hp), maxHp: p.maxHp,
       alive: p.alive, level: p.level, kills: p.kills,
       xp: p.xp, xpToLevel: p.xpToLevel,
-      weapons: p.weapons.map(w => snapshotWeapon(w, p)),
+      // Size/bonus multipliers ride on the player so shared render
+      // applies them once. Only ship when non-default to save bytes.
+      ...(p.sizeMulti && p.sizeMulti !== 1 ? { sizeMulti: r2(p.sizeMulti) } : {}),
+      ...(p.projectileBonus ? { projectileBonus: p.projectileBonus } : {}),
+      weapons: p.weapons.map(snapshotWeapon),
       activeSkin: p.activeSkin,
       activeTrail: p.activeTrail,
     })),
@@ -253,6 +254,9 @@ function gameSnapshot() {
       hp: e.hp, maxHp: e.maxHp,
       radius: e.radius, color: e.color,
       hitFlash: r2(e.hitFlash || 0),
+      // Ship dying only when present so MP can draw the shrink+fade
+      // death animation that shared drawEnemies already handles.
+      ...(e.dying !== undefined ? { dying: r2(e.dying) } : {}),
     })),
     gems: game.gems.map(gem => ({ x: r1(gem.x), y: r1(gem.y), xp: gem.xp })),
     projectiles: game.projectiles.map(pr => ({
