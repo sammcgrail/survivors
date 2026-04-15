@@ -127,7 +127,25 @@ async function getPerf(page) {
       total: Math.round(performance.memory.totalJSHeapSize / 1048576),
     } : null;
     const stats = window._dev?.getStats?.() ?? null;
-    return { fps: +fps.toFixed(1), avgMs: +avg.toFixed(2), p95Ms: +p95.toFixed(2), maxMs: +max.toFixed(2), hud, mem, stats };
+    // Phase buckets from ?perf=1 harness (update/render/frame + r.bg/world/player/particles/floats/hud).
+    // Emits avg+p95+max per label over the last ~10s window, same math as the in-page _perfReport.
+    let phases = null;
+    if (window._perf?.buckets) {
+      phases = {};
+      for (const label of Object.keys(window._perf.buckets)) {
+        const b = window._perf.buckets[label];
+        if (!b || b.length === 0) continue;
+        const s = [...b].sort((a, b) => a - b);
+        const a = b.reduce((sum, x) => sum + x, 0) / b.length;
+        phases[label] = {
+          avg: +a.toFixed(2),
+          p95: +s[Math.floor(s.length * 0.95)].toFixed(2),
+          max: +s[s.length - 1].toFixed(2),
+          n: b.length,
+        };
+      }
+    }
+    return { fps: +fps.toFixed(1), avgMs: +avg.toFixed(2), p95Ms: +p95.toFixed(2), maxMs: +max.toFixed(2), hud, mem, stats, phases };
   });
 }
 
@@ -264,6 +282,32 @@ const scenarios = {
     setup: (page) => page.evaluate(() => { setTimeout(() => window._dev?.spawnEnemies(500), 3000); }),
     description: 'iPhone-size viewport with 500 enemies — sam judder report scenario',
   },
+  // Realistic late-game: jump to wave 15, keep player alive so update+render
+  // run continuously. The dev-hook HP top-up replaces invuln without needing
+  // a new game flag. Only runs on localhost (dev hook is gated there).
+  'late-game': {
+    seconds: 60,
+    setup: (page) => page.evaluate(() => {
+      setTimeout(() => {
+        const g = window._dev?.getGame();
+        if (!g) return;
+        g.wave = 15;
+        window._dev.spawnEnemies(150);
+      }, 2000);
+      setInterval(() => {
+        const g = window._dev?.getGame();
+        if (!g?.player) return;
+        g.player.hp = g.player.maxHp;
+        // Auto-pick level-up option 0 so the sim keeps running; without
+        // this, the bot never resolves the paused level-up overlay and
+        // update() stalls for the rest of the scenario.
+        if (window._levelChoices && window._levelChoices[0]) {
+          window._levelChoices[0]();
+        }
+      }, 200);
+    }),
+    description: 'wave 15 + 150 enemies, hp topped up — realistic late-game with live update loop',
+  },
 };
 
 async function main() {
@@ -292,7 +336,7 @@ async function main() {
     console.error(`[stress] scenario: ${name} (${def.seconds}s)  ${def.description ?? ''}`);
     const ctx = await browser.newContext({ viewport: def.viewport ?? { width: 1280, height: 720 } });
     const page = await ctx.newPage();
-    await page.goto('http://localhost:18889/sp.html', { waitUntil: 'load' });
+    await page.goto('http://localhost:18889/sp.html?perf=1', { waitUntil: 'load' });
     await installBot(page);
     const r = await runScenario(page, name, def.setup, def.seconds);
     results.push(r);
@@ -323,6 +367,17 @@ async function main() {
       console.log(`frame ms: worst p95=${Math.max(...samples.map(s => s.p95Ms)).toFixed(1)} worst max=${maxMs.toFixed(1)}`);
       if (last.mem) console.log(`mem: ${last.mem.used}MB used / ${last.mem.total}MB total`);
       if (last.stats) console.log(`entities at end: enemies=${last.stats.enemies} proj=${last.stats.projectiles} particles=${last.stats.particles} gems=${last.stats.gems}`);
+      if (last.phases) {
+        const order = ['update', 'render', 'frame', 'r.bg', 'r.gems', 'r.auras', 'r.enemies', 'r.projectiles', 'r.worldfx', 'r.player', 'r.particles', 'r.floats', 'r.hud'];
+        const seen = new Set(order);
+        const extras = Object.keys(last.phases).filter(l => !seen.has(l));
+        const labels = order.filter(l => last.phases[l]).concat(extras);
+        console.log('phases (avg/p95/max ms):');
+        for (const l of labels) {
+          const p = last.phases[l];
+          console.log(`  ${l.padEnd(13)} avg=${p.avg.toFixed(2).padStart(5)} p95=${p.p95.toFixed(2).padStart(5)} max=${p.max.toFixed(2).padStart(6)} n=${p.n}`);
+        }
+      }
     }
   }
 }

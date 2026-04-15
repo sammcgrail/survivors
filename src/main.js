@@ -616,6 +616,7 @@ function render() {
   const H = canvas.height;
   const g = game;
   if (!g) return;
+  if (PERF_ON) _phaseT = performance.now();
 
   ctx.save();
   ctx.fillStyle = '#0a0a0f';
@@ -673,14 +674,16 @@ function render() {
     if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
     drawObstacle(ctx, obs);
   }
+  _phase('bg');
 
   const p = g.player;
   renderWorld(ctx, synthesizeView(g), drawSprite, g.particles,
               { cx, cy, W, H },
-              { onSeen: (name) => markSeen(name, g.wave) });
+              { onSeen: (name) => markSeen(name, g.wave), onPhase: PERF_ON ? _phase : null });
   drawChargeTrail(ctx, g.players);
   drawChainEffects(ctx, g.chainEffects);
   drawMeteorEffects(ctx, g.meteorEffects);
+  _phase('worldfx');
 
   // --- player ---
   if (p.alive) {
@@ -707,10 +710,13 @@ function render() {
 
     drawHpBar(ctx, p.x, p.y - p.radius - 10, 30, p.hp / p.maxHp);
   }
+  _phase('player');
 
   drawParticles(ctx, g.particles);
+  _phase('particles');
 
   drawFloatingTexts(ctx, g.floatingTexts);
+  _phase('floats');
 
   ctx.restore();
 
@@ -782,6 +788,7 @@ function render() {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
+  _phase('hud');
 
 }
 
@@ -889,12 +896,22 @@ let lastTime = 0;
 const PERF_ON = typeof location !== 'undefined' && /[?&]perf=1\b/.test(location.search);
 const _perfBuckets = PERF_ON ? Object.create(null) : null;
 let _perfFrames = 0;
+let _phaseT = 0; // last phase boundary timestamp, reset at render start
 
 function _perfMark(label, ms) {
   let b = _perfBuckets[label];
   if (!b) { b = _perfBuckets[label] = []; }
   b.push(ms);
   if (b.length > 600) b.shift(); // keep last ~10s at 60fps
+}
+
+// Call between render phases to close out the previous bucket. No-op
+// unless PERF_ON. Keeps the call-site ergonomic: `_phase('world')`.
+function _phase(label) {
+  if (!PERF_ON) return;
+  const n = performance.now();
+  _perfMark('r.' + label, n - _phaseT);
+  _phaseT = n;
 }
 
 function _perfReport() {
