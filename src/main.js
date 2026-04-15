@@ -16,7 +16,7 @@ import { MAPS } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
-import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks } from './shared/prestige.js';
+import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -491,6 +491,10 @@ function initGame() {
     arena: { w: map.width, h: map.height },
     obstacles: map.obstacles,
     mapId: selectedMapId,
+    // Active cosmetics from prestige (read once at game start)
+    _activeSkin: loadPrestige().activeSkin,
+    _activeTrail: loadPrestige().activeTrail,
+    _trailTimer: 0,
   };
 }
 
@@ -550,6 +554,26 @@ function update(dt) {
   //     → enemies → gems → chain/meteor effect lifetimes). Order is
   //     load-bearing; see src/shared/sim/tick.js for rationale.
   tickSim(g, dt);
+
+  // --- fire trail cosmetic ---
+  if (p.alive && g._activeTrail === 'trail_fire') {
+    g._trailTimer = (g._trailTimer || 0) - dt;
+    const speed = Math.sqrt(p.facing.x ** 2 + p.facing.y ** 2);
+    if (g._trailTimer <= 0 && speed > 0.1) {
+      g._trailTimer = 0.03; // ~33 particles/sec
+      const spread = 4;
+      g.particles.push({
+        x: p.x + (Math.random() - 0.5) * spread,
+        y: p.y + (Math.random() - 0.5) * spread,
+        vx: (Math.random() - 0.5) * 30,
+        vy: -40 - Math.random() * 60,
+        life: 0.3 + Math.random() * 0.3,
+        maxLife: 0.6,
+        radius: 2 + Math.random() * 2,
+        color: Math.random() > 0.4 ? '#f39c12' : '#e74c3c',
+      });
+    }
+  }
 
   // --- update particles ---
   for (let i = g.particles.length - 1; i >= 0; i--) {
@@ -1392,19 +1416,68 @@ function render() {
     // iframe flicker
     const flickerHide = p.iframes > 0 && Math.floor(p.iframes * 10) % 2;
     const playerAlpha = flickerHide ? 0.4 : 1.0;
+    const skin = g._activeSkin;
 
-    // glow
-    ctx.shadowColor = p.iframes > 0 ? '#fff' : '#3498db';
-    ctx.shadowBlur = 15;
+    // skin-dependent glow color
+    const glowColor = skin === 'skin_gold' ? '#f39c12'
+                    : skin === 'skin_shadow' ? '#9b59b6'
+                    : '#3498db';
+    ctx.shadowColor = p.iframes > 0 ? '#fff' : glowColor;
+    ctx.shadowBlur = skin === 'skin_shadow' ? 25 : 15;
 
-    // player sprite
-    if (!drawSprite('player', p.x, p.y, 2, playerAlpha)) {
-      // fallback circle
-      ctx.fillStyle = flickerHide ? 'rgba(255,255,255,0.5)' : '#eee';
+    // shadow skin: dark aura ring behind player
+    if (skin === 'skin_shadow') {
+      ctx.save();
+      ctx.globalAlpha = 0.3 * playerAlpha;
+      const auraR = p.radius * 2.2;
+      const grad = ctx.createRadialGradient(p.x, p.y, p.radius * 0.5, p.x, p.y, auraR);
+      grad.addColorStop(0, 'rgba(155, 89, 182, 0.5)');
+      grad.addColorStop(1, 'rgba(44, 0, 62, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, auraR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    // gold skin: golden shimmer ring
+    if (skin === 'skin_gold') {
+      ctx.save();
+      ctx.globalAlpha = (0.25 + 0.1 * Math.sin(g.time * 4)) * playerAlpha;
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // player sprite (tinted via compositing for skins)
+    const spriteDrawn = drawSprite('player', p.x, p.y, 2, playerAlpha);
+    if (spriteDrawn && skin) {
+      // overlay tint on top of sprite using 'source-atop' blend
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      const tintColor = skin === 'skin_gold' ? 'rgba(241, 196, 15, 0.35)'
+                      : skin === 'skin_shadow' ? 'rgba(100, 30, 150, 0.4)'
+                      : null;
+      if (tintColor) {
+        ctx.fillStyle = tintColor;
+        ctx.fillRect(p.x - 16, p.y - 16, 32, 32);
+      }
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore();
+    }
+    if (!spriteDrawn) {
+      // fallback circle with skin colors
+      const fillColor = skin === 'skin_gold' ? (flickerHide ? 'rgba(241,196,15,0.5)' : '#f1c40f')
+                       : skin === 'skin_shadow' ? (flickerHide ? 'rgba(100,30,150,0.5)' : '#6c3483')
+                       : (flickerHide ? 'rgba(255,255,255,0.5)' : '#eee');
+      ctx.fillStyle = fillColor;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = '#3498db';
+      ctx.strokeStyle = glowColor;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
@@ -1419,7 +1492,7 @@ function render() {
       const tipY = p.y + fy * (p.radius + 6);
       const perpX = -fy;
       const perpY = fx;
-      ctx.fillStyle = '#3498db';
+      ctx.fillStyle = glowColor;
       ctx.globalAlpha = playerAlpha;
       ctx.beginPath();
       ctx.moveTo(tipX, tipY);
@@ -1676,15 +1749,27 @@ function showPrestigeShop() {
     const owned = prestige.unlocks[u.id] || 0;
     const maxed = owned >= u.max;
     const canBuy = !maxed && prestige.scales >= u.cost;
-    const stackStr = u.max > 1 ? ` (${owned}/${u.max})` : (maxed ? ' (owned)' : '');
-    return `<div class="unlock-card${maxed ? ' unlock-maxed' : ''}${canBuy ? ' unlock-available' : ''}" onclick="${canBuy ? `purchaseUnlock('${u.id}')` : ''}">
+    const stackStr = u.max > 1 ? ` (${owned}/${u.max})` : (maxed ? '' : '');
+    // Cosmetic equip state
+    const isEquipped = (u.id === prestige.activeSkin || u.id === prestige.activeTrail);
+    const equipLabel = isEquipped ? 'EQUIPPED' : (maxed && u.cosmetic ? 'EQUIP' : '');
+    const equipClass = isEquipped ? ' unlock-equipped' : '';
+    const clickAction = canBuy ? `purchaseUnlock('${u.id}')`
+                      : (maxed && u.cosmetic) ? `toggleCosmeticEquip('${u.id}')`
+                      : '';
+    return `<div class="unlock-card${maxed ? ' unlock-maxed' : ''}${canBuy ? ' unlock-available' : ''}${equipClass}" onclick="${clickAction}">
       <div class="unlock-icon">${u.icon}</div>
       <div class="unlock-name">${u.name}${stackStr}</div>
       <div class="unlock-desc">${u.desc}</div>
-      <div class="unlock-cost">${maxed ? 'MAXED' : u.cost + ' scales'}</div>
+      <div class="unlock-cost">${equipLabel ? `<span class="equip-tag${isEquipped ? ' equipped' : ''}">${equipLabel}</span>` : (maxed ? 'MAXED' : u.cost + ' scales')}</div>
     </div>`;
   }).join('');
   document.getElementById('prestige-shop').style.display = 'flex';
+}
+
+function toggleCosmeticEquip(id) {
+  toggleCosmetic(id);
+  showPrestigeShop(); // refresh
 }
 
 function hidePrestigeShop() {
@@ -1759,3 +1844,4 @@ window.selectMap = selectMap;
 window.showPrestigeShop = showPrestigeShop;
 window.hidePrestigeShop = hidePrestigeShop;
 window.purchaseUnlock = purchaseUnlock;
+window.toggleCosmeticEquip = toggleCosmeticEquip;

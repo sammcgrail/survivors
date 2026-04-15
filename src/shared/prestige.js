@@ -51,10 +51,25 @@ export function loadPrestige() {
         totalEarned: data.totalEarned || 0,
         unlocks:     data.unlocks     || {},
         milestones:  data.milestones  || {},
+        activeSkin:  data.activeSkin   || null,   // 'skin_gold' | 'skin_shadow' | null
+        activeTrail: data.activeTrail  || null,   // 'trail_fire' | null
       };
     }
   } catch (_) { /* corrupt data — reset */ }
-  return { scales: 0, totalEarned: 0, unlocks: {}, milestones: {} };
+  return { scales: 0, totalEarned: 0, unlocks: {}, milestones: {}, activeSkin: null, activeTrail: null };
+}
+
+/** Toggle a cosmetic on/off. Returns the updated prestige data. */
+export function toggleCosmetic(id) {
+  const prestige = loadPrestige();
+  if (!prestige.unlocks[id]) return prestige; // not owned
+  if (id.startsWith('skin_')) {
+    prestige.activeSkin = prestige.activeSkin === id ? null : id;
+  } else if (id.startsWith('trail_')) {
+    prestige.activeTrail = prestige.activeTrail === id ? null : id;
+  }
+  savePrestige(prestige);
+  return prestige;
 }
 
 export function savePrestige(data) {
