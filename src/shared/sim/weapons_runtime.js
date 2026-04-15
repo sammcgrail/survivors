@@ -428,7 +428,7 @@ function fortressShockwave(g, w, p) {
     damage: 0, life: 0.25, phase: 'explode',
     color: w.color, owner: p.id,
   });
-  emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: w.shockwaveRadius });
+  emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: w.shockwaveRadius, pid: p.id });
 }
 
 // --- chain + meteor effect lifetimes ---
@@ -466,7 +466,7 @@ export function updateMeteorEffects(g, dt) {
     if (m.phase === 'warn' && m.life <= 0) {
       m.phase = 'explode';
       m.life = 0.3;
-      emit(g, EVT.METEOR_EXPLODE, { x: m.x, y: m.y, color: m.color, radius: m.radius });
+      emit(g, EVT.METEOR_EXPLODE, { x: m.x, y: m.y, color: m.color, radius: m.radius, pid: m.owner });
       for (let j = g.enemies.length - 1; j >= 0; j--) {
         const e = g.enemies[j];
         const dx = m.x - e.x, dy = m.y - e.y;
