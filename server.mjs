@@ -159,8 +159,9 @@ function tick(dt) {
   applyInputs(game, dt);
   tickSim(game, dt);
   // Forward LEVEL_UP events to the leveling player as a `levelup`
-  // message with three random valid choices. Other event types are
-  // server-side cosmetics; clients infer them from state diffs.
+  // message with three random valid choices. Other events ride the
+  // state snapshot as of the event-channel work (Tier C) — clients
+  // drain them into local particles / floating text / sfx.
   for (const evt of game.events) {
     if (evt.type === 'levelUp') sendLevelUp(evt.pid);
     else if (evt.type === 'waveSurvived') {
@@ -169,7 +170,8 @@ function tick(dt) {
       game.deathFeed.push({ text: `Wave ${evt.wave} cleared`, time: evt.time });
     }
   }
-  game.events.length = 0;
+  // events cleared after broadcast in startLoop so the snapshot can
+  // ride them out to clients.
 }
 
 function sendLevelUp(pid) {
@@ -296,6 +298,27 @@ function gameSnapshot() {
       life: r2(h.life), bobPhase: r2(h.bobPhase),
     })),
     deathFeed: game.deathFeed.slice(-5).map(d => ({ text: d.text, time: r1(d.time) })),
+    // Transient sim events from this tick — damage numbers, kill
+    // particles, sfx triggers, screen-shake cues. Clients drain and
+    // apply locally. Coordinates rounded to save bytes; levelUp kept
+    // too so peers can hear the levelup sfx on each other.
+    events: game.events.map(e => {
+      const o = { type: e.type };
+      if (e.x !== undefined) o.x = r1(e.x);
+      if (e.y !== undefined) o.y = r1(e.y);
+      if (e.dmg !== undefined) o.dmg = Math.round(e.dmg);
+      if (e.radius !== undefined) o.radius = Math.round(e.radius);
+      if (e.color !== undefined) o.color = e.color;
+      if (e.name !== undefined) o.name = e.name;
+      if (e.weapon !== undefined) o.weapon = e.weapon;
+      if (e.pid !== undefined) o.pid = e.pid;
+      if (e.by !== undefined) o.by = e.by;
+      if (e.xp !== undefined) o.xp = e.xp;
+      if (e.healed !== undefined) o.healed = r1(e.healed);
+      if (e.level !== undefined) o.level = e.level;
+      if (e.wave !== undefined) o.wave = e.wave;
+      return o;
+    }),
     waveMsg:        game.waveMsgTimer        > 0 ? game.waveMsg        : null,
     waveMsgTimer:   r2(game.waveMsgTimer),
     specialWaveMsg: game.specialWaveMsgTimer > 0 ? game.specialWaveMsg : null,
@@ -319,6 +342,10 @@ function startLoop() {
   setInterval(() => {
     tick(TICK_DT);
     broadcast();
+    // Clear events after every client sees the snapshot once — each
+    // event fires exactly once per client instead of leaking into
+    // the next tick or being sent twice.
+    game.events.length = 0;
   }, TICK_DT * 1000);
 }
 
