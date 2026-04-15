@@ -51,19 +51,33 @@ const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
 // --- sound effects (Web Audio API) ---
 let audioCtx = null;
+let sfxMaster = null;       // master gain for all SFX — keeps them from drowning BGM
+let activeSfxCount = 0;
+const MAX_CONCURRENT_SFX = 12; // hard cap — prevents audio buffer overload
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sfxMaster = audioCtx.createGain();
+    sfxMaster.gain.value = 0.6; // SFX master volume (< 1.0 so BGM stays audible)
+    sfxMaster.connect(audioCtx.destination);
+  }
   return audioCtx;
 }
+function getSfxDest() { return sfxMaster || getAudio() && sfxMaster; }
 
 function sfx(type) {
   try {
     const ac = getAudio();
+    if (activeSfxCount >= MAX_CONCURRENT_SFX) return; // drop SFX when saturated
     const t = ac.currentTime;
     const osc = ac.createOscillator();
     const gain = ac.createGain();
+    const dest = getSfxDest();
     osc.connect(gain);
-    gain.connect(ac.destination);
+    gain.connect(dest);
+    // Track concurrent SFX so we can cap them
+    activeSfxCount++;
+    osc.onended = () => { activeSfxCount = Math.max(0, activeSfxCount - 1); };
 
     switch (type) {
       case 'hit': // enemy takes damage — short blip
@@ -100,7 +114,7 @@ function sfx(type) {
         notes.forEach((freq, i) => {
           const o = ac.createOscillator();
           const g = ac.createGain();
-          o.connect(g); g.connect(ac.destination);
+          o.connect(g); g.connect(dest);
           o.type = 'triangle';
           o.frequency.setValueAtTime(freq, t + i * 0.08);
           g.gain.setValueAtTime(0.1, t + i * 0.08);
@@ -127,7 +141,7 @@ function sfx(type) {
         freqs.forEach((freq, i) => {
           const o = ac.createOscillator();
           const g = ac.createGain();
-          o.connect(g); g.connect(ac.destination);
+          o.connect(g); g.connect(dest);
           o.type = 'sawtooth';
           o.frequency.setValueAtTime(freq, t + i * 0.15);
           o.frequency.linearRampToValueAtTime(freq * 0.7, t + i * 0.15 + 0.15);
@@ -177,7 +191,7 @@ function sfx(type) {
         osc.start(t); osc.stop(t + 0.15);
         const o2 = ac.createOscillator();
         const g2 = ac.createGain();
-        o2.connect(g2); g2.connect(ac.destination);
+        o2.connect(g2); g2.connect(dest);
         o2.type = 'square';
         o2.frequency.setValueAtTime(800, t + 0.03);
         o2.frequency.linearRampToValueAtTime(400, t + 0.1);
@@ -212,7 +226,7 @@ function sfx(type) {
         // high squelch layer
         const hb2 = ac.createOscillator();
         const hg2 = ac.createGain();
-        hb2.connect(hg2); hg2.connect(ac.destination);
+        hb2.connect(hg2); hg2.connect(dest);
         hb2.type = 'square';
         hb2.frequency.setValueAtTime(500, t + 0.02);
         hb2.frequency.linearRampToValueAtTime(250, t + 0.1);
@@ -234,7 +248,7 @@ function sfx(type) {
         // high screech overtone
         const bt2 = ac.createOscillator();
         const bg2 = ac.createGain();
-        bt2.connect(bg2); bg2.connect(ac.destination);
+        bt2.connect(bg2); bg2.connect(dest);
         bt2.type = 'square';
         bt2.frequency.setValueAtTime(300, t + 0.1);
         bt2.frequency.linearRampToValueAtTime(600, t + 0.25);
@@ -277,7 +291,7 @@ function sfx(type) {
         osc.start(t); osc.stop(t + 0.15);
         const ho2 = ac.createOscillator();
         const hg2 = ac.createGain();
-        ho2.connect(hg2); hg2.connect(ac.destination);
+        ho2.connect(hg2); hg2.connect(dest);
         ho2.type = 'sine';
         ho2.frequency.setValueAtTime(659, t + 0.05);
         ho2.frequency.linearRampToValueAtTime(1047, t + 0.15);
@@ -331,7 +345,7 @@ const MAP_TRACKS = {
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 const DEFAULT_TRACK_MP3 = 'survivors_battle.mp3';
-const MUSIC_VOL = 0.35;
+const MUSIC_VOL = 0.45;
 const MENU_VOL = 0.30;
 
 let bgMusic = null;

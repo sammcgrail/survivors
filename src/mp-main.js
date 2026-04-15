@@ -115,19 +115,32 @@ const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
 // --- sound effects (Web Audio API) ---
 let audioCtx = null;
+let sfxMaster = null;
+let activeSfxCount = 0;
+const MAX_CONCURRENT_SFX = 12;
 function getAudio() {
-  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (!audioCtx) {
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    sfxMaster = audioCtx.createGain();
+    sfxMaster.gain.value = 0.6;
+    sfxMaster.connect(audioCtx.destination);
+  }
   return audioCtx;
 }
+function getSfxDest() { return sfxMaster || getAudio() && sfxMaster; }
 
 function sfx(type) {
   try {
     const ac = getAudio();
+    if (activeSfxCount >= MAX_CONCURRENT_SFX) return;
     const t = ac.currentTime;
     const osc = ac.createOscillator();
     const gain = ac.createGain();
+    const dest = getSfxDest();
     osc.connect(gain);
-    gain.connect(ac.destination);
+    gain.connect(dest);
+    activeSfxCount++;
+    osc.onended = () => { activeSfxCount = Math.max(0, activeSfxCount - 1); };
 
     switch (type) {
       case 'hit':
@@ -161,7 +174,7 @@ function sfx(type) {
         notes.forEach((freq, i) => {
           const o = ac.createOscillator();
           const g = ac.createGain();
-          o.connect(g); g.connect(ac.destination);
+          o.connect(g); g.connect(dest);
           o.type = 'triangle';
           o.frequency.setValueAtTime(freq, t + i * 0.08);
           g.gain.setValueAtTime(0.1, t + i * 0.08);
@@ -186,7 +199,7 @@ function sfx(type) {
         freqs.forEach((freq, i) => {
           const o = ac.createOscillator();
           const g = ac.createGain();
-          o.connect(g); g.connect(ac.destination);
+          o.connect(g); g.connect(dest);
           o.type = 'sawtooth';
           o.frequency.setValueAtTime(freq, t + i * 0.15);
           o.frequency.linearRampToValueAtTime(freq * 0.7, t + i * 0.15 + 0.15);
@@ -232,7 +245,7 @@ function sfx(type) {
         osc.start(t); osc.stop(t + 0.15);
         const o2 = ac.createOscillator();
         const g2 = ac.createGain();
-        o2.connect(g2); g2.connect(ac.destination);
+        o2.connect(g2); g2.connect(dest);
         o2.type = 'square';
         o2.frequency.setValueAtTime(800, t + 0.03);
         o2.frequency.linearRampToValueAtTime(400, t + 0.1);
@@ -251,7 +264,7 @@ function sfx(type) {
 // --- battle music (map-aware + mute toggle) ---
 const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg' };
 const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
-const MP_MUSIC_VOL = 0.35;
+const MP_MUSIC_VOL = 0.45;
 let mpBgMusic = null;
 let mpBgMusicGain = null;
 let mpMusicFading = false;
