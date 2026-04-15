@@ -503,6 +503,31 @@ export function drawWeaponAuras(ctx, players, time, viewport) {
         }
       }
 
+      // Charge cooldown indicator — red arc that fills as cooldown
+      // completes, so players know when the next dash is ready.
+      // Bright flash when fully charged. barnaldo feedback: players
+      // need visual clarity to play around the timing.
+      if ((w.type === 'charge' || w.type === 'fortress') && !w.active) {
+        const progress = Math.min(1, w.timer / w.cooldown);
+        if (progress < 1) {
+          const r = (p.radius || 14) + 6;
+          ctx.strokeStyle = 'rgba(231, 76, 60, 0.4)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + progress * Math.PI * 2);
+          ctx.stroke();
+        } else {
+          // Ready flash — subtle pulse when charge is available
+          const pulse = 0.3 + Math.sin(time * 6) * 0.15;
+          const r = (p.radius || 14) + 6;
+          ctx.strokeStyle = `rgba(231, 76, 60, ${pulse})`;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+      }
+
       if (w.type === 'fortress') {
         const ph = w.phase || 0;
         const r = w.shieldRadius * sm * (1 + Math.sin(ph) * 0.08);
@@ -722,6 +747,26 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
   drawConsumables(ctx, view.consumables || [], drawSprite, cx, cy, W, H);
+  // Charge fire wake — lingering damage zones left behind Bull Rush
+  // dashes. Drawn before enemies/auras so the trail reads as ground.
+  for (const t of (view.chargeTrails || [])) {
+    if (t.x < cx - t.radius || t.x > cx + W + t.radius ||
+        t.y < cy - t.radius || t.y > cy + H + t.radius) continue;
+    const alpha = Math.min(1, t.life * 1.5) * 0.4;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = t.color || '#e74c3c';
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.radius, 0, Math.PI * 2);
+    ctx.fill();
+    // Bright core
+    ctx.globalAlpha = alpha * 0.6;
+    ctx.fillStyle = '#f39c12';
+    ctx.beginPath();
+    ctx.arc(t.x, t.y, t.radius * 0.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
   drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);

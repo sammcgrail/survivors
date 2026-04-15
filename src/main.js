@@ -522,6 +522,7 @@ function initGame() {
     // Eager-init here so sim modules don't need defensive `|| []` checks.
     chainEffects: [],
     meteorEffects: [],
+    chargeTrails: [],
     // Map state — `arena` overrides the global WORLD dims; `obstacles`
     // is consumed by sim/collision.js and rendered by the canvas pass.
     arena: { w: map.width, h: map.height },

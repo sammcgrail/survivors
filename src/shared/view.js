@@ -33,6 +33,7 @@
  * @property {Array}  chainEffects  — { points: [{x,y}], life, color }
  * @property {Array}  meteorEffects — { x, y, radius, life, phase, color }
  * @property {Array}  consumables — { x, y, type, radius, color, life, bobPhase }
+ * @property {Array}  chargeTrails — { x, y, radius, life, color }
  * @property {Array}  obstacles   — { x, y, w, h, type }
  */
 
@@ -55,6 +56,7 @@ export function synthesizeView(g) {
     gems: g.gems,
     heartDrops: g.heartDrops,
     consumables: g.consumables,
+    chargeTrails: g.chargeTrails,
     chainEffects: g.chainEffects,
     meteorEffects: g.meteorEffects,
     obstacles: g.obstacles,

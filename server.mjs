@@ -104,6 +104,7 @@ function initGame() {
     consumables: [],
     chainEffects: [],
     meteorEffects: [],
+    chargeTrails: [],
     deathFeed: [],
     time: 0,
     wave: 1,
@@ -301,6 +302,10 @@ function gameSnapshot() {
     consumables: game.consumables.map(c => ({
       x: r1(c.x), y: r1(c.y), type: c.type, radius: c.radius,
       color: c.color, life: r2(c.life), bobPhase: r2(c.bobPhase),
+    })),
+    chargeTrails: (game.chargeTrails || []).map(t => ({
+      x: r1(t.x), y: r1(t.y), radius: t.radius,
+      life: r2(t.life), color: t.color,
     })),
     deathFeed: game.deathFeed.slice(-5).map(d => ({ text: d.text, time: r1(d.time) })),
     // Transient sim events from this tick — damage numbers, kill

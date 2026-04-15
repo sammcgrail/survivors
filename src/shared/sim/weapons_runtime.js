@@ -70,11 +70,31 @@ function fireCharge(g, w, p) {
   w.chargeTimer = w.duration;
   w.chargeDx = f.x / d;
   w.chargeDy = f.y / d;
+  const startX = p.x, startY = p.y;
   p.x += w.chargeDx * w.speed * w.duration;
   p.y += w.chargeDy * w.speed * w.duration;
   p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x));
   p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y));
   emit(g, EVT.CHARGE_BURST, { x: p.x, y: p.y, color: w.color, pid: p.id });
+  // Fire wake — drop damage zones along the dash path. Enemies
+  // that walk through the trail take half charge damage per tick.
+  // Rewards aggressive pathing through enemy packs.
+  if (!g.chargeTrails) g.chargeTrails = [];
+  const trailDist = Math.hypot(p.x - startX, p.y - startY);
+  const zones = Math.max(3, Math.floor(trailDist / 30));
+  const effectiveWidth = w.width * (p.sizeMulti || 1);
+  for (let i = 0; i <= zones; i++) {
+    const t = i / zones;
+    g.chargeTrails.push({
+      x: startX + (p.x - startX) * t,
+      y: startY + (p.y - startY) * t,
+      radius: effectiveWidth * 0.6,
+      damage: w.damage * 0.5 * (p.damageMulti || 1),
+      life: 1.0,     // 1 second lingering trail
+      owner: p.id,
+      color: w.color,
+    });
+  }
 }
 
 function fireChain(g, w, p) {
@@ -416,6 +436,26 @@ export function updateChainEffects(g, dt) {
   for (let i = g.chainEffects.length - 1; i >= 0; i--) {
     g.chainEffects[i].life -= dt;
     if (g.chainEffects[i].life <= 0) g.chainEffects.splice(i, 1);
+  }
+}
+
+// Charge fire-wake trails. Lingering damage zones left behind a Bull
+// Rush dash. Enemies walking through take half charge damage per tick
+// for 1 second. Rewards aggressive pathing through enemy packs.
+export function updateChargeTrails(g, dt) {
+  if (!g.chargeTrails) return;
+  for (let i = g.chargeTrails.length - 1; i >= 0; i--) {
+    const t = g.chargeTrails[i];
+    t.life -= dt;
+    if (t.life <= 0) { g.chargeTrails.splice(i, 1); continue; }
+    // Damage enemies overlapping this zone — per-tick dot, not burst.
+    for (const e of g.enemies) {
+      if (e.dying !== undefined) continue;
+      const dx = e.x - t.x, dy = e.y - t.y;
+      if (dx * dx + dy * dy < (t.radius + e.radius) ** 2) {
+        damageEnemy(g, e, t.damage * dt, t.owner);
+      }
+    }
   }
 }
 

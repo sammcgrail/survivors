@@ -20,8 +20,10 @@ export function createWeapon(type) {
       color: '#e67e22', pulsePhase: 0,
     };
     case 'charge': return {
-      type: 'charge', cooldown: 2.5, timer: 0, damage: 40, speed: 500,
-      duration: 0.3, width: 40, color: '#e74c3c',
+      // Buffed per barn's analysis: was 16 dps (worst weapon), now
+      // ~22 dps base + trail damage rewards aggressive pathing.
+      type: 'charge', cooldown: 1.8, timer: 0, damage: 40, speed: 500,
+      duration: 0.3, width: 55, color: '#e74c3c',
       active: false, chargeTimer: 0, chargeDx: 0, chargeDy: 0,
     };
     case 'orbit': return {
