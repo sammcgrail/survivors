@@ -196,9 +196,15 @@ function sendLevelUp(pid) {
 function r1(n) { return Math.round(n * 10) / 10; }
 function r2(n) { return Math.round(n * 100) / 100; }
 
-// Per-weapon visual fields that the MP renderer needs to keep auras in
-// sync with the actual damage zone after upgrades. Pre-multiplies
+// Per-weapon visual fields that the MP renderer needs. Pre-multiplies
 // sizeMulti + projectileBonus so MP gets effective values directly.
+//
+// Live state shipped (phase, pulsePhase, fireCount, active flags) is
+// what PR 4 needs to drive the shared weapon-aura render — MP can't
+// fake `gameTime * k` once SP and MP share the same code path because
+// the SP version reads w.phase directly. Rounded to 2 decimals to
+// keep the snapshot tight (spread-effect numbers don't need 1e-15
+// precision).
 function snapshotWeapon(w, p) {
   const sm = p.sizeMulti || 1;
   const pb = p.projectileBonus || 0;
@@ -208,6 +214,16 @@ function snapshotWeapon(w, p) {
   if (w.shieldRadius !== undefined) o.shieldRadius = w.shieldRadius * sm;
   if (w.auraRadius !== undefined)   o.auraRadius = w.auraRadius * sm;
   if (w.bladeCount !== undefined)   o.bladeCount = w.bladeCount + pb;
+  // Animation state (only ship when present; saves ~10 bytes per
+  // weapon for types that don't use these fields).
+  if (w.phase !== undefined)        o.phase = r2(w.phase);
+  if (w.pulsePhase !== undefined)   o.pulsePhase = r2(w.pulsePhase);
+  if (w.fireCount !== undefined)    o.fireCount = w.fireCount;
+  if (w.active)                     o.active = true;
+  if (w.chargeDx !== undefined && w.active) {
+    o.chargeDx = r2(w.chargeDx);
+    o.chargeDy = r2(w.chargeDy);
+  }
   return o;
 }
 
