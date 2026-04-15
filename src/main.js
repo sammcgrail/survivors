@@ -17,6 +17,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
+import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -632,130 +633,31 @@ function update(dt) {
   // spawns, screen shake triggers); client decides what to do. Empty
   // until PR #12 starts emitting from extracted sim code.
   if (g.events.length > 0) {
-    for (const evt of g.events) handleSimEvent(evt);
+    for (const evt of g.events) applySimEvent(evt, spEventClient);
     g.events.length = 0;
   }
 }
 
-// Handle a single event from the sim. Sim is forbidden from touching
-// DOM/canvas/audio directly — it emits events into g.events, client
-// side-effects happen here. New sim subsystems plug in by adding cases.
-function handleSimEvent(evt) {
-  const g = game;
-  if (!g) return;
-  switch (evt.type) {
-    case EVT.GEM_PICKUP:
-      sfx('xp');
-      g.floatingTexts.push({
-        x: evt.x, y: evt.y, text: '+' + evt.xp,
-        color: '#3498db', life: 0.8, maxLife: 0.8, vy: -60,
-      });
-      spawnParticles(evt.x, evt.y, '#3498db', 3);
-      break;
-    case EVT.HEART_PICKUP:
-      sfx('heal');
-      if (evt.healed > 0) {
-        g.floatingTexts.push({
-          x: evt.x, y: evt.y, text: '+' + Math.floor(evt.healed) + ' HP',
-          color: '#2ecc71', life: 0.8, maxLife: 0.8, vy: -50,
-        });
-      }
-      spawnParticles(evt.x, evt.y, '#e74c3c', 4);
-      break;
-    case EVT.LEVEL_UP:
-      g.levelFlash = 0.15; // 150ms flash
-      showLevelUp(g);
-      break;
-    case EVT.ENEMY_HIT:
-      // Floating damage number gated to dmg >= 5 — keeps breath ticks
-      // from spamming text. Sfx gated the same way.
-      if (evt.dmg >= 5) {
-        sfx('hit');
-        // Big hits read as crits — bigger gold text + spark burst.
-        const isCrit = evt.dmg >= 50;
-        g.floatingTexts.push({
-          x: evt.x + (Math.random() - 0.5) * 10,
-          y: evt.y - evt.radius - 4,
-          text: isCrit ? Math.floor(evt.dmg).toString() + '!' : Math.floor(evt.dmg).toString(),
-          color: isCrit ? '#f39c12' : '#f1c40f',
-          life: isCrit ? 0.7 : 0.5, maxLife: isCrit ? 0.7 : 0.5, vy: -40,
-        });
-        if (isCrit) spawnParticles(evt.x, evt.y, '#f39c12', 6);
-      }
-      break;
-    case EVT.ENEMY_KILLED: {
-      sfx('kill');
-      // Particle count + screenshake scale with enemy size — a swarm
-      // pop is a small blip, a boss death is a screen-shaking
-      // detonation. radius is shipped on ENEMY_KILLED.
-      const r = evt.radius || 10;
-      const big = r >= 18;
-      const huge = r >= 30;
-      const count = huge ? 40 : big ? 20 : Math.max(8, Math.round(r * 1.2));
-      spawnParticles(evt.x, evt.y, evt.color, count);
-      // White hot-flash sparks for the bigger kills.
-      if (big) spawnParticles(evt.x, evt.y, '#ffffff', huge ? 15 : 6);
-      if (huge)      g.screenShake = Math.max(g.screenShake, 0.4);
-      else if (big)  g.screenShake = Math.max(g.screenShake, 0.15);
-      if (huge)      g.levelFlash = Math.max(g.levelFlash || 0, 0.12);
-      break;
-    }
-    case EVT.PLAYER_HIT:
-      g.screenShake = 0.15;
-      spawnParticles(evt.x, evt.y, '#e74c3c', 5);
-      sfx('playerhit');
-      break;
-    case EVT.PLAYER_DEATH:
-      sfx('death');
-      g.deathFeed.push({ text: `${g.playerName} killed by ${evt.by}`, time: g.time });
-      showDeathScreen(g);
-      break;
-    case EVT.BOSS_STEP:
-      sfx('boss_step');
-      break;
-    case EVT.BOSS_TELEGRAPH:
-      spawnParticles(evt.x, evt.y, '#d63031', 12);
-      sfx('boss_telegraph');
-      break;
-    case EVT.HIVE_BURST:
-      spawnParticles(evt.x, evt.y, '#fdcb6e', 8);
-      sfx('hive_burst');
-      break;
-    case EVT.WEAPON_FIRE:
-      // Map weapon name to fire sfx. Most don't have one.
-      if (evt.weapon === 'spit')              sfx('spit');
-      else if (evt.weapon === 'chain')        sfx('chain');
-      else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
-      else if (evt.weapon === 'thunder_god')  sfx('chain');
-      break;
-    case EVT.CHARGE_BURST:
-      g.screenShake = 0.1;
-      sfx('charge');
-      spawnParticles(evt.x, evt.y, evt.color, 8);
-      break;
-    case EVT.SHIELD_HUM:
-      sfx('shield_hum');
-      break;
-    case EVT.CHAIN_ZAP:
-      sfx('zap');
-      break;
-    case EVT.METEOR_WARN:
-      // The warn ring lives in g.meteorEffects; no extra side-effect needed.
-      break;
-    case EVT.METEOR_EXPLODE:
-      g.screenShake = 0.1;
-      sfx('meteor');
-      spawnParticles(evt.x, evt.y, evt.color, 12);
-      break;
-    case EVT.EVOLUTION:
-      g.screenShake = 0.5;
-      spawnParticles(evt.x, evt.y, '#f39c12', 20);
-      break;
-    case EVT.WAVE_SURVIVED:
-      g.deathFeed.push({ text: `${g.playerName} survived wave ${evt.wave}`, time: evt.time });
-      break;
-  }
-}
+// SP event-client shim — drains g.events via the shared
+// applySimEvent. DOM-flip callbacks wire through to the local
+// level-up menu + death screen.
+const spEventClient = {
+  get particles()     { return game?.particles; },
+  get floatingTexts() { return game?.floatingTexts; },
+  sfx,
+  shake(v) { if (game) game.screenShake = Math.max(game.screenShake, v); },
+  flash(v) { if (game) game.levelFlash  = Math.max(game.levelFlash || 0, v); },
+  onLevelUp()     { if (game) showLevelUp(game); },
+  onPlayerDeath(evt) {
+    if (!game) return;
+    game.deathFeed.push({ text: `${game.playerName} killed by ${evt.by}`, time: game.time });
+    showDeathScreen(game);
+  },
+  onWaveSurvived(evt) {
+    if (!game) return;
+    game.deathFeed.push({ text: `${game.playerName} survived wave ${evt.wave}`, time: evt.time });
+  },
+};
 
 // --- level up UI ---
 function showLevelUp(g) {
