@@ -374,13 +374,21 @@ const mpEventClient = {
   // falls through to sfx('levelup') and the leveling player hears
   // the cue twice.
   onLevelUp: () => {},
-  // onPlayerDeath: DOM flip handled in processStateChanges for now
-  // (needs the `me` snapshot object that event alone doesn't carry).
+  // Death-screen DOM flip — only the local player. Event has pid;
+  // we look me up on currState (set just before this event drains
+  // so it's the same snapshot the death came from).
+  onPlayerDeath(evt) {
+    if (evt.pid !== myId || !currState) return;
+    const me = currState.players.find(p => p.id === myId);
+    if (me) showDeathScreen(currState, me);
+    iDied = true;
+  },
 };
 
-// Only tracked for the death-screen DOM flip — every other change
-// signal comes through the event channel now.
-let prevMyAlive = null;
+// Set true on local-player death event, cleared on join/respawn.
+// startGame() reads this to choose join vs respawn for the same
+// PLAY/RETRY button.
+let iDied = false;
 
 // Camera
 let camera = { x: 1500, y: 1500 };
@@ -468,10 +476,6 @@ function connectWS() {
         for (const id of trailState.keys()) if (!live.has(id)) trailState.delete(id);
       }
 
-      // Death screen trigger still lives here since it's a DOM flip,
-      // not a transient effect. Level-up menu also stays — server
-      // sends separate `levelup` with choices.
-      processStateChanges(msg);
       return;
     }
 
@@ -519,17 +523,6 @@ function showLevelUpChoices(choices) {
   }, 10000);
 }
 
-function processStateChanges(state) {
-  const me = state.players.find(p => p.id === myId);
-  if (!me) return;
-
-  // Death-screen DOM flip — stays here because event drain happens
-  // before DOM work and we need the latest state object for the
-  // showDeathScreen call.
-  if (prevMyAlive === true && !me.alive) showDeathScreen(state, me);
-
-  prevMyAlive = me.alive;
-}
 
 function sendInput() {
   if (!ws || ws.readyState !== WebSocket.OPEN) return;
@@ -550,6 +543,7 @@ function joinGame() {
   const nameInput = document.getElementById('name-input');
   const name = (nameInput.value || '').trim().slice(0, 12) || 'player';
   myName = name;
+  iDied = false;
 
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('death-screen').style.display = 'none';
@@ -587,7 +581,7 @@ function respawnGame() {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'respawn', weapon: selectedWeapon, prestige: prestigePayload() }));
   }
-  prevMyAlive = null;
+  iDied = false;
 }
 
 function showDeathScreen(state, me) {
@@ -1073,7 +1067,7 @@ window.addEventListener('load', () => {
 // Expose handlers used by inline HTML.
 // Both PLAY and RETRY use `onclick="startGame()"` in template.html — alias
 // to joinGame on first press, respawnGame after death.
-window.startGame = () => (renderStarted && prevMyAlive === false ? respawnGame() : joinGame());
+window.startGame = () => (renderStarted && iDied ? respawnGame() : joinGame());
 window.selectWeapon = selectWeapon;
 window.toggleMute = toggleMpMute;
 window.showBestiary = showBestiary;
