@@ -587,33 +587,48 @@ export function applySimEvent(evt, client) {
     }
 
     case 'bossPhase': {
-      // Phase transition VFX — brief screen flash + particle burst at
-      // boss position. Phase 3 escalates to deep red and calls an
-      // optional minimap border flash if the client shim supports it.
-      const p3 = evt.phase === 3;
-      shake(p3 ? 0.25 : 0.15);
-      flash(p3 ? 0.20 : 0.12);
-      sfx('boss_telegraph'); // reuse until a dedicated phase-change cue exists
-      // Outer burst — phase-colored explosion ring
-      const burstColor = p3 ? '#7b1212' : '#e17055';
-      for (let i = 0; i < (p3 ? 32 : 20); i++) {
+      // Phase transition VFX. Each phase escalates intensity:
+      //   phase 2 → small burst, brief flash
+      //   phase 3 → bigger crimson burst + white sparks + minimap flash
+      //   phase 4 → ENRAGED — biggest shake, white screen flash, full
+      //             crimson burst with a "ENRAGED" floating banner above
+      //             the boss so players know the rules just changed.
+      const phase = evt.phase || 2;
+      const p4 = phase === 4;
+      const p3 = phase === 3;
+      shake(p4 ? 0.5 : p3 ? 0.25 : 0.15);
+      flash(p4 ? 0.4 : p3 ? 0.20 : 0.12);
+      sfx(p4 ? 'boss_step' : 'boss_telegraph');
+      const burstColor = p4 ? '#ff2424' : p3 ? '#7b1212' : '#e17055';
+      const burstCount = p4 ? 56 : p3 ? 32 : 20;
+      for (let i = 0; i < burstCount; i++) {
         pushFx(client.particles, evt.x, evt.y, burstColor, {
-          speedMin: 100, speedMax: 300,
-          lifeMin: 0.4, lifeMax: 0.8,
-          radiusMin: 2, radiusMax: 4.5,
+          speedMin: p4 ? 140 : 100, speedMax: p4 ? 380 : 300,
+          lifeMin: 0.4, lifeMax: 0.9,
+          radiusMin: 2, radiusMax: p4 ? 5.5 : 4.5,
         });
       }
-      if (p3) {
-        // Phase 3 gets extra white-hot sparks to read as a
-        // distinct escalation vs phase 2.
-        for (let i = 0; i < 12; i++) {
+      if (p3 || p4) {
+        // White-hot sparks for the high-stakes phases. Phase 4 doubles
+        // the count to read as another step up.
+        const sparks = p4 ? 24 : 12;
+        for (let i = 0; i < sparks; i++) {
           pushFx(client.particles, evt.x, evt.y, '#ffffff', {
-            speedMin: 200, speedMax: 400,
-            lifeMin: 0.15, lifeMax: 0.3,
-            radiusMin: 1.2, radiusMax: 2.2,
+            speedMin: 200, speedMax: 450,
+            lifeMin: 0.15, lifeMax: 0.35,
+            radiusMin: 1.2, radiusMax: 2.4,
           });
         }
-        if (client.minimapBorderFlash) client.minimapBorderFlash(0.6);
+        if (client.minimapBorderFlash) client.minimapBorderFlash(p4 ? 1.0 : 0.6);
+      }
+      if (p4) {
+        // Floating "ENRAGED" banner above the boss — long life so
+        // players have time to register the threshold change before
+        // the silent dashes start landing.
+        client.floatingTexts.push({
+          x: evt.x, y: evt.y - 60, text: 'ENRAGED',
+          color: '#ff5050', life: 1.6, maxLife: 1.6, vy: -32,
+        });
       }
       break;
     }
