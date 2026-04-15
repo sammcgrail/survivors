@@ -14,7 +14,7 @@ import { spawnEnemy } from './shared/sim/enemies.js';
 import { POWERUPS, getAvailableChoices } from './shared/sim/powerups.js';
 import { tickSim } from './shared/sim/tick.js';
 import { escapeHTML } from './shared/htmlEscape.js';
-import { MAPS } from './shared/maps.js';
+import { MAPS, resolveMapObstacles } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
@@ -77,6 +77,10 @@ const MAP_TRACKS = {
   forest: 'forest_theme.ogg',
   graveyard: 'graveyard_theme.ogg',
   ruins: 'ruins_theme.ogg',
+  // Procedural maps reuse their thematic parent's track — wilderness is
+  // a forest variant, catacombs a ruins variant.
+  wilderness: 'forest_theme.ogg',
+  catacombs: 'ruins_theme.ogg',
 };
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
@@ -196,6 +200,11 @@ let gameStarted = false;
 // --- init game ---
 function initGame() {
   const map = MAPS[selectedMapId] || MAPS.arena;
+  // rng hoisted out of the game literal so procedural obstacles can
+  // share the same seed — deterministic layouts + deterministic spawns
+  // off one roll.
+  const rng = createRng(Date.now() & 0x7fffffff);
+  const obstacles = resolveMapObstacles(map, rng);
   const p = {
     x: WORLD_W / 2,
     y: WORLD_H / 2,
@@ -263,7 +272,7 @@ function initGame() {
     // events here; client handles sfx/particles/HUD flashes from the
     // queue. See src/shared/sim/events.js for the EVT enum.
     events: [],
-    rng: createRng(Date.now() & 0x7fffffff),
+    rng,
     // Visual effect arrays — chain bolts and meteor warn/explode rings.
     // Eager-init here so sim modules don't need defensive `|| []` checks.
     chainEffects: [],
@@ -272,7 +281,7 @@ function initGame() {
     // Map state — `arena` overrides the global WORLD dims; `obstacles`
     // is consumed by sim/collision.js and rendered by the canvas pass.
     arena: { w: map.width, h: map.height },
-    obstacles: map.obstacles,
+    obstacles,
     mapId: selectedMapId,
     // Active cosmetics from prestige (read once at game start)
     _activeSkin: loadPrestige().activeSkin,
