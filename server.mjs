@@ -127,8 +127,9 @@ function applyInputs(g, dt) {
     let dy = (inp.down ? 1 : 0) - (inp.up ? 1 : 0);
     if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
     if (dx || dy) p.facing = { x: dx, y: dy };
-    p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x + dx * p.speed * dt));
-    p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y + dy * p.speed * dt));
+    const slow = p._terrainSlow || 1;
+    p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x + dx * p.speed * slow * dt));
+    p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y + dy * p.speed * slow * dt));
     if (g.obstacles.length > 0) pushOutOfObstacles(p, g.obstacles);
     if (p.hpRegen > 0) p.hp = Math.min(p.maxHp, p.hp + p.hpRegen * dt);
     if (p.iframes > 0) p.iframes -= dt;

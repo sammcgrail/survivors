@@ -12,6 +12,7 @@
 // imageSmoothingEnabled=false — sharp pixel-art upscale, almost free.
 
 import { MAPS } from './maps.js';
+import { isLowerCorner, TILE_WORLD_SIZE } from './mapTerrain.js';
 
 const TILESETS = new Map();      // name -> { img, lookup: Map<key, bbox>, tileSize }
 const BG_CACHE = new Map();      // mapId -> HTMLCanvasElement
@@ -55,57 +56,10 @@ export async function loadTileset(name) {
   return ts;
 }
 
-// Mulberry32 — same shape as sim/rng.js but inlined here so this module
-// stays standalone and doesn't drag the sim into the renderer.
-function hash32(s) {
-  let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) {
-    h = Math.imul(h ^ s.charCodeAt(i), 16777619);
-  }
-  return h >>> 0;
-}
-function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6D2B79F5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// Per-map "patch" generator: drops a handful of lower-terrain blobs
-// across the corner grid, deterministic from mapId so SP/MP/replays all
-// see the same layout. Returns a function (cx, cy) -> true if the corner
-// is *upper* (the base terrain). False = lower (path/dirt/scorch patch).
-//
-// Density tuning: ~6% of corners end up lower. That's enough to break
-// up the uniform texture without making the map look diseased.
-function terrainPatchFn(mapId, tilesX, tilesY) {
-  const rng = mulberry32(hash32(mapId));
-  const blobCount = Math.max(6, Math.round(tilesX * tilesY * 0.012));
-  const blobs = [];
-  for (let i = 0; i < blobCount; i++) {
-    blobs.push({
-      x: rng() * tilesX,
-      y: rng() * tilesY,
-      r: 2 + rng() * 3,
-    });
-  }
-  return (cx, cy) => {
-    for (const b of blobs) {
-      const dx = cx - b.x, dy = cy - b.y;
-      if (dx * dx + dy * dy < b.r * b.r) return false; // lower
-    }
-    return true; // upper
-  };
-}
-
 // Composite the whole map into a small offscreen canvas at native tile
 // resolution (one 16×16 tile per cell). Cached per mapId — same map id
-// returns the same canvas. The render path scales this up to world size
-// with imageSmoothingEnabled=false for crisp pixel-art look.
+// returns the same canvas. Patch placement comes from shared mapTerrain
+// so the gameplay sim and the renderer see identical patches.
 export async function buildBackgroundCanvas(mapId) {
   if (BG_CACHE.has(mapId)) return BG_CACHE.get(mapId);
   const map = MAPS[mapId];
@@ -113,16 +67,16 @@ export async function buildBackgroundCanvas(mapId) {
   const ts = await loadTileset(map.tileset);
   if (!ts) return null;
 
-  const tileWorld = 64;                           // one Wang tile = 64u in the world
-  const tilesX = Math.ceil(map.width / tileWorld);
-  const tilesY = Math.ceil(map.height / tileWorld);
+  const tilesX = Math.ceil(map.width / TILE_WORLD_SIZE);
+  const tilesY = Math.ceil(map.height / TILE_WORLD_SIZE);
   const off = document.createElement('canvas');
   off.width = tilesX * ts.tileSize;
   off.height = tilesY * ts.tileSize;
   const ctx = off.getContext('2d');
   ctx.imageSmoothingEnabled = false;
 
-  const isUpper = terrainPatchFn(mapId, tilesX, tilesY);
+  // True corner = upper (base) terrain; false = lower (patch).
+  const isUpper = (cx, cy) => !isLowerCorner(mapId, cx, cy);
   for (let ty = 0; ty < tilesY; ty++) {
     for (let tx = 0; tx < tilesX; tx++) {
       const k = cornerKey(

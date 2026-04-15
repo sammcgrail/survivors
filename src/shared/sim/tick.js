@@ -12,8 +12,10 @@ import { updateProjectiles } from './projectiles.js';
 import { updateEnemies } from './enemies.js';
 import { updateGems } from './gems.js';
 import { updateHearts } from './hearts.js';
+import { updateTerrain } from './terrain.js';
 
 export function tickSim(g, dt) {
+  updateTerrain(g, dt);          // sets p._terrainSlow, applies hostile DoT
   updateWaves(g, dt);
   updateWeapons(g, dt);
   updateProjectiles(g, dt);
