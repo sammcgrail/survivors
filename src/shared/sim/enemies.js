@@ -5,6 +5,7 @@
 import { ENEMY_TYPES, enemyType, scaleEnemy } from '../enemyTypes.js';
 import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
+import { pushOutOfObstacles, circleRectCollision } from './collision.js';
 
 // Cell size for the spatial hash. Brute is largest enemy at radius 24,
 // so 50u keeps any colliding pair within own cell + 1 neighbor.
@@ -26,8 +27,13 @@ export function spawnEnemy(g) {
   const ex = anchor.x + Math.cos(angle) * dist;
   const ey = anchor.y + Math.sin(angle) * dist;
   const e = enemyType(g.wave, g.rng);
-  e.x = Math.max(e.radius, Math.min(WORLD_W - e.radius, ex));
-  e.y = Math.max(e.radius, Math.min(WORLD_H - e.radius, ey));
+  const W = g.arena ? g.arena.w : WORLD_W;
+  const H = g.arena ? g.arena.h : WORLD_H;
+  e.x = Math.max(e.radius, Math.min(W - e.radius, ex));
+  e.y = Math.max(e.radius, Math.min(H - e.radius, ey));
+  // If we landed inside an obstacle, push out so the enemy doesn't
+  // start its life clipped through a wall.
+  if (g.obstacles && g.obstacles.length > 0) pushOutOfObstacles(e, g.obstacles);
   g.enemies.push(e);
 }
 
@@ -127,6 +133,10 @@ function updateEnemyTick(g, dt) {
         e.y += (target.dy / target.dist) * e.speed * dt;
       }
     }
+
+    // Push enemies out of obstacles — naturally creates "pathfinding"
+    // as they slide along walls toward the target.
+    if (g.obstacles && g.obstacles.length > 0) pushOutOfObstacles(e, g.obstacles);
 
     if (e.name === 'spawner') updateSpawnerAi(g, e, dt);
 

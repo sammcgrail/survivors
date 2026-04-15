@@ -1,9 +1,11 @@
-// Projectile movement, range cleanup, and enemy collision. Pure sim;
-// damage application + side-effects route through damage.js + events.
-// Damage multi comes from the projectile's owner (set at fire time).
+// Projectile movement, range cleanup, enemy collision, and obstacle
+// blocking. Pure sim; damage routes through damage.js + events.
 import { damageEnemy } from './damage.js';
+import { circleRectCollision } from './collision.js';
+import { PROJECTILE_BLOCKERS } from '../maps.js';
 
 export function updateProjectiles(g, dt) {
+  const obstacles = g.obstacles;
   for (let i = g.projectiles.length - 1; i >= 0; i--) {
     const proj = g.projectiles[i];
     proj.x += proj.vx * dt;
@@ -11,6 +13,22 @@ export function updateProjectiles(g, dt) {
     proj.dist += proj.speed * dt;
 
     if (proj.dist > proj.range) {
+      g.projectiles.splice(i, 1);
+      continue;
+    }
+
+    // Wall / pillar / tomb absorb projectiles. Trees pass through.
+    let blocked = false;
+    if (obstacles && obstacles.length > 0) {
+      for (const obs of obstacles) {
+        if (!PROJECTILE_BLOCKERS.has(obs.type)) continue;
+        if (circleRectCollision(proj.x, proj.y, proj.radius, obs.x, obs.y, obs.w, obs.h)) {
+          blocked = true;
+          break;
+        }
+      }
+    }
+    if (blocked) {
       g.projectiles.splice(i, 1);
       continue;
     }
