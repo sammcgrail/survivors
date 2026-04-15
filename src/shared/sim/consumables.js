@@ -43,7 +43,7 @@ export function spawnConsumable(g, x, y, type) {
     life: Infinity,   // never despawn — rare + valuable
     bobPhase: g.rng.range(0, Math.PI * 2),
   });
-  emit(g, EVT.CONSUMABLE_SPAWN, { x, y, ctype: type });
+  emit(g, EVT.CONSUMABLE_SPAWN, { x, y, ctype: type, color: def.color });
 }
 
 // Apply the consumable effect to the picking-up player.

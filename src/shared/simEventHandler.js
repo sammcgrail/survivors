@@ -54,6 +54,44 @@ function pushFx(particles, x, y, color, opts) {
   });
 }
 
+// Consumable spawn fanfare — fires once when an elite/brute/boss
+// drops a rare item. Upward fountain in the item's color + outward
+// ring flash so a player panning over later still gets the "oh!"
+// landed-here moment. Server already gates this hard (boss 50%,
+// elite 6%) so this firing means something landed.
+function consumableSpawnFanfare(particles, evt) {
+  const { x, y } = evt;
+  const color = evt.color || '#f39c12';
+  // Outward ring — 16 evenly-spaced particles for a clean shock.
+  for (let i = 0; i < 16; i++) {
+    const angle = (Math.PI * 2 * i) / 16;
+    pushFx(particles, x, y, color, {
+      angle,
+      speedMin: 140, speedMax: 180,
+      lifeMin: 0.35, lifeMax: 0.5,
+      radiusMin: 1.8, radiusMax: 2.6,
+    });
+  }
+  // Upward fountain — 14 particles biased up + slight outward
+  // spread. Reads as the drop "popping" into existence.
+  for (let i = 0; i < 14; i++) {
+    pushFx(particles, x, y, color, {
+      speedMin: 30, speedMax: 100,
+      lifeMin: 0.5, lifeMax: 0.85,
+      radiusMin: 2, radiusMax: 3.5,
+      biasY: -120,
+    });
+  }
+  // White core sparks for the pop accent.
+  for (let i = 0; i < 6; i++) {
+    pushFx(particles, x, y, '#ffffff', {
+      speedMin: 100, speedMax: 200,
+      lifeMin: 0.2, lifeMax: 0.35,
+      radiusMin: 1.2, radiusMax: 2,
+    });
+  }
+}
+
 // Per-consumable pickup burst — distinct feel per type so the moment
 // reads at a glance: bomb explodes outward, magnet pulls inward,
 // shield rings out + glows. Players can tell what they grabbed
@@ -466,8 +504,11 @@ export function applySimEvent(evt, client) {
       break;
 
     case 'consumableSpawn':
-      // Soft sparkle at spawn point so players notice the drop.
-      spawn(evt.x, evt.y, evt.color || '#f39c12', 5);
+      // Rare drop — make it loud. Upward fountain + ring flash so
+      // an off-screen player who pans over still notices it landed
+      // (server gate keeps this rare; we don't have to be subtle).
+      consumableSpawnFanfare(client.particles, evt);
+      sfx('powerup');
       break;
 
     case 'consumablePickup': {
