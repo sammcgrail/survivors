@@ -27,6 +27,8 @@ export const EVT = {
   ENEMY_SHOOT:         'enemyShoot',
   ENEMY_AIM:           'enemyAim',
   BOSS_PHASE:          'bossPhase',
+  STATUS_APPLIED:      'statusApplied',
+  STATUS_EXPIRED:      'statusExpired',
 };
 
 // Spread payload first so a stray `type` field in the payload (e.g.

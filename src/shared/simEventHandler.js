@@ -676,5 +676,51 @@ export function applySimEvent(evt, client) {
       }
       break;
     }
+
+    case 'statusApplied': {
+      // Light particle pop when a status lands — type-coded palette.
+      // Kept small: chain/storm hits fire these repeatedly and would
+      // overwhelm the screen if each burst were too large.
+      const { statusType, x, y } = evt;
+      if (statusType === 'burn') {
+        // 3-5 orange embers rising from the enemy.
+        const count = 3 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i++) {
+          pushFx(client.particles, x, y, Math.random() < 0.6 ? '#e67e22' : '#f39c12', {
+            speedMin: 20, speedMax: 60,
+            lifeMin: 0.4, lifeMax: 0.7,
+            radiusMin: 1.5, radiusMax: 2.5,
+            biasY: -80,
+          });
+        }
+      } else if (statusType === 'slow') {
+        // 2-3 blue motes.
+        const count = 2 + Math.floor(Math.random() * 2);
+        for (let i = 0; i < count; i++) {
+          pushFx(client.particles, x, y, '#74b9ff', {
+            speedMin: 30, speedMax: 80,
+            lifeMin: 0.3, lifeMax: 0.5,
+            radiusMin: 1.5, radiusMax: 2.5,
+          });
+        }
+      } else if (statusType === 'freeze') {
+        // 4-6 white/cyan shards + a fat center flash.
+        const count = 4 + Math.floor(Math.random() * 3);
+        for (let i = 0; i < count; i++) {
+          pushFx(client.particles, x, y, Math.random() < 0.5 ? '#dff9fb' : '#00cec9', {
+            speedMin: 40, speedMax: 110,
+            lifeMin: 0.3, lifeMax: 0.6,
+            radiusMin: 1.5, radiusMax: 3,
+          });
+        }
+        // Brief white core flash at impact point.
+        pushFx(client.particles, x, y, '#ffffff', {
+          speedMin: 0, speedMax: 5,
+          lifeMin: 0.12, lifeMax: 0.18,
+          radiusMin: 6, radiusMax: 9,
+        });
+      }
+      break;
+    }
   }
 }

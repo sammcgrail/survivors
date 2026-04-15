@@ -7,10 +7,29 @@ import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
 import { pushOutOfObstacles, obstacleAvoidance } from './collision.js';
 import { enemyShootingAi } from './enemyProjectiles.js';
+import { damageEnemy } from './damage.js';
 
 // Reusable zero vector for the no-obstacles path — saves an
 // allocation per enemy per tick on maps without obstacles.
 const ZERO_VEC = { x: 0, y: 0 };
+
+// Apply a status effect to an enemy. Same-type effects refresh duration
+// (no stacking) — caller can safely re-apply on every hit. Boss is
+// immune; callers should check before calling if they want to skip the
+// emit, but this guard makes double-sure.
+// effect shape: { type, remaining, magnitude, tickRate? }
+export function applyStatus(g, enemy, effect) {
+  if (enemy.name === 'boss' || enemy.dying !== undefined) return;
+  enemy.statusEffects ??= [];
+  const existing = enemy.statusEffects.find(s => s.type === effect.type);
+  if (existing) {
+    // Refresh — don't reset tickAccum so in-progress burn ticks aren't lost.
+    existing.remaining = Math.max(existing.remaining, effect.remaining);
+    return;
+  }
+  enemy.statusEffects.push({ ...effect, tickAccum: 0 });
+  emit(g, EVT.STATUS_APPLIED, { statusType: effect.type, x: enemy.x, y: enemy.y });
+}
 
 // Cell size for the spatial hash. Sized to cover the largest flock
 // perception radius (150 for fast/tank) within a 1-cell neighbor
@@ -148,7 +167,7 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
   }
 }
 
-function updateGhostMovement(e, dt, edx, edy, dist) {
+function updateGhostMovement(e, dt, edx, edy, dist, speedMod = 1) {
   const nx = edx / dist;
   const ny = edy / dist;
   const sign = e.orbitSign || 1;
@@ -157,8 +176,8 @@ function updateGhostMovement(e, dt, edx, edy, dist) {
   // closing at range, committed up close, drive-by prevented at melee
   const inward = dist > 100 ? 0.8 : 1.0;
   const orbit = dist > 100 ? 0.6 : dist > 30 ? 0.3 : 0.1;
-  e.x += (nx * inward + perpX * orbit) * e.speed * dt;
-  e.y += (ny * inward + perpY * orbit) * e.speed * dt;
+  e.x += (nx * inward + perpX * orbit) * e.speed * speedMod * dt;
+  e.y += (ny * inward + perpY * orbit) * e.speed * speedMod * dt;
 }
 
 function updateSpawnerAi(g, e, dt) {
@@ -239,19 +258,52 @@ function updateEnemyTick(g, dt, hash) {
     const e = g.enemies[i];
     if (e.dying !== undefined) continue; // animating but not interacting
 
+    // Status effects: drain durations, apply burn DoT, compute speed
+    // multiplier. Boss is immune — its phase system owns its speed.
+    // Freeze reuses the stunTimer gate so spawner-birth and shooting
+    // are also suppressed (matches thunder_god overcharge behavior).
+    let speedMod = 1;
+    if (e.statusEffects?.length && e.name !== 'boss') {
+      e.statusEffects = e.statusEffects.filter(s => {
+        s.remaining -= dt;
+        if (s.type === 'burn') {
+          s.tickAccum = (s.tickAccum || 0) + dt;
+          // Drain accumulated time in full tick increments so fast dt
+          // values don't skip a tick.
+          while (s.tickAccum >= s.tickRate && !e.dying) {
+            damageEnemy(g, e, s.magnitude, null);
+            s.tickAccum -= s.tickRate;
+          }
+        } else if (s.type === 'slow') {
+          speedMod = Math.min(speedMod, s.magnitude);
+        } else if (s.type === 'freeze') {
+          speedMod = 0;
+        }
+        if (s.remaining <= 0) {
+          emit(g, EVT.STATUS_EXPIRED, { statusType: s.type, x: e.x, y: e.y });
+          return false;
+        }
+        return true;
+      });
+      // Freeze: bump stunTimer by one frame so the existing gate
+      // blocks movement/spawner/shooting this tick without touching
+      // the stun decrement logic that runs inside the guard.
+      if (speedMod === 0) e.stunTimer = Math.max(e.stunTimer || 0, dt + 0.001);
+    }
+
     // Stunned enemies freeze in place but still take damage. Thunder god
-    // overcharge is the current source; any future CC rides the same hook.
+    // overcharge is the current source; freeze status extends this gate.
     if (e.stunTimer > 0) {
       e.stunTimer -= dt;
     } else {
       const target = nearestAlivePlayer(g, e.x, e.y);
       if (target && target.dist > 1) {
-        if (e.name === 'ghost')      updateGhostMovement(e, dt, target.dx, target.dy, target.dist);
+        if (e.name === 'ghost')      updateGhostMovement(e, dt, target.dx, target.dy, target.dist, speedMod);
         else if (e.name === 'boss')  updateBossAi(g, e, dt, target.dx, target.dy, target.dist);
         else if (!e.flock) {
           // Fallback for any type without flock config — pure chase.
-          e.x += (target.dx / target.dist) * e.speed * dt;
-          e.y += (target.dy / target.dist) * e.speed * dt;
+          e.x += (target.dx / target.dist) * e.speed * speedMod * dt;
+          e.y += (target.dy / target.dist) * e.speed * speedMod * dt;
         } else {
           // Boids blend: chase + separation + alignment + cohesion +
           // obstacle avoidance. Avoidance has a high implicit weight
@@ -280,13 +332,13 @@ function updateEnemyTick(g, dt, hash) {
                  + avoid.y * 5.0;
           const m = Math.hypot(vx, vy);
           if (m > 0.001) {
-            e.vx = (vx / m) * e.speed;
-            e.vy = (vy / m) * e.speed;
+            e.vx = (vx / m) * e.speed * speedMod;
+            e.vy = (vy / m) * e.speed * speedMod;
           } else {
             // Forces canceled exactly — fall back to chase so the enemy
             // doesn't freeze in place.
-            e.vx = chaseX * e.speed;
-            e.vy = chaseY * e.speed;
+            e.vx = chaseX * e.speed * speedMod;
+            e.vy = chaseY * e.speed * speedMod;
           }
           e.x += e.vx * dt;
           e.y += e.vy * dt;

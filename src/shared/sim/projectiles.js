@@ -1,6 +1,7 @@
 // Projectile movement, range cleanup, enemy collision, and obstacle
 // blocking. Pure sim; damage routes through damage.js + events.
 import { damageEnemy } from './damage.js';
+import { applyStatus } from './enemies.js';
 import { circleRectCollision } from './collision.js';
 import { PROJECTILE_BLOCKERS } from '../maps.js';
 
@@ -50,6 +51,7 @@ export function updateProjectiles(g, dt) {
       const edy = proj.y - e.y;
       if (edx * edx + edy * edy < (proj.radius + e.radius) ** 2) {
         damageEnemy(g, e, dmg, proj.owner);
+        if (proj.statusOnHit) applyStatus(g, e, proj.statusOnHit);
         proj.pierce--;
         if (proj.pierce <= 0) {
           g.projectiles.splice(i, 1);

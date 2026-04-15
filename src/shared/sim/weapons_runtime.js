@@ -4,6 +4,7 @@
 // METEOR_EXPLODE, SHIELD_HUM, CHARGE_BURST events.
 import { EVT, emit } from './events.js';
 import { damageEnemy } from './damage.js';
+import { applyStatus } from './enemies.js';
 
 // Random-N enemies inside a circular range, drawn via Fisher-Yates so
 // the choice tracks g.rng deterministically. Used by lightning_field +
@@ -124,6 +125,7 @@ function fireChain(g, w, p) {
   for (const t of targets) {
     chainPoints.push({ x: t.x, y: t.y });
     damageEnemy(g, t, w.damage * p.damageMulti, p.id);
+    applyStatus(g, t, { type: 'slow', remaining: 2.0, magnitude: 0.4, tickRate: 0 });
   }
   g.chainEffects.push({ points: chainPoints, life: 0.2, color: w.color });
 }
@@ -167,6 +169,8 @@ function fireDragonStorm(g, w, p) {
       speed: w.speed, damage: w.damage, range: w.range,
       dist: 0, pierce: w.pierce, radius: 7, color: w.color,
       owner: p.id,
+      // Burn applied per hit in projectiles.js via statusOnHit.
+      statusOnHit: { type: 'burn', remaining: 3.0, magnitude: 8, tickRate: 0.5 },
     });
   }
 }
@@ -252,6 +256,7 @@ function tickLightningField(g, w, p) {
   const targets = randomEnemiesInRange(g, p.x, p.y, effectiveRadius, zapCount);
   for (const t of targets) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id);
+    applyStatus(g, t, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.15, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'lightning_field', pid: p.id });
@@ -472,6 +477,8 @@ export function updateMeteorEffects(g, dt) {
         const dx = m.x - e.x, dy = m.y - e.y;
         if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
           damageEnemy(g, g.enemies[j], m.damage, m.owner);
+          // Meteor freeze — hard landing stuns enemies in the blast zone.
+          if (m.damage > 0) applyStatus(g, e, { type: 'freeze', remaining: 0.8, magnitude: 0, tickRate: 0 });
         }
       }
     } else if (m.phase === 'explode' && m.life <= 0) {
