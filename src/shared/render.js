@@ -288,9 +288,18 @@ export function drawMeteorEffects(ctx, meteorEffects) {
 // Charge effect is NOT handled here — it's SP-only until the server
 // starts shipping speed/duration/chargeTimer/width for the charge
 // weapon. Callers add charge render inline after this.
-export function drawWeaponAuras(ctx, players, time) {
+//
+// `viewport` is optional — {cx, cy, W, H}; when provided, cull
+// players whose entire largest possible aura can't hit the viewport.
+// 300px margin covers thunder_god @ max sizeMulti. SP has at most
+// one player so the cull is a no-op; MP at 8 players gets a real
+// perf win.
+export function drawWeaponAuras(ctx, players, time, viewport) {
+  const vx = viewport?.cx, vy = viewport?.cy, vw = viewport?.W, vh = viewport?.H;
+  const cull = viewport !== undefined;
   for (const p of players) {
     if (!p.alive) continue;
+    if (cull && (p.x < vx - 300 || p.x > vx + vw + 300 || p.y < vy - 300 || p.y > vy + vh + 300)) continue;
     const sm = p.sizeMulti || 1;
     const pb = p.projectileBonus || 0;
     for (const w of (p.weapons || [])) {
