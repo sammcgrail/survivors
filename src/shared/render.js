@@ -119,6 +119,7 @@ const ENEMY_NAME_TO_SPRITE = { ghost: 'skull' };
 // — SP wires this to the bestiary discovery hook so playing
 // continuously builds out the catalog.
 export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
+  const now = typeof performance !== 'undefined' ? performance.now() : 0;
   for (const e of enemies) {
     if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
     const spriteName = e.sprite || ENEMY_NAME_TO_SPRITE[e.name] || e.name;
@@ -141,16 +142,10 @@ export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
     if (onSeen) onSeen(e.name);
 
     if (!drawSprite(spriteName, e.x, e.y, e.radius / 8)) {
-      ctx.fillStyle = e.color;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.fill();
+      drawEnemyFallback(ctx, e, now);
     }
     if (e.hitFlash > 0) {
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(e.hitFlash * 5, 0.6)})`;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius * 0.8, 0, Math.PI * 2);
-      ctx.fill();
+      drawHitFlashLayers(ctx, e);
     }
 
     // Status tint — persistent overlay while a status is active.
@@ -166,6 +161,143 @@ export function drawEnemies(ctx, enemies, drawSprite, cx, cy, W, H, onSeen) {
       drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
     }
   }
+}
+
+// Fallback renderer for enemies without a sprite (poisoner / splitter /
+// bomber / healer added after the original sprite sheet). Goes beyond a
+// flat colored circle — outline ring + main fill + per-type animated
+// detail so they read as distinct creatures. All detail is procedural
+// against `performance.now()` + per-enemy offsets so there's no state
+// per enemy and the call is O(1) per enemy.
+function drawEnemyFallback(ctx, e, now) {
+  const r = e.radius;
+  // Outline ring — slightly darker than the fill, 1.5px wide.
+  ctx.strokeStyle = shadeHex(e.color, -0.35);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  // Main fill.
+  ctx.fillStyle = e.color;
+  ctx.beginPath();
+  ctx.arc(e.x, e.y, r - 0.5, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (e.name === 'poisoner') {
+    // Shimmering spiky rim — 8 spikes that rotate and breathe, toxic feel.
+    const t = now / 400 + e.x * 0.01;
+    ctx.fillStyle = shadeHex(e.color, 0.35);
+    for (let i = 0; i < 8; i++) {
+      const a = t + (Math.PI * 2 * i) / 8;
+      const spikeR = r + 1.5 + Math.sin(t * 2 + i) * 1.2;
+      ctx.beginPath();
+      ctx.arc(e.x + Math.cos(a) * spikeR, e.y + Math.sin(a) * spikeR, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (e.name === 'splitter') {
+    // Lumpy body — 3 offset inner lobes that pulse, suggests it's
+    // about to split.
+    const t = now / 300 + e.x * 0.02;
+    ctx.fillStyle = shadeHex(e.color, 0.2);
+    for (let i = 0; i < 3; i++) {
+      const a = t + (Math.PI * 2 * i) / 3;
+      const offR = r * 0.45;
+      const lobeR = r * (0.35 + Math.sin(t * 3 + i) * 0.08);
+      ctx.beginPath();
+      ctx.arc(e.x + Math.cos(a) * offR, e.y + Math.sin(a) * offR, lobeR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (e.name === 'bomber') {
+    // Ticking fuse dot — bright core that throbs faster as hp drops,
+    // visual "it's about to explode" cue.
+    const hpFrac = e.hp / e.maxHp;
+    const tickRate = 220 - (1 - hpFrac) * 180; // throb faster at low hp
+    const pulse = 0.55 + Math.sin(now / tickRate + e.x * 0.03) * 0.45;
+    ctx.fillStyle = `rgba(255, 220, 120, ${pulse})`;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y - r * 0.15, r * 0.28, 0, Math.PI * 2);
+    ctx.fill();
+    // Fuse line running up from the top
+    ctx.strokeStyle = 'rgba(120, 60, 30, 0.9)';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(e.x, e.y - r * 0.6);
+    ctx.lineTo(e.x + Math.sin(now / 200) * 1.5, e.y - r * 1.1);
+    ctx.stroke();
+  } else if (e.name === 'healer') {
+    // Cross-shaped inner glow + 4 orbiting motes. Reads as medical.
+    const t = now / 500 + e.x * 0.008;
+    ctx.fillStyle = 'rgba(220, 255, 235, 0.9)';
+    const armR = r * 0.55;
+    const armW = r * 0.18;
+    ctx.fillRect(e.x - armW / 2, e.y - armR, armW, armR * 2);
+    ctx.fillRect(e.x - armR, e.y - armW / 2, armR * 2, armW);
+    ctx.fillStyle = 'rgba(220, 255, 235, 0.7)';
+    for (let i = 0; i < 4; i++) {
+      const a = t + (Math.PI * 2 * i) / 4;
+      const orbR = r * 1.15;
+      ctx.beginPath();
+      ctx.arc(e.x + Math.cos(a) * orbR, e.y + Math.sin(a) * orbR, 1.6, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    // Generic fallback — 1 inner highlight dot so even unnamed new
+    // enemies pick up a hint of depth for free.
+    ctx.fillStyle = shadeHex(e.color, 0.35);
+    ctx.beginPath();
+    ctx.arc(e.x - r * 0.25, e.y - r * 0.25, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Multi-stage hit flash. Was a single semi-opaque overlay. Now:
+//   fresh hit  — bright core + radial crack streaks
+//   mid decay  — dimmer overlay + fading streaks
+//   tail       — last tint only
+// Reads as a multi-frame response instead of a single fade.
+function drawHitFlashLayers(ctx, e) {
+  const hf = e.hitFlash;
+  // Bright core — visible only fresh (first ~0.15s)
+  if (hf > 0.6) {
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(hf * 0.9, 0.9)})`;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+    // 4 short crack streaks radiating out — only on fresh hits.
+    ctx.strokeStyle = `rgba(255,255,255,${hf * 0.7})`;
+    ctx.lineWidth = 1.3;
+    for (let i = 0; i < 4; i++) {
+      const a = (Math.PI * 2 * i) / 4 + (e.x * 0.03);
+      const r0 = e.radius * 0.3;
+      const r1 = e.radius * (0.95 + hf * 0.35);
+      ctx.beginPath();
+      ctx.moveTo(e.x + Math.cos(a) * r0, e.y + Math.sin(a) * r0);
+      ctx.lineTo(e.x + Math.cos(a) * r1, e.y + Math.sin(a) * r1);
+      ctx.stroke();
+    }
+  } else {
+    // Decay overlay only.
+    ctx.fillStyle = `rgba(255,255,255,${Math.min(hf * 5, 0.5)})`;
+    ctx.beginPath();
+    ctx.arc(e.x, e.y, e.radius * 0.8, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// Shift a #rrggbb color toward white (pct > 0) or black (pct < 0).
+// Clamped. Used for outline/inner highlight tinting off the enemy's
+// base color so every type keeps its identity.
+function shadeHex(hex, pct) {
+  const h = hex.startsWith('#') ? hex.slice(1) : hex;
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  const target = pct >= 0 ? 255 : 0;
+  const amt = Math.abs(pct);
+  const rr = Math.round(r + (target - r) * amt);
+  const gg = Math.round(g + (target - g) * amt);
+  const bb = Math.round(b + (target - b) * amt);
+  return `rgb(${rr},${gg},${bb})`;
 }
 
 // Per-status overlay drawn on top of the enemy sprite. Burn flickers

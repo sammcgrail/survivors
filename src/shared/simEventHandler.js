@@ -442,7 +442,26 @@ export function applySimEvent(evt, client) {
           color: crit ? '#f39c12' : '#f1c40f',
           life: crit ? 0.7 : 0.5, maxLife: crit ? 0.7 : 0.5, vy: -40,
         });
-        if (crit) spawn(evt.x, evt.y, '#f39c12', 6);
+        // Multi-stage impact: radial debris (fast, short) + trailing
+        // sparks (slower, longer). Reads as a hit that blooms + fades,
+        // instead of a single puff. Crit gets a denser + brighter
+        // version of the same shape.
+        const debrisCount = crit ? 8 : 5;
+        for (let i = 0; i < debrisCount; i++) {
+          pushFx(client.particles, evt.x, evt.y, crit ? '#ffe08a' : '#f1c40f', {
+            speedMin: 140, speedMax: 260,
+            lifeMin: 0.12, lifeMax: 0.22,
+            radiusMin: 1.4, radiusMax: 2.6,
+          });
+        }
+        const sparkCount = crit ? 4 : 2;
+        for (let i = 0; i < sparkCount; i++) {
+          pushFx(client.particles, evt.x, evt.y, crit ? '#f39c12' : '#f1c40f', {
+            speedMin: 40, speedMax: 90,
+            lifeMin: 0.35, lifeMax: 0.6,
+            radiusMin: 0.8, radiusMax: 1.6,
+          });
+        }
       }
       break;
 
@@ -467,7 +486,23 @@ export function applySimEvent(evt, client) {
 
     case 'playerHit':
       if (isMe) { shake(0.15); sfx('playerhit'); }
-      spawn(evt.x, evt.y, '#e74c3c', 5);
+      // Multi-stage: immediate red debris (5 fast) + 3 slower dark-red
+      // sparks that linger. Same bloom-then-fade shape as enemy hits
+      // so damage feedback reads consistently across targets.
+      for (let i = 0; i < 5; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#e74c3c', {
+          speedMin: 130, speedMax: 230,
+          lifeMin: 0.15, lifeMax: 0.28,
+          radiusMin: 1.5, radiusMax: 2.8,
+        });
+      }
+      for (let i = 0; i < 3; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#7b1212', {
+          speedMin: 30, speedMax: 70,
+          lifeMin: 0.4, lifeMax: 0.7,
+          radiusMin: 0.9, radiusMax: 1.6,
+        });
+      }
       break;
 
     case 'playerDeath':
