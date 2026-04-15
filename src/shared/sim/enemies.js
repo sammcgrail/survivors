@@ -138,8 +138,9 @@ function computeFlockSteering(g, hash, ei) {
   const perR2 = fc.perceptionRadius * fc.perceptionRadius;
   const sepR2 = fc.sepRadius * fc.sepRadius;
   let sepX = 0, sepY = 0;
-  let alignX = 0, alignY = 0, alignCount = 0;
+  let alignX = 0, alignY = 0;
   let cohX = 0, cohY = 0;
+  let neighborCount = 0;
   for (let kx = -1; kx <= 1; kx++) {
     for (let ky = -1; ky <= 1; ky++) {
       const bucket = hash.get((cx + kx) * HASH_KEY_STRIDE + (cy + ky));
@@ -152,42 +153,35 @@ function computeFlockSteering(g, hash, ei) {
         const dx = e.x - o.x, dy = e.y - o.y;
         const d2 = dx * dx + dy * dy;
         if (d2 > perR2 || d2 < 0.01) continue;
-        const d = Math.sqrt(d2);
         if (d2 < sepR2) {
           // Separation pushes harder the closer the neighbor is.
+          const d = Math.sqrt(d2);
           sepX += dx / d;
           sepY += dy / d;
         }
         alignX += o.vx;
         alignY += o.vy;
-        alignCount++;
-        // Cohesion is the average vector toward neighbors == -dx/-dy summed.
-        cohX -= dx;
-        cohY -= dy;
+        cohX += o.x - e.x;
+        cohY += o.y - e.y;
+        neighborCount++;
       }
     }
   }
-  if (alignCount > 0) {
-    alignX /= alignCount; alignY /= alignCount;
-    cohX /= alignCount;   cohY /= alignCount;
+  if (neighborCount > 0) {
+    alignX /= neighborCount; alignY /= neighborCount;
+    cohX /= neighborCount;   cohY /= neighborCount;
   }
   return { sepX, sepY, alignX, alignY, cohX, cohY };
 }
 
-// Pass 1: per-enemy movement + AI + hit-flash decay + player contact.
-// Iterate backward because dying enemies splice from the array. Movement
+// Per-enemy movement + AI + hit-flash decay + player contact. Movement
 // + AI target the nearest alive player; contact damage hits any player
-// the enemy actually overlaps.
+// the enemy actually overlaps. Dying enemies were removed in the
+// pre-pass, so indices stay stable for the flock hash here.
 function updateEnemyTick(g, dt, hash) {
   for (let i = g.enemies.length - 1; i >= 0; i--) {
     const e = g.enemies[i];
-
-    // dying animation — shrink + fade then remove
-    if (e.dying !== undefined) {
-      e.dying -= dt;
-      if (e.dying <= 0) g.enemies.splice(i, 1);
-      continue;
-    }
+    if (e.dying !== undefined) continue; // animating but not interacting
 
     // Stunned enemies freeze in place but still take damage. Thunder god
     // overcharge is the current source; any future CC rides the same hook.
@@ -220,9 +214,14 @@ function updateEnemyTick(g, dt, hash) {
           if (m > 0.001) {
             e.vx = (vx / m) * e.speed;
             e.vy = (vy / m) * e.speed;
-            e.x += e.vx * dt;
-            e.y += e.vy * dt;
+          } else {
+            // Forces canceled exactly — fall back to chase so the enemy
+            // doesn't freeze in place.
+            e.vx = chaseX * e.speed;
+            e.vy = chaseY * e.speed;
           }
+          e.x += e.vx * dt;
+          e.y += e.vy * dt;
         }
       }
     }
@@ -291,9 +290,15 @@ function updateRepulsion(g) {
 }
 
 export function updateEnemies(g, dt) {
-  // Hash built once before movement so flock queries see a coherent
-  // snapshot. Repulsion rebuilds post-movement for accurate overlap
-  // detection (positions just shifted). Total: ~0.4ms for 200 enemies.
+  // Pre-pass: progress death animations + remove finished ones BEFORE
+  // building the hash so the flock pass sees stable indices (no
+  // mid-tick splices invalidating the bucket index lists).
+  for (let i = g.enemies.length - 1; i >= 0; i--) {
+    const e = g.enemies[i];
+    if (e.dying === undefined) continue;
+    e.dying -= dt;
+    if (e.dying <= 0) g.enemies.splice(i, 1);
+  }
   const hash = buildSpatialHash(g.enemies);
   updateEnemyTick(g, dt, hash);
   updateRepulsion(g);
