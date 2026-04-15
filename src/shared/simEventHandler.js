@@ -546,6 +546,46 @@ export function applySimEvent(evt, client) {
       }
       break;
 
+    case 'enemyAim': {
+      // Telegraph windup before an enemy fires. Drops a dotted line
+      // of color-coded particles between shooter and locked target so
+      // the player has a reaction window to step out of the line.
+      // Plus a charging burst on the enemy itself so they read as
+      // "winding up" even when the player is looking elsewhere.
+      const color = evt.name === 'boss' ? '#d63031' : '#6c5ce7';
+      const dur = evt.duration || 0.4;
+      const dx = (evt.tx - evt.x), dy = (evt.ty - evt.y);
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const segments = Math.max(6, Math.min(14, Math.round(dist / 35)));
+      for (let i = 1; i <= segments; i++) {
+        const t = i / (segments + 1);
+        client.particles.push({
+          x: evt.x + dx * t,
+          y: evt.y + dy * t,
+          vx: 0, vy: 0,
+          life: dur, maxLife: dur,
+          color,
+          radius: 1.8 + (1 - t) * 1.2, // bigger near the shooter
+        });
+      }
+      // Charging glow on the enemy — small inward-drifting motes
+      // that look like the enemy is gathering energy.
+      for (let i = 0; i < 6; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const startR = 14 + Math.random() * 10;
+        client.particles.push({
+          x: evt.x + Math.cos(angle) * startR,
+          y: evt.y + Math.sin(angle) * startR,
+          vx: -Math.cos(angle) * 60,
+          vy: -Math.sin(angle) * 60,
+          life: dur * 0.6, maxLife: dur * 0.6,
+          color,
+          radius: 1.5 + Math.random(),
+        });
+      }
+      break;
+    }
+
     case 'bossSpawn':
       // Boss arrival — ominous sfx, big shake, deep red burst at
       // spawn so everyone knows where THE DEMON landed.
