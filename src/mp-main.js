@@ -16,6 +16,7 @@ import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
+import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -645,7 +646,28 @@ function showDeathScreen(state, me) {
     Kills: ${me.kills}<br>
     <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
   `;
-  document.getElementById('death-screen').style.display = 'flex';
+
+  // Achievement badges — read-only from localStorage (earned in SP, displayed here)
+  const screen = document.getElementById('death-screen');
+  let achEl = document.getElementById('mp-ds-achievements');
+  if (!achEl) {
+    achEl = document.createElement('div');
+    achEl.id = 'mp-ds-achievements';
+    achEl.style.cssText = 'margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center;';
+    screen.appendChild(achEl);
+  }
+  achEl.innerHTML = '';
+  const allAch = loadAchievements();
+  for (const def of ACHIEVEMENTS) {
+    const unlocked = !!allAch[def.id];
+    const badge = document.createElement('span');
+    badge.className = `ds-ach-badge${unlocked ? '' : ' ds-ach-badge--locked'}`;
+    badge.title = `${def.label}: ${def.desc}${unlocked ? '' : ' (locked)'}`;
+    badge.textContent = unlocked ? def.icon : '🔒';
+    achEl.appendChild(badge);
+  }
+
+  screen.style.display = 'flex';
 }
 
 function showSpectateOverlay(pid) {
