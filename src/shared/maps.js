@@ -20,12 +20,15 @@ export const MAPS = {
     tileset: null,           // open field, plain grid render
     obstacles: [],
     spawns: [{ x: 1500, y: 1500, radius: 200 }],
+    terrainEffect: null,     // no patches, no effects
   },
 
   forest: {
     name: 'Dark Forest',
     width: 3500, height: 3500,
     tileset: 'forest',
+    terrainEffect: { type: 'slow', factor: 0.55 }, // sticky mud patches
+
     obstacles: [
       // Scattered tree clusters — tree obstacles don't block projectiles.
       { x:  500, y:  500, w: 60, h: 60, type: 'tree' },
@@ -56,6 +59,8 @@ export const MAPS = {
     name: 'Ancient Ruins',
     width: 3000, height: 3000,
     tileset: 'ruins',
+    terrainEffect: { type: 'slow', factor: 0.55 }, // gravel patches — loose footing
+
     obstacles: [
       // Inner courtyard with broken walls + columns
       { x:  800, y:  800, w: 200, h: 40, type: 'wall' },
@@ -79,6 +84,8 @@ export const MAPS = {
     name: 'Forsaken Graveyard',
     width: 3000, height: 3000,
     tileset: 'graveyard',
+    terrainEffect: { type: 'damage', dps: 5 },     // cursed scorched ground
+
     obstacles: [
       // Tombstone rows
       { x:  500, y:  500, w: 80, h: 30, type: 'tomb' },

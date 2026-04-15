@@ -528,8 +528,9 @@ function update(dt) {
     if (dx && dy) { dx *= 0.7071; dy *= 0.7071; }
   }
   if (dx || dy) p.facing = { x: dx, y: dy };
-  p.x += dx * p.speed * dt;
-  p.y += dy * p.speed * dt;
+  const slow = p._terrainSlow || 1;
+  p.x += dx * p.speed * slow * dt;
+  p.y += dy * p.speed * slow * dt;
   p.x = Math.max(p.radius, Math.min(g.arena.w - p.radius, p.x));
   p.y = Math.max(p.radius, Math.min(g.arena.h - p.radius, p.y));
   if (g.obstacles.length > 0) pushOutOfObstacles(p, g.obstacles);
