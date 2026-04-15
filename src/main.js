@@ -1065,19 +1065,32 @@ function render() {
   const p = g.player;
   for (const w of p.weapons) {
     if (w.type === 'breath') {
-      const pulse = 1 + Math.sin(w.pulsePhase) * 0.1;
+      const pulse = 1 + Math.sin(w.pulsePhase) * 0.12;
       const r = w.radius * pulse;
-      const grad = ctx.createRadialGradient(p.x, p.y, r * 0.3, p.x, p.y, r);
-      grad.addColorStop(0, 'rgba(230, 126, 34, 0.15)');
-      grad.addColorStop(0.7, 'rgba(230, 126, 34, 0.08)');
-      grad.addColorStop(1, 'rgba(230, 126, 34, 0)');
+      // Hotter inner gradient — orange→red transition reads as
+      // actual heat instead of a dim sphere.
+      const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
+      grad.addColorStop(0,   'rgba(255, 200, 90, 0.30)');
+      grad.addColorStop(0.5, 'rgba(230, 126, 34, 0.16)');
+      grad.addColorStop(1,   'rgba(231,  76, 60, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
       ctx.fill();
 
+      // Pulse-wave: an outer ring expanding past the aura that
+      // re-spawns once per pulse cycle. Shows the breath actually
+      // ticks rather than just sitting there.
+      const wavePhase = (w.pulsePhase * 0.5) % 1;
+      const waveR = r * (1 + wavePhase * 0.5);
+      ctx.strokeStyle = `rgba(255, 180, 90, ${0.4 * (1 - wavePhase)})`;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, waveR, 0, Math.PI * 2);
+      ctx.stroke();
+
       // ring
-      ctx.strokeStyle = 'rgba(230, 126, 34, 0.3)';
+      ctx.strokeStyle = 'rgba(230, 126, 34, 0.4)';
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
@@ -1115,10 +1128,22 @@ function render() {
       ctx.stroke();
     }
 
-    // orbit blades
+    // orbit blades — leading-edge arc trail behind each blade so the
+    // orbit reads as motion, not a static ring of triangles.
     if (w.type === 'orbit') {
+      const phase = w.phase || 0;
+      ctx.strokeStyle = w.color;
+      ctx.lineWidth = 2;
       for (let b = 0; b < w.bladeCount; b++) {
-        const angle = (w.phase || 0) + (b * Math.PI * 2 / w.bladeCount);
+        const angle = phase + (b * Math.PI * 2 / w.bladeCount);
+        // Trailing arc — 0.4 rad behind the blade, fades alpha tail-end.
+        for (let t = 1; t <= 4; t++) {
+          ctx.globalAlpha = 0.45 - t * 0.1;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, w.radius, angle - 0.05 * t, angle - 0.05 * (t - 1));
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
         const bx = p.x + Math.cos(angle) * w.radius;
         const by = p.y + Math.sin(angle) * w.radius;
         ctx.save();
@@ -1126,7 +1151,7 @@ function render() {
         ctx.rotate(angle + Math.PI / 2);
         ctx.fillStyle = w.color;
         ctx.shadowColor = w.color;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 8;
         ctx.beginPath();
         ctx.moveTo(0, -10);
         ctx.lineTo(4, 4);
@@ -1167,8 +1192,25 @@ function render() {
       }
     }
 
-    // lightning field radius indicator
+    // lightning field — random idle forks across the field for ambient
+    // crackle, plus the dashed boundary ring.
     if (w.type === 'lightning_field') {
+      // Sparse idle forks: 1-2 per frame, short lifetime via local
+      // particle channel (no chain effect spam).
+      if (Math.random() < 0.3) {
+        const a1 = Math.random() * Math.PI * 2;
+        const a2 = a1 + (Math.random() - 0.5) * 0.6;
+        const r1 = w.radius * (0.3 + Math.random() * 0.6);
+        const r2 = w.radius * (0.3 + Math.random() * 0.6);
+        ctx.save();
+        ctx.strokeStyle = 'rgba(255, 234, 167, 0.5)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(p.x + Math.cos(a1) * r1, p.y + Math.sin(a1) * r1);
+        ctx.lineTo(p.x + Math.cos(a2) * r2, p.y + Math.sin(a2) * r2);
+        ctx.stroke();
+        ctx.restore();
+      }
       ctx.strokeStyle = 'rgba(255, 234, 167, 0.15)';
       ctx.lineWidth = 1;
       ctx.setLineDash([4, 8]);
@@ -1267,23 +1309,33 @@ function render() {
   }
 
   // --- chain lightning effects ---
+  // Two passes per bolt: a thick translucent outer glow, then a thin
+  // bright inner core. Each segment gets two jagged midpoints instead
+  // of one, so the bolts read as proper electric arcs rather than
+  // simple V's.
   for (const ce of g.chainEffects) {
-    ctx.strokeStyle = ce.color;
-    ctx.lineWidth = 2;
+    const t = ce.life / 0.2;
     ctx.shadowColor = ce.color;
-    ctx.shadowBlur = 10;
-    ctx.globalAlpha = ce.life / 0.2;
-    for (let i = 0; i < ce.points.length - 1; i++) {
-      const a = ce.points[i];
-      const b = ce.points[i + 1];
-      ctx.beginPath();
-      ctx.moveTo(a.x, a.y);
-      // jagged lightning
-      const mx = (a.x + b.x) / 2 + (Math.random() - 0.5) * 20;
-      const my = (a.y + b.y) / 2 + (Math.random() - 0.5) * 20;
-      ctx.lineTo(mx, my);
-      ctx.lineTo(b.x, b.y);
-      ctx.stroke();
+    for (let pass = 0; pass < 2; pass++) {
+      ctx.lineWidth = pass === 0 ? 6 : 2;
+      ctx.strokeStyle = pass === 0 ? ce.color : '#ffffff';
+      ctx.shadowBlur = pass === 0 ? 14 : 6;
+      ctx.globalAlpha = pass === 0 ? t * 0.45 : t;
+      for (let i = 0; i < ce.points.length - 1; i++) {
+        const a = ce.points[i];
+        const b = ce.points[i + 1];
+        const dx = (b.x - a.x), dy = (b.y - a.y);
+        const m1x = a.x + dx * 0.33 + (Math.random() - 0.5) * 18;
+        const m1y = a.y + dy * 0.33 + (Math.random() - 0.5) * 18;
+        const m2x = a.x + dx * 0.66 + (Math.random() - 0.5) * 18;
+        const m2y = a.y + dy * 0.66 + (Math.random() - 0.5) * 18;
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(m1x, m1y);
+        ctx.lineTo(m2x, m2y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
     }
     ctx.globalAlpha = 1;
     ctx.shadowBlur = 0;
@@ -1292,6 +1344,21 @@ function render() {
   // --- meteor effects ---
   for (const m of g.meteorEffects) {
     if (m.phase === 'warn') {
+      // Falling streak from off-screen down to the warn ring — sells
+      // the "something's coming" moment before the explosion.
+      const t = 1 - (m.life / 0.5);            // 0 at spawn → 1 at impact
+      const streakStart = m.y - 480 * (1 - t);  // top of streak rises
+      const grad = ctx.createLinearGradient(m.x, streakStart, m.x, m.y);
+      grad.addColorStop(0,   'rgba(255, 99, 72, 0)');
+      grad.addColorStop(0.7, 'rgba(255, 150, 80, 0.4)');
+      grad.addColorStop(1,   'rgba(255, 220, 100, 0.9)');
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = 6 * t + 2;
+      ctx.beginPath();
+      ctx.moveTo(m.x, streakStart);
+      ctx.lineTo(m.x, m.y);
+      ctx.stroke();
+
       ctx.strokeStyle = 'rgba(255, 99, 72, 0.5)';
       ctx.lineWidth = 2;
       ctx.setLineDash([4, 4]);
@@ -1397,6 +1464,18 @@ function render() {
       ctx.fill();
     }
     ctx.shadowBlur = 0;
+    // Drop the occasional ember behind the projectile so the trail
+    // reads through the sprite even at high speed.
+    if (Math.random() < 0.4) {
+      g.particles.push({
+        x: proj.x + (Math.random() - 0.5) * 4,
+        y: proj.y + (Math.random() - 0.5) * 4,
+        vx: 0, vy: 0,
+        life: 0.25, maxLife: 0.25,
+        radius: 1.5 + Math.random(),
+        color: proj.color,
+      });
+    }
   }
 
   // --- charge effect (streak along charge vector) ---
