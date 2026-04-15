@@ -46,8 +46,10 @@ const STARTING_WEAPONS = new Set([
   'spit', 'breath', 'charge', 'orbit', 'chain', 'meteor', 'shield', 'lightning_field',
 ]);
 
-const players = new Map(); // ws -> player object
+const players = new Map();   // ws -> full player object (in-game)
+const lobbyQueue = new Map(); // ws -> { pid, name, weapon, prestige } (waiting in lobby)
 let game = null;
+let lobbyTimer = null;
 let nextId = 0;
 
 function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
@@ -401,9 +403,131 @@ function broadcast() {
   }
 }
 
+// ============================================================
+// LOBBY PHASE — 10s countdown + map vote before game starts.
+// Only triggers when the server is completely empty (no connected
+// players, no lobby queue). Mid-game joins skip the lobby.
+// ============================================================
+
+function initLobby() {
+  const rng = createRng(Date.now() & 0x7fffffff);
+  // Pick 3 distinct random map options from the rotation.
+  const pool = [...MAP_ROTATION];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = rng.int(i + 1);
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return { lobbyPhase: true, lobbyCountdown: 10, mapVotes: {}, mapOptions: pool.slice(0, 3), rng };
+}
+
+function broadcastLobbyState() {
+  if (!game || !game.lobbyPhase) return;
+  const queued = [...lobbyQueue.values()];
+  const msg = JSON.stringify({
+    type: 'lobbyState',
+    countdown: game.lobbyCountdown,
+    mapOptions: game.mapOptions,
+    votes: Object.entries(game.mapVotes).map(([pidStr, mapId]) => ({
+      playerName: queued.find(q => String(q.pid) === pidStr)?.name ?? '?',
+      mapId,
+    })),
+    playerCount: lobbyQueue.size,
+  });
+  for (const ws of lobbyQueue.keys()) {
+    try { ws.send(msg); } catch { /* dead socket */ }
+  }
+}
+
+function startGame(selectedMapId) {
+  const mapId = selectedMapId;
+  const map = MAPS[mapId];
+  const rng = game.rng; // reuse lobby rng for obstacle seeding
+  console.log(`[*] map: ${mapId} (${map.name})`);
+  game = {
+    players: [],
+    enemies: [],
+    projectiles: [],
+    gems: [],
+    heartDrops: [],
+    consumables: [],
+    enemyProjectiles: [],
+    chainEffects: [],
+    meteorEffects: [],
+    chargeTrails: [],
+    deathFeed: [],
+    time: 0,
+    wave: 1,
+    waveTimer: 0,
+    waveDuration: 20,
+    spawnTimer: 0,
+    spawnRate: 2.0,
+    specialWaveMsg: null,
+    specialWaveMsgTimer: 0,
+    waveMsg: '',
+    waveMsgTimer: 0,
+    kills: 0,
+    playerName: 'mp',
+    events: [],
+    rng,
+    mapId,
+    arena: { w: map.width, h: map.height },
+    obstacles: resolveMapObstacles(map, rng),
+  };
+  // Promote all queued players to in-game players.
+  for (const [ws, queued] of lobbyQueue) {
+    const player = makePlayer(queued.pid, queued.name, queued.weapon, rng, map.spawns[0], queued.prestige);
+    players.set(ws, player);
+    try {
+      ws.send(JSON.stringify({
+        type: 'welcome',
+        you: queued.pid,
+        name: player.name,
+        color: player.color,
+        arena: game.arena,
+        map: { id: mapId, obstacles: game.obstacles },
+      }));
+      for (let i = 1; i < player.level; i++) {
+        game.events.push({ type: 'levelUp', level: i + 1, pid: queued.pid });
+      }
+    } catch { /* dead socket — close handler cleaned it up */ }
+  }
+  lobbyQueue.clear();
+}
+
+function resolveLobby() {
+  if (!game || !game.lobbyPhase) return;
+  // Tally votes; random tiebreak among options.
+  const tally = {};
+  for (const mapId of Object.values(game.mapVotes)) {
+    tally[mapId] = (tally[mapId] || 0) + 1;
+  }
+  const options = game.mapOptions;
+  let winner = options[Math.floor(Math.random() * options.length)];
+  let max = 0;
+  for (const [mapId, count] of Object.entries(tally)) {
+    if (count > max) { max = count; winner = mapId; }
+  }
+  console.log(`[*] lobby resolved → ${winner} (tally: ${JSON.stringify(tally)})`);
+  startGame(winner);
+}
+
+function startLobbyTimer() {
+  if (lobbyTimer) clearInterval(lobbyTimer);
+  lobbyTimer = setInterval(() => {
+    if (!game || !game.lobbyPhase) { clearInterval(lobbyTimer); lobbyTimer = null; return; }
+    game.lobbyCountdown -= 1;
+    broadcastLobbyState();
+    if (game.lobbyCountdown <= 0) {
+      clearInterval(lobbyTimer);
+      lobbyTimer = null;
+      resolveLobby();
+    }
+  }, 1000);
+}
+
 function startLoop() {
-  game = initGame();
   setInterval(() => {
+    if (!game || game.lobbyPhase) return; // idle during lobby / before first join
     tick(TICK_DT);
     broadcast();
     // Clear events after every client sees the snapshot once — each
@@ -425,22 +549,40 @@ wss.on('connection', (ws) => {
     try { msg = JSON.parse(raw.toString()); } catch { return; }
 
     if (msg.type === 'join') {
-      if (player) return; // double-join on same socket: first wins
-      if (players.size >= MAX_PLAYERS) {
+      if (player || lobbyQueue.has(ws)) return; // double-join on same socket: first wins
+      if (players.size + lobbyQueue.size >= MAX_PLAYERS) {
         ws.send(JSON.stringify({ type: 'error', reason: 'server_full' }));
         ws.close();
         return;
       }
-      // Reset game state when first player joins an empty server so they
+      const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
+      const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
+      const prestige = sanitizePrestige(msg.prestige);
+
+      // If a lobby is active, queue this player and broadcast lobby state.
+      // Also start a fresh lobby when the server is completely empty.
+      if (!game || game.lobbyPhase || (players.size === 0 && lobbyQueue.size === 0)) {
+        if (!game || (!game.lobbyPhase && players.size === 0 && lobbyQueue.size === 0)) {
+          // Truly empty server — start a new lobby.
+          game = initLobby();
+          startLobbyTimer();
+          console.log(`[*] lobby started: options=${game.mapOptions.join(',')}`);
+        }
+        const queued = { pid, name, weapon, prestige };
+        lobbyQueue.set(ws, queued);
+        console.log(`[+] ${name} queued in lobby (${lobbyQueue.size} waiting)`);
+        broadcastLobbyState();
+        return;
+      }
+
+      // Game is in progress — join immediately.
+      // Reset game state when first player joins a dead server so they
       // don't spawn into a wave-18 death trap left over from prior sessions.
       const anyAlive = [...players.values()].some(p => p.alive);
       if (!anyAlive) {
         game = initGame();
         console.log('[*] game reset (no alive players)');
       }
-      const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
-      const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
-      const prestige = sanitizePrestige(msg.prestige);
       player = makePlayer(pid, name, weapon, game.rng, MAPS[game.mapId].spawns[0], prestige);
       players.set(ws, player);
       console.log(`[+] ${name} joined with ${weapon} (${players.size} players)`);
@@ -452,14 +594,24 @@ wss.on('connection', (ws) => {
         arena: game.arena,
         map: { id: game.mapId, obstacles: game.obstacles },
       }));
-      // Headstart prestige: queue level-up choice for the bonus level so
-      // the player picks a perk on join. Processed next tick when
-      // game.players is rebuilt from the players Map.
       for (let i = 1; i < player.level; i++) {
         game.events.push({ type: 'levelUp', level: i + 1, pid });
       }
       return;
     }
+
+    // Map vote — only valid while in lobby.
+    if (msg.type === 'mapVote') {
+      if (!game || !game.lobbyPhase || !lobbyQueue.has(ws)) return;
+      const queued = lobbyQueue.get(ws);
+      const voteMapId = String(msg.mapId || '');
+      if (game.mapOptions.includes(voteMapId)) {
+        game.mapVotes[String(queued.pid)] = voteMapId;
+        broadcastLobbyState();
+      }
+      return;
+    }
+
     if (!player) return;
 
     if (msg.type === 'input') {
@@ -498,6 +650,12 @@ wss.on('connection', (ws) => {
     if (players.has(ws)) {
       console.log(`[-] ${player ? player.name : '?'} left (${players.size - 1} players)`);
       players.delete(ws);
+    } else if (lobbyQueue.has(ws)) {
+      const queued = lobbyQueue.get(ws);
+      console.log(`[-] ${queued.name} left lobby (${lobbyQueue.size - 1} waiting)`);
+      if (game && game.mapVotes) delete game.mapVotes[String(queued.pid)];
+      lobbyQueue.delete(ws);
+      if (game && game.lobbyPhase) broadcastLobbyState();
     }
   });
 });

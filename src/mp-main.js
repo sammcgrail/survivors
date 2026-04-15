@@ -308,6 +308,11 @@ let mapId = null;
 let obstacles = [];
 let bgCanvas = null;
 
+// Lobby phase — shown after join, before server sends 'welcome'.
+let inLobby = false;
+let lobbyData = null; // { countdown, mapOptions, votes, playerCount }
+let myMapVote = null;
+
 // State interpolation: store previous + current snapshots
 let prevState = null;
 let currState = null;
@@ -424,7 +429,21 @@ function connectWS() {
     let msg;
     try { msg = JSON.parse(evt.data); } catch (e) { return; }
 
+    if (msg.type === 'lobbyState') {
+      inLobby = true;
+      lobbyData = msg;
+      renderLobby();
+      return;
+    }
+
     if (msg.type === 'welcome') {
+      // Hide lobby overlay when game actually starts.
+      inLobby = false;
+      lobbyData = null;
+      myMapVote = null;
+      const lobbyEl = document.getElementById('mp-lobby');
+      if (lobbyEl) lobbyEl.style.display = 'none';
+
       myId = msg.you;
       myName = msg.name;
       arena = msg.arena || arena;
@@ -567,6 +586,12 @@ function joinGame() {
   const name = (nameInput.value || '').trim().slice(0, 12) || 'player';
   myName = name;
   iDied = false;
+  // Reset lobby state for fresh join.
+  inLobby = false;
+  lobbyData = null;
+  myMapVote = null;
+  const lobbyEl = document.getElementById('mp-lobby');
+  if (lobbyEl) lobbyEl.style.display = 'none';
 
   document.getElementById('start-screen').style.display = 'none';
   document.getElementById('death-screen').style.display = 'none';
@@ -643,6 +668,42 @@ function showSpectateOverlay(pid) {
   }
   hud.textContent = '\u{1F441} SPECTATING ' + name.toUpperCase() + ' \u2014 TAB to cycle';
   hud.style.display = 'block';
+}
+
+// ============================================================
+// LOBBY UI
+// ============================================================
+
+function renderLobby() {
+  const el = document.getElementById('mp-lobby');
+  if (!el || !lobbyData) return;
+  el.style.display = 'flex';
+
+  const cdEl = document.getElementById('lobby-countdown');
+  if (cdEl) cdEl.textContent = `Starting in ${lobbyData.countdown}s`;
+
+  const plEl = document.getElementById('lobby-players');
+  const n = lobbyData.playerCount;
+  if (plEl) plEl.textContent = `${n} player${n !== 1 ? 's' : ''} connected`;
+
+  const cardsEl = document.getElementById('lobby-map-cards');
+  if (!cardsEl) return;
+  cardsEl.innerHTML = '';
+  for (const mId of lobbyData.mapOptions) {
+    const voteCount = lobbyData.votes.filter(v => v.mapId === mId).length;
+    const isMyVote = myMapVote === mId;
+    const card = document.createElement('div');
+    card.className = 'lobby-map-card' + (isMyVote ? ' lobby-map-card--selected' : '');
+    card.innerHTML = `<div class="lmc-name">${mId}</div><div class="lmc-votes">${voteCount} vote${voteCount !== 1 ? 's' : ''}</div>`;
+    card.addEventListener('click', () => {
+      myMapVote = mId;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'mapVote', mapId: mId }));
+      }
+      renderLobby(); // optimistic highlight
+    });
+    cardsEl.appendChild(card);
+  }
 }
 
 // ============================================================

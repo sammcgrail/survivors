@@ -160,6 +160,14 @@ canvas { touch-action: none; }
 /* death screen achievement badges */
 .ds-ach-badge { font-size: 20px; cursor: default; }
 .ds-ach-badge--locked { opacity: 0.25; filter: grayscale(1); }
+
+/* MP lobby map-vote overlay */
+#mp-lobby { position: fixed; inset: 0; background: rgba(0,0,0,0.85); z-index: 100; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: #fff; font-family: monospace; display: none; }
+.lobby-map-card { padding: 12px 20px; border: 1px solid #444; border-radius: 6px; cursor: pointer; text-align: center; min-width: 100px; background: rgba(255,255,255,0.05); transition: border-color 0.15s; }
+.lobby-map-card:hover { border-color: #888; }
+.lobby-map-card--selected { border-color: #f1c40f; background: rgba(241,196,15,0.1); }
+.lmc-name { font-size: 14px; font-weight: bold; margin-bottom: 4px; }
+.lmc-votes { font-size: 11px; color: #aaa; }
 </style>
 </head>
 <body data-mode="mp">
@@ -340,6 +348,14 @@ canvas { touch-action: none; }
     </div>
     <div class="bestiary-grid" id="bestiary-grid"></div>
   </div>
+</div>
+
+<div id="mp-lobby" class="mp-only">
+  <div id="lobby-countdown" style="font-size:24px; color:#f1c40f;"></div>
+  <div id="lobby-players" style="font-size:14px; color:#aaa;"></div>
+  <div style="font-size:13px; color:#ccc; margin-bottom:4px;">Vote for a map:</div>
+  <div id="lobby-map-cards" style="display:flex; gap:12px;"></div>
+  <div style="font-size:11px; color:#666; margin-top:8px;">Game starts automatically — majority vote wins</div>
 </div>
 
 <div id="prestige-shop" style="display:none">
