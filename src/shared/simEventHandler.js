@@ -81,14 +81,18 @@ export function applySimEvent(evt, client) {
 
     case 'enemyKilled': {
       sfx('kill');
-      // Particle count + shake scale with enemy radius.
+      // Particle count scales with enemy radius; particles fire for
+      // everyone in view. Shake + flash only for the killer — peers
+      // shouldn't get cross-map screen shake when a friend kills a
+      // boss on the other side of the arena.
       const r = evt.radius || 10;
       const big = r >= 18, huge = r >= 30;
       spawn(evt.x, evt.y, evt.color, huge ? 40 : big ? 20 : Math.max(8, Math.round(r * 1.2)));
       if (big) spawn(evt.x, evt.y, '#ffffff', huge ? 15 : 6);
-      if (huge)      shake(0.4);
-      else if (big)  shake(0.15);
-      if (huge)      flash(0.12);
+      const killedIt = !client.isMe || client.isMe(evt.killer);
+      if (killedIt && huge)      shake(0.4);
+      else if (killedIt && big)  shake(0.15);
+      if (killedIt && huge)      flash(0.12);
       break;
     }
 
