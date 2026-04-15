@@ -54,34 +54,69 @@ export function pushOutOfObstacles(circle, obstacles) {
 
 // Steering force that routes a moving entity around obstacles.
 //
-// Lookahead-only — project the current velocity forward `lookAhead`
-// units; if the tip is inside an obstacle, steer perpendicular to the
-// velocity, away from the obstacle centre. This curves the entity
-// around walls instead of slamming. Hard contact correction is left
-// to pushOutOfObstacles in the same tick.
+// Works in two passes:
+//   1. Find the strongest nearby obstacle ahead of us (closest /
+//      largest overlap). Its geometry determines which side of the
+//      velocity we steer toward — so when two obstacles meet at a
+//      corner, we don't pick opposing sides that cancel to zero.
+//   2. Sum perpendicular pushes for every obstacle within range,
+//      all along the side chosen in pass 1, with linear falloff.
 //
-// Earlier iteration also did a proximity radial push, but it
-// overpowered chase right at the wall edge (proximity west + chase
-// east normalize to pure west) and made enemies oscillate in a
-// 4-tick cycle. Lookahead alone routes them around cleanly.
+// Fallback: if no obstacle is "ahead" (forward component ≥ 0) but
+// we're overlapping one (pushOut couldn't fully resolve in a single
+// tick), we push straight backward along −velocity so the entity
+// retreats rather than grinding against the rect.
 export function obstacleAvoidance(x, y, vx, vy, obstacles, lookAhead) {
   const speed = Math.hypot(vx, vy);
-  if (speed < 0.001) return { x: 0, y: 0 }; // stationary — nothing to project
+  if (speed < 0.001) return { x: 0, y: 0 };
   const dx = vx / speed, dy = vy / speed;
-  const tipX = x + dx * lookAhead;
-  const tipY = y + dy * lookAhead;
+  const perpX = -dy, perpY = dx;
+  const lookAhead2 = lookAhead * lookAhead;
+
+  // Pass 1 — find the strongest ahead obstacle to decide the steering side.
+  let bestStrength = 0;
+  let bestLateral = 0;
+  let overlapping = false;
+  for (const o of obstacles) {
+    const nx = Math.max(o.x, Math.min(x, o.x + o.w));
+    const ny = Math.max(o.y, Math.min(y, o.y + o.h));
+    const rdx = nx - x, rdy = ny - y;
+    const d2 = rdx * rdx + rdy * rdy;
+    if (d2 < 0.0001) { overlapping = true; continue; }  // inside the rect
+    const forward = rdx * dx + rdy * dy;
+    if (forward <= 0) continue;                         // obstacle behind
+    if (d2 >= lookAhead2) continue;
+    const strength = 1 - Math.sqrt(d2) / lookAhead;
+    if (strength > bestStrength) {
+      bestStrength = strength;
+      // Signed lateral offset of the entity *relative to the obstacle*
+      // on the perpendicular axis. Using the rect centre keeps the
+      // choice stable across the obstacle's whole face.
+      bestLateral = perpX * (x - (o.x + o.w * 0.5)) + perpY * (y - (o.y + o.h * 0.5));
+    }
+  }
+
+  // Overlapping and nothing "ahead" to route around: reverse course.
+  if (bestStrength === 0) {
+    return overlapping ? { x: -dx, y: -dy } : { x: 0, y: 0 };
+  }
+
+  // Pass 2 — accumulate perpendicular pushes, all on the same side.
+  // `>= 0` bias: ties consistently pick +perp so enemies on the exact
+  // midline of a thin rect don't flip-flop and clash.
+  const sign = bestLateral >= 0 ? 1 : -1;
   let ax = 0, ay = 0;
   for (const o of obstacles) {
-    const nx = Math.max(o.x, Math.min(tipX, o.x + o.w));
-    const ny = Math.max(o.y, Math.min(tipY, o.y + o.h));
-    const tdx = tipX - nx, tdy = tipY - ny;
-    if (tdx * tdx + tdy * tdy > 0.01) continue; // tip clear of this obstacle
-    const ocx = o.x + o.w * 0.5;
-    const ocy = o.y + o.h * 0.5;
-    const perpX = -dy, perpY = dx;
-    const sign = (perpX * (ocx - x) + perpY * (ocy - y)) < 0 ? 1 : -1;
-    ax += perpX * sign;
-    ay += perpY * sign;
+    const nx = Math.max(o.x, Math.min(x, o.x + o.w));
+    const ny = Math.max(o.y, Math.min(y, o.y + o.h));
+    const rdx = nx - x, rdy = ny - y;
+    const d2 = rdx * rdx + rdy * rdy;
+    if (d2 < 0.0001) continue;
+    const forward = rdx * dx + rdy * dy;
+    if (forward <= 0 || d2 >= lookAhead2) continue;
+    const strength = 1 - Math.sqrt(d2) / lookAhead;
+    ax += perpX * sign * strength;
+    ay += perpY * sign * strength;
   }
   return { x: ax, y: ay };
 }
