@@ -13,7 +13,11 @@ export const WEAPON_ICONS = {
 export function createWeapon(type) {
   switch (type) {
     case 'spit': return {
-      type: 'spit', cooldown: 0.8, timer: 0, damage: 15, speed: 350,
+      // Balance pass 2026-04-15 (bench): damage 15 → 20. Spit was
+      // falling off hard by wave 10 (17 DPS vs 185 for field at same
+      // wave). Gentle bump keeps it picked as a starter without
+      // making Spit+ / dragon_storm paths dominant.
+      type: 'spit', cooldown: 0.8, timer: 0, damage: 20, speed: 350,
       range: 300, count: 1, pierce: 1, color: '#9b59b6',
     };
     case 'breath': return {
@@ -32,8 +36,12 @@ export function createWeapon(type) {
       bladeCount: 2, rotSpeed: 3, color: '#ecf0f1', phase: 0,
     };
     case 'chain': return {
-      type: 'chain', cooldown: 1.2, timer: 0, damage: 20, range: 250,
-      chainRange: 120, chains: 2, color: '#00d2d3',
+      // Balance pass 2026-04-15 (bench): damage 20 → 28, cooldown 1.2
+      // → 0.9, chains 2 → 3. Chain was DECLINING wave 10→18 (101 → 70
+      // DPS) because single-target scaling couldn't keep up with HP.
+      // Faster fire + one extra bounce keeps it useful late game.
+      type: 'chain', cooldown: 0.9, timer: 0, damage: 28, range: 250,
+      chainRange: 130, chains: 3, color: '#00d2d3',
     };
     case 'meteor': return {
       type: 'meteor', cooldown: 3.5, timer: 0, damage: 50, blastRadius: 60,
@@ -47,8 +55,13 @@ export function createWeapon(type) {
       color: '#74b9ff', knockback: 100, phase: 0,
     };
     case 'lightning_field': return {
-      type: 'lightning_field', cooldown: 0.6, timer: 0, damage: 18, radius: 140,
-      color: '#ffeaa7', zapCount: 3,
+      // Balance pass 2026-04-15 (bench): damage 18 → 22, zapCount 3 → 4.
+      // Field was plateauing at ~200 DPS late game while other bases
+      // hit 1000+. Extra zap + small damage bump restores parity
+      // without making thunder_god more potent (thunder_god has its
+      // own damage field, doesn't inherit this).
+      type: 'lightning_field', cooldown: 0.6, timer: 0, damage: 22, radius: 140,
+      color: '#ffeaa7', zapCount: 4,
     };
     case 'dragon_storm': return {
       type: 'dragon_storm', cooldown: 0.4, timer: 0, damage: 25, speed: 300,
@@ -91,10 +104,15 @@ export function createWeapon(type) {
     // Breath + Orbit fusion. 4 rotating flame blades at 85u; each blade
     // has a 32u contact aura that applies burn on hit. No direct meteor
     // or shockwave — pure sustained DoT melee clear.
+    //
+    // Balance pass 2026-04-15 (bench): bladeDamage 20 → 16. First-run
+    // bench showed inferno_wheel at 5067 DPS at wave 18, 27% above the
+    // next evolution (fortress at 3977). Nerfed to put it in the
+    // evolution band (~4000 DPS) with the others.
     case 'inferno_wheel': return {
       type: 'inferno_wheel', cooldown: 0, timer: 0,
       bladeCount: 4, radius: 85, bladeRadius: 32,
-      bladeDamage: 20,
+      bladeDamage: 16,
       burnDps: 10, burnDuration: 2.0,
       rotSpeed: 3.2, phase: 0,
       color: '#f39c12',
