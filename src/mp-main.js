@@ -10,6 +10,14 @@ import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
+import { loadPrestige } from './shared/prestige.js';
+
+// Server validates + caps so we just send what we have. Cosmetics fall
+// back to null for never-played users with empty localStorage.
+function prestigePayload() {
+  const p = loadPrestige();
+  return { unlocks: p.unlocks, activeSkin: p.activeSkin, activeTrail: p.activeTrail };
+}
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -209,6 +217,30 @@ const TICK_DT = 1 / 20;  // server sends at 20Hz
 // Client-side particles (decorative only)
 let particles = [];
 let screenShake = 0;
+// Per-player fire-trail throttle keyed by id. Last position is used to
+// detect movement so stationary trail-wearers don't pile particles.
+const trailState = new Map();
+
+function spawnFireTrail(pl, dt) {
+  let st = trailState.get(pl.id);
+  if (!st) { st = { timer: 0, lastX: pl.x, lastY: pl.y }; trailState.set(pl.id, st); }
+  const dx = pl.x - st.lastX, dy = pl.y - st.lastY;
+  const moved = dx * dx + dy * dy > 0.5;
+  st.lastX = pl.x; st.lastY = pl.y;
+  st.timer -= dt;
+  if (st.timer > 0 || !moved) return;
+  st.timer = 0.03; // ~33 particles/sec while moving
+  particles.push({
+    x: pl.x + (Math.random() - 0.5) * 4,
+    y: pl.y + (Math.random() - 0.5) * 4,
+    vx: (Math.random() - 0.5) * 30,
+    vy: -40 - Math.random() * 60,
+    life: 0.3 + Math.random() * 0.3,
+    maxLife: 0.6,
+    radius: 2 + Math.random() * 2,
+    color: Math.random() > 0.4 ? '#f39c12' : '#e74c3c',
+  });
+}
 
 // Track previous state for change detection (sounds, death, etc.)
 let prevMyHp = null;
@@ -401,11 +433,11 @@ function joinGame() {
     const waitJoin = setInterval(() => {
       if (connected && ws && ws.readyState === WebSocket.OPEN) {
         clearInterval(waitJoin);
-        ws.send(JSON.stringify({ type: 'join', name: myName, weapon: selectedWeapon }));
+        ws.send(JSON.stringify({ type: 'join', name: myName, weapon: selectedWeapon, prestige: prestigePayload() }));
       }
     }, 100);
   } else {
-    ws.send(JSON.stringify({ type: 'join', name: myName, weapon: selectedWeapon }));
+    ws.send(JSON.stringify({ type: 'join', name: myName, weapon: selectedWeapon, prestige: prestigePayload() }));
   }
 
   if (!renderStarted) {
@@ -417,7 +449,7 @@ function joinGame() {
 function respawnGame() {
   document.getElementById('death-screen').style.display = 'none';
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'respawn', weapon: selectedWeapon }));
+    ws.send(JSON.stringify({ type: 'respawn', weapon: selectedWeapon, prestige: prestigePayload() }));
   }
   prevMyAlive = null;
   prevMyHp = null;
@@ -928,13 +960,55 @@ function render(dt) {
     const isMe = pl.id === myId;
     if (pl.x < cx - 60 || pl.x > cx + W + 60 || pl.y < cy - 60 || pl.y > cy + H + 60) continue;
     const playerRadius = 14;
+    const skin = pl.activeSkin;
 
-    // Player glow
-    ctx.shadowColor = isMe ? '#3498db' : pl.color;
-    ctx.shadowBlur = isMe ? 15 : 8;
+    // Shadow-skin aura behind sprite (matches SP render).
+    if (skin === 'skin_shadow') {
+      ctx.save();
+      ctx.globalAlpha = 0.3;
+      const auraR = playerRadius * 2.2;
+      const grad = ctx.createRadialGradient(pl.x, pl.y, playerRadius * 0.5, pl.x, pl.y, auraR);
+      grad.addColorStop(0, 'rgba(155, 89, 182, 0.5)');
+      grad.addColorStop(1, 'rgba(44, 0, 62, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(pl.x, pl.y, auraR, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+    // Gold-skin shimmer ring.
+    if (skin === 'skin_gold') {
+      ctx.save();
+      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(gameTime * 4);
+      ctx.strokeStyle = '#f1c40f';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(pl.x, pl.y, playerRadius + 4, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    // Glow color tracks skin.
+    const glowColor = skin === 'skin_gold' ? '#f39c12'
+                    : skin === 'skin_shadow' ? '#9b59b6'
+                    : (isMe ? '#3498db' : pl.color);
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = skin === 'skin_shadow' ? 25 : (isMe ? 15 : 8);
 
     // Player sprite/circle
-    if (!drawSprite('player', pl.x, pl.y, 2)) {
+    const spriteDrawn = drawSprite('player', pl.x, pl.y, 2);
+    if (spriteDrawn && skin) {
+      // Skin tint overlay.
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      const tintColor = skin === 'skin_gold' ? 'rgba(241, 196, 15, 0.35)'
+                      : 'rgba(100, 30, 150, 0.4)';
+      ctx.fillStyle = tintColor;
+      ctx.fillRect(pl.x - 16, pl.y - 16, 32, 32);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore();
+    }
+    if (!spriteDrawn) {
       ctx.fillStyle = pl.color;
       ctx.beginPath();
       ctx.arc(pl.x, pl.y, playerRadius, 0, Math.PI * 2);
@@ -946,6 +1020,12 @@ function render(dt) {
       }
     }
     ctx.shadowBlur = 0;
+
+    // Fire trail particles. Spawned local-only so we don't have to add
+    // a particle channel to the WS protocol — visible to whoever's
+    // watching the wearer. Keyed by player id so each wearer has its
+    // own throttle bucket.
+    if (pl.activeTrail === 'trail_fire') spawnFireTrail(pl, dt);
 
     // "YOU" indicator - arrow above self
     if (isMe) {

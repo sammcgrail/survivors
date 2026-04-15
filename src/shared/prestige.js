@@ -78,11 +78,51 @@ export function savePrestige(data) {
   } catch (_) { /* storage full — silently fail */ }
 }
 
-/** Apply all owned unlocks to a player object at run start. */
-export function applyPrestigeUnlocks(player) {
-  const prestige = loadPrestige();
+// Clamp a raw {id: count} map to catalog max per id, dropping unknown
+// ids. Shared by applyUnlocks + sanitizePrestige.
+function clampUnlocks(raw) {
+  const out = {};
+  if (!raw) return out;
   for (const u of UNLOCKS) {
-    const n = prestige.unlocks[u.id] || 0;
+    const n = Math.max(0, Math.min(Number(raw[u.id]) || 0, u.max));
+    if (n > 0) out[u.id] = n;
+  }
+  return out;
+}
+
+/** Apply an unlocks map (id -> count) to a player. Counts are clamped
+ *  to catalog max so untrusted client input can't over-buff —
+ *  server.mjs calls this on join with whatever the client sent. */
+export function applyUnlocks(player, unlocks) {
+  const clamped = clampUnlocks(unlocks);
+  for (const u of UNLOCKS) {
+    const n = clamped[u.id] || 0;
     if (n > 0) u.apply(player, n);
   }
+}
+
+/** SP convenience: pull from localStorage and apply. */
+export function applyPrestigeUnlocks(player) {
+  applyUnlocks(player, loadPrestige().unlocks);
+}
+
+/** Validate + sanitize a client-supplied prestige payload. Returns
+ *  `{ unlocks, activeSkin, activeTrail }` with each unlock count
+ *  capped, unknown keys stripped, and cosmetics required to be owned.
+ *  Used by server.mjs so peer validation lives in one place. */
+export function sanitizePrestige(raw) {
+  const out = { unlocks: {}, activeSkin: null, activeTrail: null };
+  if (!raw || typeof raw !== 'object') return out;
+  out.unlocks = clampUnlocks(raw.unlocks);
+  // Cosmetics must be in the catalog, marked cosmetic, and actually
+  // owned (count > 0). Catalog id-prefix decides skin vs trail.
+  const cosmetic = (id, prefix) => {
+    if (!id || !id.startsWith(prefix)) return null;
+    const u = UNLOCKS.find(x => x.id === id && x.cosmetic);
+    if (!u) return null;
+    return (out.unlocks[id] || 0) > 0 ? id : null;
+  };
+  out.activeSkin = cosmetic(raw.activeSkin, 'skin_');
+  out.activeTrail = cosmetic(raw.activeTrail, 'trail_');
+  return out;
 }

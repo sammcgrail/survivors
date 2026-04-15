@@ -17,6 +17,7 @@ import { createWeapon } from './src/shared/weapons.js';
 import { POWERUPS, getAvailableChoices } from './src/shared/sim/powerups.js';
 import { MAPS } from './src/shared/maps.js';
 import { pushOutOfObstacles } from './src/shared/sim/collision.js';
+import { applyUnlocks, sanitizePrestige } from './src/shared/prestige.js';
 
 // Map rotation. Tomorrow this'll be a vote / lobby choice; for now the
 // server picks a random one each session reset.
@@ -49,8 +50,8 @@ const players = new Map(); // ws -> player object
 let game = null;
 let nextId = 0;
 
-function makePlayer(pid, name, weaponType, rng, spawn) {
-  return {
+function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
+  const p = {
     id: pid,
     name: (name || `player${pid}`).slice(0, 12),
     color: COLORS[pid % COLORS.length],
@@ -79,7 +80,12 @@ function makePlayer(pid, name, weaponType, rng, spawn) {
     // outstanding level-up the player hasn't responded to yet.
     powerupStacks: { ['weapon_' + weaponType]: 1 },
     pendingChoice: null,
+    // Cosmetics broadcast in state so peers can render skins/trail.
+    activeSkin: prestige ? prestige.activeSkin : null,
+    activeTrail: prestige ? prestige.activeTrail : null,
   };
+  if (prestige) applyUnlocks(p, prestige.unlocks);
+  return p;
 }
 
 function initGame() {
@@ -200,6 +206,8 @@ function gameSnapshot() {
       alive: p.alive, level: p.level, kills: p.kills,
       xp: p.xp, xpToLevel: p.xpToLevel,
       weapons: p.weapons.map(w => w.type),
+      activeSkin: p.activeSkin,
+      activeTrail: p.activeTrail,
     })),
     enemies: game.enemies.map(e => ({
       name: e.name,
@@ -278,7 +286,8 @@ wss.on('connection', (ws) => {
       }
       const name = String(msg.name || '').slice(0, 12).trim() || `player${pid}`;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
-      player = makePlayer(pid, name, weapon, game.rng, MAPS[game.mapId].spawns[0]);
+      const prestige = sanitizePrestige(msg.prestige);
+      player = makePlayer(pid, name, weapon, game.rng, MAPS[game.mapId].spawns[0], prestige);
       players.set(ws, player);
       console.log(`[+] ${name} joined with ${weapon} (${players.size} players)`);
       ws.send(JSON.stringify({
@@ -307,7 +316,8 @@ wss.on('connection', (ws) => {
       // spam respawn to reset iframes + heal to full + reroll weapon.
       if (player.alive) return;
       const weapon = STARTING_WEAPONS.has(msg.weapon) ? msg.weapon : 'spit';
-      Object.assign(player, makePlayer(pid, player.name, weapon, game.rng, MAPS[game.mapId].spawns[0]));
+      const prestige = sanitizePrestige(msg.prestige);
+      Object.assign(player, makePlayer(pid, player.name, weapon, game.rng, MAPS[game.mapId].spawns[0], prestige));
     } else if (msg.type === 'choose') {
       // Reply to a pending levelup. choiceId must be one of the three the
       // server offered; otherwise drop silently (catch fat-finger races).
