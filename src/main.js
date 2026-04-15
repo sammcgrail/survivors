@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras } from './shared/render.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1040,26 +1040,7 @@ function render() {
   // --- gems (sprites) ---
   for (const gem of g.gems) drawGem(ctx, gem, drawSprite);
 
-  // --- heart pickups (sprites with bob) ---
-  for (const h of g.heartDrops) {
-    const bob = Math.sin(h.bobPhase) * 3;
-    const fadeAlpha = h.life < 3 ? h.life / 3 : 1; // fade out last 3 seconds
-    ctx.globalAlpha = fadeAlpha;
-    if (!drawSprite('heart', h.x, h.y + bob, 0.8, fadeAlpha)) {
-      // fallback — draw a simple heart shape
-      ctx.fillStyle = '#e74c3c';
-      ctx.beginPath();
-      ctx.arc(h.x - 4, h.y + bob - 2, 5, 0, Math.PI * 2);
-      ctx.arc(h.x + 4, h.y + bob - 2, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.beginPath();
-      ctx.moveTo(h.x - 9, h.y + bob);
-      ctx.lineTo(h.x, h.y + bob + 8);
-      ctx.lineTo(h.x + 9, h.y + bob);
-      ctx.fill();
-    }
-    ctx.globalAlpha = 1;
-  }
+  drawHeartDrops(ctx, g.heartDrops, drawSprite, cx, cy, W, H);
 
   const p = g.player;
   drawWeaponAuras(ctx, g.players, g.time);
@@ -1126,50 +1107,24 @@ function render() {
 
   // --- player ---
   if (p.alive) {
-    // iframe flicker
     const flickerHide = p.iframes > 0 && Math.floor(p.iframes * 10) % 2;
     const playerAlpha = flickerHide ? 0.4 : 1.0;
     const skin = g._activeSkin;
-
-    // skin-dependent glow color
     const glowColor = skin === 'skin_gold' ? '#f39c12'
                     : skin === 'skin_shadow' ? '#9b59b6'
                     : '#3498db';
-    ctx.shadowColor = p.iframes > 0 ? '#fff' : glowColor;
-    ctx.shadowBlur = skin === 'skin_shadow' ? 25 : 15;
-
-    drawSkinAura(ctx, p.x, p.y, p.radius, skin, g.time, playerAlpha);
-
-    // player sprite (tinted via compositing for skins)
-    const spriteDrawn = drawSprite('player', p.x, p.y, 2, playerAlpha);
-    if (spriteDrawn && skin) {
-      // overlay tint on top of sprite using 'source-atop' blend
-      ctx.save();
-      ctx.globalCompositeOperation = 'source-atop';
-      const tintColor = skin === 'skin_gold' ? 'rgba(241, 196, 15, 0.35)'
-                      : skin === 'skin_shadow' ? 'rgba(100, 30, 150, 0.4)'
-                      : null;
-      if (tintColor) {
-        ctx.fillStyle = tintColor;
-        ctx.fillRect(p.x - 16, p.y - 16, 32, 32);
-      }
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.restore();
-    }
-    if (!spriteDrawn) {
-      // fallback circle with skin colors
-      const fillColor = skin === 'skin_gold' ? (flickerHide ? 'rgba(241,196,15,0.5)' : '#f1c40f')
+    const fallbackFill = skin === 'skin_gold' ? (flickerHide ? 'rgba(241,196,15,0.5)' : '#f1c40f')
                        : skin === 'skin_shadow' ? (flickerHide ? 'rgba(100,30,150,0.5)' : '#6c3483')
                        : (flickerHide ? 'rgba(255,255,255,0.5)' : '#eee');
-      ctx.fillStyle = fillColor;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = glowColor;
-      ctx.lineWidth = 2;
-      ctx.stroke();
-    }
-    ctx.shadowBlur = 0;
+
+    drawPlayerBody(ctx, drawSprite, p, g.time, {
+      skin,
+      alpha: playerAlpha,
+      radius: p.radius,
+      glowColor,
+      shadowColor: p.iframes > 0 ? '#fff' : glowColor,
+      fallbackFill,
+    });
 
     // facing indicator (little triangle pointing in move direction)
     const fd = Math.sqrt(p.facing.x ** 2 + p.facing.y ** 2);

@@ -505,3 +505,78 @@ export function drawGem(ctx, gem, drawSprite, fallbackRadius = 6) {
   ctx.fill();
   ctx.globalAlpha = 1;
 }
+
+// Heart pickups — sprite with bob + late-life fade, triangle-rounded
+// heart-shape fallback. Viewport-culled (20px margin).
+export function drawHeartDrops(ctx, heartDrops, drawSprite, cx, cy, W, H) {
+  for (const h of heartDrops) {
+    if (h.x < cx - 20 || h.x > cx + W + 20 || h.y < cy - 20 || h.y > cy + H + 20) continue;
+    const bob = Math.sin(h.bobPhase) * 3;
+    const fadeAlpha = h.life < 3 ? h.life / 3 : 1;
+    ctx.globalAlpha = fadeAlpha;
+    if (!drawSprite('heart', h.x, h.y + bob, 0.8, fadeAlpha)) {
+      ctx.fillStyle = '#e74c3c';
+      ctx.beginPath();
+      ctx.arc(h.x - 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+      ctx.arc(h.x + 4, h.y + bob - 2, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(h.x - 9, h.y + bob);
+      ctx.lineTo(h.x, h.y + bob + 8);
+      ctx.lineTo(h.x + 9, h.y + bob);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+}
+
+// Player body — skin glow + shadow + sprite with skin-tint overlay,
+// fallback circle. Caller handles name/HP/decorations since those
+// differ between SP (single player + facing) and MP (name + isMe
+// arrow + level badge).
+//
+// `opts` fields:
+//   skin, alpha, radius, glowColor, fallbackFill, strokeOnFallback
+export function drawPlayerBody(ctx, drawSprite, p, time, opts = {}) {
+  const {
+    skin,
+    alpha = 1,
+    radius = 14,
+    glowColor = '#3498db',
+    shadowColor = glowColor,
+    shadowBlur,
+    fallbackFill = '#eee',
+    strokeOnFallback = true,
+  } = opts;
+
+  ctx.shadowColor = shadowColor;
+  ctx.shadowBlur = shadowBlur !== undefined ? shadowBlur : (skin === 'skin_shadow' ? 25 : 15);
+
+  drawSkinAura(ctx, p.x, p.y, radius, skin, time, alpha);
+
+  const drawn = drawSprite('player', p.x, p.y, 2, alpha);
+  if (drawn && skin) {
+    const tintColor = skin === 'skin_gold' ? 'rgba(241, 196, 15, 0.35)'
+                    : skin === 'skin_shadow' ? 'rgba(100, 30, 150, 0.4)'
+                    : null;
+    if (tintColor) {
+      ctx.save();
+      ctx.globalCompositeOperation = 'source-atop';
+      ctx.fillStyle = tintColor;
+      ctx.fillRect(p.x - 16, p.y - 16, 32, 32);
+      ctx.restore();
+    }
+  }
+  if (!drawn) {
+    ctx.fillStyle = fallbackFill;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    if (strokeOnFallback) {
+      ctx.strokeStyle = glowColor;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }
+  ctx.shadowBlur = 0;
+}
