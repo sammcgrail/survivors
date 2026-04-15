@@ -209,8 +209,12 @@ function updateEnemyTick(g, dt, hash) {
           const chaseX = target.dx / target.dist;
           const chaseY = target.dy / target.dist;
           const f = computeFlockSteering(g, hash, i);
+          // Lookahead distance scales with speed so fast enemies see
+          // further ahead and have room to steer. At 60u/s (blob) this
+          // gives ~60u lookahead; at 130u/s (fast) ~110u — enough to
+          // turn around corners instead of overshooting.
           const avoid = g.obstacles && g.obstacles.length > 0
-            ? obstacleAvoidance(e.x, e.y, e.vx, e.vy, g.obstacles, e.radius + 60)
+            ? obstacleAvoidance(e.x, e.y, e.vx, e.vy, g.obstacles, e.radius + e.speed * 0.8)
             : ZERO_VEC;
           let vx = chaseX * fc.chaseWeight
                  + f.sepX * fc.sepWeight
