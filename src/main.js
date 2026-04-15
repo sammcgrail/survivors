@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects } from './shared/render.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1311,102 +1311,8 @@ function render() {
   drawChainEffects(ctx, g.chainEffects);
   drawMeteorEffects(ctx, g.meteorEffects);
 
-  // --- enemies (sprites with shape fallback) ---
-  for (const e of g.enemies) {
-    // skip if off screen
-    if (e.x < cx - 50 || e.x > cx + W + 50 || e.y < cy - 50 || e.y > cy + H + 50) continue;
-    if (e.dying === undefined) markSeen(e.name, g.wave); // bestiary discovery
-
-    // death animation — shrink + fade
-    if (e.dying !== undefined) {
-      const t = e.dying / 0.2; // 1.0 → 0.0 over 200ms
-      const dyingScale = (0.3 + t * 0.7) * (e.radius / 8); // fold shrink into final scale
-      const spriteName = e.sprite || 'blob';
-      // single drawImage with alpha — no save/translate/scale/restore
-      if (!drawSprite(spriteName, e.x, e.y, dyingScale, t)) {
-        const prev = ctx.globalAlpha;
-        ctx.globalAlpha = t;
-        ctx.fillStyle = '#fff';
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, e.radius * (0.3 + t * 0.7), 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = prev;
-      }
-      continue; // skip normal render + hp bar
-    }
-
-    const spriteScale = e.radius / 8; // scale sprite to match enemy radius
-    const spriteName = e.sprite || 'blob';
-
-    if (e.hitFlash > 0) {
-      // draw sprite then overlay white flash circle
-      if (!drawSprite(spriteName, e.x, e.y, spriteScale)) {
-        ctx.fillStyle = e.color;
-        ctx.beginPath();
-        ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.fillStyle = `rgba(255,255,255,${Math.min(e.hitFlash * 5, 0.6)})`;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius * 0.8, 0, Math.PI * 2);
-      ctx.fill();
-    } else if (!drawSprite(spriteName, e.x, e.y, spriteScale)) {
-      // fallback to colored circle if sprites not loaded
-      ctx.fillStyle = e.color;
-      ctx.beginPath();
-      ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    if (e.hp < e.maxHp) {
-      drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
-    }
-  }
-
-  // --- projectiles (sprites with trail) ---
-  for (const proj of g.projectiles) {
-    // trail sprites
-    const trailLen = 4;
-    const speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
-    if (speed > 0) {
-      const nx = -proj.vx / speed;
-      const ny = -proj.vy / speed;
-      for (let t = 1; t <= trailLen; t++) {
-        const alpha = 0.3 - t * 0.06;
-        const tScale = (1 - t * 0.15) * 0.7;
-        if (!drawSprite('spitTrail', proj.x + nx * t * 6, proj.y + ny * t * 6, tScale, alpha)) {
-          ctx.globalAlpha = alpha;
-          ctx.fillStyle = proj.color;
-          ctx.beginPath();
-          ctx.arc(proj.x + nx * t * 6, proj.y + ny * t * 6, proj.radius * (1 - t * 0.15), 0, Math.PI * 2);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-      }
-    }
-    // main projectile sprite
-    ctx.shadowColor = proj.color;
-    ctx.shadowBlur = 10;
-    if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
-      ctx.fillStyle = proj.color;
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    // Drop the occasional ember behind the projectile so the trail
-    // reads through the sprite even at high speed.
-    if (Math.random() < 0.4) {
-      g.particles.push({
-        x: proj.x + (Math.random() - 0.5) * 4,
-        y: proj.y + (Math.random() - 0.5) * 4,
-        vx: 0, vy: 0,
-        life: 0.25, maxLife: 0.25,
-        radius: 1.5 + Math.random(),
-        color: proj.color,
-      });
-    }
-  }
+  drawEnemies(ctx, g.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, g.wave));
+  drawProjectiles(ctx, g.projectiles, drawSprite, g.particles, cx, cy, W, H);
 
   // --- charge effect (streak along charge vector) ---
   for (const w of p.weapons) {
