@@ -5,6 +5,7 @@
 
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
+import { installKeyboardInput } from './shared/input.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
@@ -883,44 +884,21 @@ function render() {
 }
 
 // --- input ---
-const KEY_MAP = {
-  'w': 'up', 'arrowup': 'up',
-  's': 'down', 'arrowdown': 'down',
-  'a': 'left', 'arrowleft': 'left',
-  'd': 'right', 'arrowright': 'right',
-};
-
-document.addEventListener('keydown', e => {
-  // level-up keyboard shortcuts
-  if (paused && window._levelChoices && window._levelChoices.length > 0) {
-    const num = parseInt(e.key);
-    if (num >= 1 && num <= window._levelChoices.length) {
-      window._levelChoices[num - 1]();
-      e.preventDefault();
-      return;
-    }
-  }
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-  const k = KEY_MAP[e.key.toLowerCase()];
-  if (k) { keys[k] = true; e.preventDefault(); }
+// Keyboard handlers + KEY_MAP live in shared/input.js. Level-up
+// callback gates on `paused` (SP's pause flag = level-up overlay
+// is open). `onClear` resets analog joystick state too — the
+// joystick itself stays inline below since SP needs analog
+// magnitude that MP doesn't (MP only sends boolean keys to server).
+installKeyboardInput(keys, {
+  onLevelUpKey(idx) {
+    if (!paused || !window._levelChoices) return false;
+    const pick = window._levelChoices[idx];
+    if (!pick) return false;
+    pick();
+    return true;
+  },
+  onClear() { analogMove.x = 0; analogMove.y = 0; },
 });
-
-document.addEventListener('keyup', e => {
-  if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-  const k = KEY_MAP[e.key.toLowerCase()];
-  if (k) { keys[k] = false; e.preventDefault(); }
-});
-
-// Clear all input on blur / tab hide. Without this, holding a key, alt-tabbing,
-// and releasing it while the page is hidden leaves the key permanently "down"
-// — player drifts forever after returning. Mobile home-button does the same.
-function clearAllInput() {
-  keys.up = keys.down = keys.left = keys.right = false;
-  analogMove.x = 0;
-  analogMove.y = 0;
-}
-window.addEventListener('blur', clearAllInput);
-document.addEventListener('visibilitychange', () => { if (document.hidden) clearAllInput(); });
 
 // --- mobile invisible touch joystick ---
 const joyZone = document.getElementById('joystick-zone');
