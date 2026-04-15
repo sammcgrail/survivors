@@ -590,13 +590,29 @@ export function updateMeteorEffects(g, dt) {
       m.phase = 'explode';
       m.life = 0.3;
       emit(g, EVT.METEOR_EXPLODE, { x: m.x, y: m.y, color: m.color, radius: m.radius, pid: m.owner });
-      for (let j = g.enemies.length - 1; j >= 0; j--) {
-        const e = g.enemies[j];
-        const dx = m.x - e.x, dy = m.y - e.y;
-        if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
-          damageEnemy(g, g.enemies[j], m.damage, m.owner);
-          // Meteor freeze — hard landing stuns enemies in the blast zone.
-          if (m.damage > 0) applyStatus(g, e, { type: 'freeze', remaining: 0.8, magnitude: 0, tickRate: 0 });
+      if (m.targetsPlayer) {
+        // Enemy-source blast (bomber death) — hits players, not other
+        // enemies. Obeys iframes so a bomber chain-kill doesn't one-shot
+        // the player through multiple overlapping rings.
+        for (const p of g.players) {
+          if (!p.alive || p.iframes > 0) continue;
+          const dx = m.x - p.x, dy = m.y - p.y;
+          if (dx * dx + dy * dy < (m.radius + p.radius) ** 2) {
+            const dmg = Math.max(1, m.damage - (p.armor || 0));
+            p.hp -= dmg;
+            p.iframes = 0.5;
+            emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: m.sourceName || 'bomber', pid: p.id });
+          }
+        }
+      } else {
+        for (let j = g.enemies.length - 1; j >= 0; j--) {
+          const e = g.enemies[j];
+          const dx = m.x - e.x, dy = m.y - e.y;
+          if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
+            damageEnemy(g, g.enemies[j], m.damage, m.owner);
+            // Meteor freeze — hard landing stuns enemies in the blast zone.
+            if (m.damage > 0) applyStatus(g, e, { type: 'freeze', remaining: 0.8, magnitude: 0, tickRate: 0 });
+          }
         }
       }
     } else if (m.phase === 'explode' && m.life <= 0) {

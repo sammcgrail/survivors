@@ -15,9 +15,11 @@ import { updateHearts } from './hearts.js';
 import { updateConsumables } from './consumables.js';
 import { updateEnemyProjectiles } from './enemyProjectiles.js';
 import { updateTerrain } from './terrain.js';
+import { updatePlayerStatus } from './playerStatus.js';
 
 export function tickSim(g, dt) {
   updateTerrain(g, dt);          // sets p._terrainSlow, applies hostile DoT
+  updatePlayerStatus(g, dt);     // poisoner DoT
   updateWaves(g, dt);
   updateWeapons(g, dt);
   updateProjectiles(g, dt);
