@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem } from './shared/render.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -965,44 +965,8 @@ function render(dt) {
     ctx.shadowBlur = 0;
   }
 
-  // --- chain effects (chain lightning bolts + lightning_field zaps) ---
-  for (const ce of (state.chainEffects || [])) {
-    const alpha = Math.max(0, Math.min(1, ce.life / 0.2));
-    ctx.strokeStyle = ce.color;
-    ctx.globalAlpha = alpha;
-    ctx.lineWidth = 2;
-    ctx.shadowColor = ce.color;
-    ctx.shadowBlur = 8;
-    ctx.beginPath();
-    ctx.moveTo(ce.points[0].x, ce.points[0].y);
-    for (let i = 1; i < ce.points.length; i++) ctx.lineTo(ce.points[i].x, ce.points[i].y);
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.globalAlpha = 1;
-  }
-
-  // --- meteor effects (warn ring then explosion flash) ---
-  for (const m of (state.meteorEffects || [])) {
-    if (m.x < cx - m.radius || m.x > cx + W + m.radius || m.y < cy - m.radius || m.y > cy + H + m.radius) continue;
-    if (m.phase === 'warn') {
-      const a = 0.5 + Math.sin(gameTime * 12) * 0.3;
-      ctx.strokeStyle = m.color;
-      ctx.globalAlpha = a;
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.globalAlpha = 1;
-    } else {
-      const a = Math.max(0, Math.min(1, m.life / 0.3));
-      ctx.fillStyle = m.color;
-      ctx.globalAlpha = a * 0.5;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, m.radius, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-  }
+  drawChainEffects(ctx, state.chainEffects || []);
+  drawMeteorEffects(ctx, state.meteorEffects || []);
 
   // --- players ---
   for (const pl of state.players) {
