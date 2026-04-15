@@ -23,9 +23,13 @@ export function damageEnemy(g, e, dmg, killerId) {
   if (e.dying) return false;
   e.hp -= dmg;
   e.hitFlash = 1;
-  // damage numbers gated to dmg >= 5 to avoid floating-text spam from
-  // breath ticks. Client decides what to render based on the dmg value.
-  emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
+  // dmg < 5 hits never trigger client visuals (text/sfx/crit gated
+  // at >= 5), so skip emission server-side. Drops the bandwidth
+  // pressure from breath weapons fanning out across many enemies
+  // every tick — was the dominant event volume in 8-player MP.
+  if (dmg >= 5) {
+    emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
+  }
   if (e.hp <= 0) {
     spawnGem(g, e.x, e.y, e.xp);
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
