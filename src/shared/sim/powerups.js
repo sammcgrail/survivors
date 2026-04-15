@@ -20,14 +20,17 @@ export const POWERUPS = [
   { id: 'weapon_meteor', name: 'Meteor', desc: 'Drops AoE on enemy clusters', icon: '☄️', max: 1, apply(g, p) { p.weapons.push(createWeapon('meteor')); } },
   { id: 'weapon_shield', name: 'Barrier', desc: 'Knockback shield — pushes and damages nearby enemies', icon: '🛡️', max: 1, apply(g, p) { p.weapons.push(createWeapon('shield')); } },
   { id: 'weapon_lightning_field', name: 'Lightning Field', desc: 'Passive zaps random nearby enemies', icon: '⚡', max: 1, apply(g, p) { p.weapons.push(createWeapon('lightning_field')); } },
+  // Balance pass 2026-04-15 (VoX): buffed most weapon upgrades, nerfed
+  // barrier_up (shield was dominating — players were untouchable with
+  // stacked barrier). Non-shield builds now scale harder per stack.
   { id: 'spit_up', name: 'Spit+', desc: 'Extra projectile + pierce', icon: '🔮+', max: 3, requires: 'weapon_spit', apply(g, p) { let w = p.weapons.find(w=>w.type==='spit'); if(w){w.count++;w.pierce++;} } },
-  { id: 'breath_up', name: 'Breath+', desc: '+30% aura radius', icon: '🌀+', max: 3, requires: 'weapon_breath', apply(g, p) { let w = p.weapons.find(w=>w.type==='breath'); if(w) w.radius *= 1.3; } },
-  { id: 'charge_up', name: 'Rush+', desc: '+40% charge damage & width', icon: '🐂+', max: 3, requires: 'weapon_charge', apply(g, p) { let w = p.weapons.find(w=>w.type==='charge'); if(w){w.damage*=1.4;w.width*=1.4;} } },
-  { id: 'orbit_up', name: 'Orbit+', desc: '+1 orbiting blade', icon: '🗡️+', max: 3, requires: 'weapon_orbit', apply(g, p) { let w = p.weapons.find(w=>w.type==='orbit'); if(w) w.bladeCount++; } },
-  { id: 'chain_up', name: 'Chain+', desc: '+1 chain target', icon: '⚡+', max: 3, requires: 'weapon_chain', apply(g, p) { let w = p.weapons.find(w=>w.type==='chain'); if(w) w.chains++; } },
-  { id: 'meteor_up', name: 'Meteor+', desc: '+40% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.4;w.damage*=1.4;} } },
-  { id: 'shield_up', name: 'Barrier+', desc: '+25% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.25;w.knockback*=1.25;} } },
-  { id: 'lightning_field_up', name: 'Field+', desc: '+1 zap target & +20% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount++;w.radius*=1.2;} } },
+  { id: 'breath_up', name: 'Breath+', desc: '+40% aura radius', icon: '🌀+', max: 3, requires: 'weapon_breath', apply(g, p) { let w = p.weapons.find(w=>w.type==='breath'); if(w) w.radius *= 1.4; } },
+  { id: 'charge_up', name: 'Rush+', desc: '+50% charge damage & width', icon: '🐂+', max: 3, requires: 'weapon_charge', apply(g, p) { let w = p.weapons.find(w=>w.type==='charge'); if(w){w.damage*=1.5;w.width*=1.5;} } },
+  { id: 'orbit_up', name: 'Orbit+', desc: '+1 blade & +10% rotation', icon: '🗡️+', max: 3, requires: 'weapon_orbit', apply(g, p) { let w = p.weapons.find(w=>w.type==='orbit'); if(w){w.bladeCount++;w.rotSpeed*=1.1;} } },
+  { id: 'chain_up', name: 'Chain+', desc: '+1 chain target & +20% damage', icon: '⚡+', max: 3, requires: 'weapon_chain', apply(g, p) { let w = p.weapons.find(w=>w.type==='chain'); if(w){w.chains++;w.damage*=1.2;} } },
+  { id: 'meteor_up', name: 'Meteor+', desc: '+50% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.5;w.damage*=1.5;} } },
+  { id: 'shield_up', name: 'Barrier+', desc: '+15% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.15;w.knockback*=1.15;} } },
+  { id: 'lightning_field_up', name: 'Field+', desc: '+2 zap targets & +25% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount+=2;w.radius*=1.25;} } },
   // EVOLUTIONS: fuse two maxed base weapons into a combined form. Gated
   // by `requiresEvo` — getAvailableChoices hides the entry until both
   // source `_up` stacks hit 3. Each `apply` strips the sources and pushes

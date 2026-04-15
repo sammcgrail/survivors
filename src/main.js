@@ -440,7 +440,7 @@ function initGame() {
   // thresholds to match and queue a level-up choice for the bonus level.
   const prestigeLevels = p.level - 1;
   if (prestigeLevels > 0) {
-    for (let i = 0; i < prestigeLevels; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
+    for (let i = 0; i < prestigeLevels; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.30);
   }
 
   return {

@@ -37,8 +37,11 @@ export function createWeapon(type) {
       color: '#ff6348',
     };
     case 'shield': return {
-      type: 'shield', cooldown: 99999, timer: 99999, damage: 20, radius: 50,
-      color: '#74b9ff', knockback: 200, phase: 0,
+      // Nerfed per VoX 2026-04-15: was radius 50 / damage 20 / knockback 200.
+      // Fortress build still carries, but barrier is no longer a
+      // "stand still and win" button on its own.
+      type: 'shield', cooldown: 99999, timer: 99999, damage: 12, radius: 35,
+      color: '#74b9ff', knockback: 100, phase: 0,
     };
     case 'lightning_field': return {
       type: 'lightning_field', cooldown: 0.6, timer: 0, damage: 18, radius: 140,

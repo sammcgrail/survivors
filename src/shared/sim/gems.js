@@ -34,7 +34,7 @@ export function updateGems(g, dt) {
         while (p.xp >= p.xpToLevel) {
           p.xp -= p.xpToLevel;
           p.level++;
-          p.xpToLevel = Math.floor(p.xpToLevel * 1.45);
+          p.xpToLevel = Math.floor(p.xpToLevel * 1.30);
           emit(g, EVT.LEVEL_UP, { level: p.level, pid: p.id });
         }
         break;
