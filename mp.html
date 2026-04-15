@@ -72,8 +72,12 @@ body[data-mode="mp"] .sp-only { display: none !important; }
 .weapon-card .wc-name { color: #e74c3c; font-size: 0.95rem; font-weight: 700; margin-bottom: 4px; }
 .weapon-card .wc-desc { color: #777; font-size: 0.7rem; line-height: 1.4; }
 @media (pointer: coarse) {
-  .weapon-select { flex-direction: column; align-items: center; gap: 10px; }
-  .weapon-card { width: 240px; padding: 12px; }
+  #start-screen, #death-screen { justify-content: flex-start; overflow-y: auto; padding: 24px 0; }
+  .weapon-select { flex-direction: row; flex-wrap: wrap; gap: 8px; max-width: 340px; }
+  .weapon-card { width: 150px; padding: 10px 8px; }
+  .weapon-card .wc-icon { font-size: 1.4rem; margin-bottom: 4px; }
+  .weapon-card .wc-name { font-size: 0.8rem; }
+  .weapon-card .wc-desc { font-size: 0.6rem; }
 }
 
 #xp-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 6px; background: #111; z-index: 10; }
