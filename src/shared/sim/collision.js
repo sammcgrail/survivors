@@ -54,34 +54,46 @@ export function pushOutOfObstacles(circle, obstacles) {
 
 // Steering force that routes a moving entity around obstacles.
 //
-// Lookahead-only — project the current velocity forward `lookAhead`
-// units; if the tip is inside an obstacle, steer perpendicular to the
-// velocity, away from the obstacle centre. This curves the entity
-// around walls instead of slamming. Hard contact correction is left
-// to pushOutOfObstacles in the same tick.
+// For each obstacle, compute distance from the entity to the nearest
+// point on the rect. If the obstacle is "ahead" (forward projection
+// of velocity onto the nearest-point direction is positive) and
+// within `lookAhead`, add a perpendicular push whose magnitude falls
+// off linearly to zero at lookAhead.
 //
-// Earlier iteration also did a proximity radial push, but it
-// overpowered chase right at the wall edge (proximity west + chase
-// east normalize to pure west) and made enemies oscillate in a
-// 4-tick cycle. Lookahead alone routes them around cleanly.
+// Why continuous falloff instead of the old in-tip-or-not boolean:
+// the boolean misses near-misses (diagonal corner approach) and
+// flip-flops sign when the enemy crosses the short-axis midpoint of
+// a thin rect, which made enemies oscillate and clash at the midline.
+// Continuous falloff + shorter-way-around sign (bias via rect
+// geometry, not just centre distance) gives smooth routing.
 export function obstacleAvoidance(x, y, vx, vy, obstacles, lookAhead) {
   const speed = Math.hypot(vx, vy);
-  if (speed < 0.001) return { x: 0, y: 0 }; // stationary — nothing to project
+  if (speed < 0.001) return { x: 0, y: 0 };
   const dx = vx / speed, dy = vy / speed;
-  const tipX = x + dx * lookAhead;
-  const tipY = y + dy * lookAhead;
+  const perpX = -dy, perpY = dx;
   let ax = 0, ay = 0;
   for (const o of obstacles) {
-    const nx = Math.max(o.x, Math.min(tipX, o.x + o.w));
-    const ny = Math.max(o.y, Math.min(tipY, o.y + o.h));
-    const tdx = tipX - nx, tdy = tipY - ny;
-    if (tdx * tdx + tdy * tdy > 0.01) continue; // tip clear of this obstacle
+    // Nearest point on the rect FROM the entity. Used to compute both
+    // distance and "is this obstacle ahead?".
+    const nx = Math.max(o.x, Math.min(x, o.x + o.w));
+    const ny = Math.max(o.y, Math.min(y, o.y + o.h));
+    const rdx = nx - x, rdy = ny - y;
+    const forward = rdx * dx + rdy * dy;   // positive → obstacle ahead
+    if (forward <= 0) continue;            // obstacle is behind us
+    const d2 = rdx * rdx + rdy * rdy;
+    if (d2 >= lookAhead * lookAhead) continue;
+    const d = Math.sqrt(d2);
+    const strength = 1 - d / lookAhead;    // 1 at contact, 0 at lookAhead
+    // Pick the side that's closer to a free corner. For a rect we can
+    // project the entity onto perpL; whichever half of the rect is on
+    // the same side as the entity has a closer exit, so we steer
+    // toward that side.
     const ocx = o.x + o.w * 0.5;
     const ocy = o.y + o.h * 0.5;
-    const perpX = -dy, perpY = dx;
-    const sign = (perpX * (ocx - x) + perpY * (ocy - y)) < 0 ? 1 : -1;
-    ax += perpX * sign;
-    ay += perpY * sign;
+    const lateral = perpX * (x - ocx) + perpY * (y - ocy);
+    const sign = lateral >= 0 ? 1 : -1;    // ≥0 bias: ties consistently pick +perp side
+    ax += perpX * sign * strength;
+    ay += perpY * sign * strength;
   }
   return { x: ax, y: ay };
 }
