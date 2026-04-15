@@ -8,7 +8,7 @@ import { SPRITE_SIZE, SP } from './shared/sprites.js';
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
-import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
+import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 
 const canvas = document.getElementById('c');
@@ -594,12 +594,13 @@ function render(dt) {
   // Snap to integer pixels — sub-pixel translation causes shimmer on retina.
   ctx.translate(-Math.round(cx), -Math.round(cy));
 
-  // --- background: tiled pattern (when map has a tileset loaded) or
-  //     fallback dark grid lines ---
+  // --- background: tiled pattern, neon abstract render, or grid fallback ---
   if (bgCanvas) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(bgCanvas, 0, 0, bgCanvas.width, bgCanvas.height, 0, 0, arena.w, arena.h);
     ctx.imageSmoothingEnabled = true;
+  } else if (MAPS[mapId]?.abstractRender === 'neon') {
+    drawNeonBackground(ctx, cx, cy, W, H, arena);
   } else {
     const gridSize = 60;
     const startX = Math.floor(cx / gridSize) * gridSize;

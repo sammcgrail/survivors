@@ -15,7 +15,7 @@ import { escapeHTML } from './shared/htmlEscape.js';
 import { MAPS } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
-import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
+import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks } from './shared/prestige.js';
 
 const canvas = document.getElementById('c');
@@ -918,15 +918,17 @@ function render() {
 
   ctx.translate(-cx, -cy);
 
-  // --- background: pre-baked Wang-sampled tileset (when loaded) or
-  //     fallback dark grid lines. The bg canvas is at native tile
-  //     resolution; nearest-neighbor scale to world size keeps the
-  //     pixel-art crisp when zoomed in. ---
+  // --- background: pre-baked Wang-sampled tileset (when loaded), neon
+  //     abstract render for code-only maps, or fallback dark grid. The
+  //     bg canvas is at native tile resolution; nearest-neighbor scale
+  //     keeps the pixel art crisp. ---
   if (g.bgCanvas) {
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(g.bgCanvas, 0, 0, g.bgCanvas.width, g.bgCanvas.height,
                   0, 0, g.arena.w, g.arena.h);
     ctx.imageSmoothingEnabled = true;
+  } else if (MAPS[g.mapId]?.abstractRender === 'neon') {
+    drawNeonBackground(ctx, cx, cy, W, H, g.arena);
   } else {
     const gridSize = 60;
     const startX = Math.floor(cx / gridSize) * gridSize;

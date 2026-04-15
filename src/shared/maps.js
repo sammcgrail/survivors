@@ -80,6 +80,52 @@ export const MAPS = {
     spawns: [{ x: 1500, y: 1500, radius: 150 }],
   },
 
+  // "Neon Grid" — code-rendered abstract map. No pixellab assets; the
+  // obstacles are geometric primitives that the renderer paints with a
+  // glowing-line aesthetic. Layout is a hand-tuned ring pattern: 12
+  // pillars outside, 12 pillars inside (offset half-angle), and 4 wall
+  // segments forming a central square with cardinal openings.
+  neon: {
+    name: 'Neon Grid',
+    width: 3000, height: 3000,
+    tileset: null,
+    terrainEffect: null,
+    abstractRender: 'neon',  // signals the renderer to use neon bg + glowing obstacles
+    obstacles: (() => {
+      const o = [];
+      const cx = 1500, cy = 1500;
+      const ring = (count, radius, angleOffset, type, size) => {
+        for (let i = 0; i < count; i++) {
+          const a = angleOffset + (i * Math.PI * 2) / count;
+          o.push({
+            x: cx + Math.cos(a) * radius - size / 2,
+            y: cy + Math.sin(a) * radius - size / 2,
+            w: size, h: size, type,
+          });
+        }
+      };
+      ring(12, 1100, 0, 'neon_pillar', 70);
+      ring(8, 600, Math.PI / 8, 'neon_pillar', 60);
+      // Inner square arena (200u square, 4 walls each 280 long, with 80u
+      // gap on each side at the cardinal midpoints — N/S/E/W openings).
+      const w = 280, t = 30, gap = 80, half = 200;
+      // Top wall (split around cardinal opening)
+      o.push({ x: cx - half - w/2, y: cy - half - t/2, w: (w - gap)/2 + 100, h: t, type: 'neon_wall' });
+      o.push({ x: cx + gap/2,       y: cy - half - t/2, w: (w - gap)/2 + 100, h: t, type: 'neon_wall' });
+      // Bottom
+      o.push({ x: cx - half - w/2, y: cy + half - t/2, w: (w - gap)/2 + 100, h: t, type: 'neon_wall' });
+      o.push({ x: cx + gap/2,       y: cy + half - t/2, w: (w - gap)/2 + 100, h: t, type: 'neon_wall' });
+      // Left
+      o.push({ x: cx - half - t/2, y: cy - half - w/2, w: t, h: (w - gap)/2 + 100, type: 'neon_wall' });
+      o.push({ x: cx - half - t/2, y: cy + gap/2,       w: t, h: (w - gap)/2 + 100, type: 'neon_wall' });
+      // Right
+      o.push({ x: cx + half - t/2, y: cy - half - w/2, w: t, h: (w - gap)/2 + 100, type: 'neon_wall' });
+      o.push({ x: cx + half - t/2, y: cy + gap/2,       w: t, h: (w - gap)/2 + 100, type: 'neon_wall' });
+      return o;
+    })(),
+    spawns: [{ x: 1500, y: 1500, radius: 80 }],
+  },
+
   graveyard: {
     name: 'Forsaken Graveyard',
     width: 3000, height: 3000,
@@ -112,7 +158,7 @@ export const MAPS = {
 // Obstacle types that block projectiles (trees do not — projectiles
 // pass through foliage). Cached as a Set so the projectile loop is
 // O(1) per check instead of comparing strings.
-export const PROJECTILE_BLOCKERS = new Set(['wall', 'pillar', 'tomb']);
+export const PROJECTILE_BLOCKERS = new Set(['wall', 'pillar', 'tomb', 'neon_wall', 'neon_pillar']);
 
 // Pick a starting map. Currently fixed; later this'll be a vote /
 // rotation / lobby choice.
