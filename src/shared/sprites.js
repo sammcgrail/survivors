@@ -15,8 +15,8 @@ export const SP = {
   spit:       [0, 1],
   spitTrail:  [1, 1],
   skull:      [5, 1],
-  boss:       [0, 2],
-  brute:      [1, 2],
-  elite:      [2, 2],
-  spawner:    [3, 2],
+  // Row 2 (boss, brute, elite, spawner) are un-drawn placeholders —
+  // near-black background pixels, not real sprites. Omitted so
+  // drawSprite returns false and the colored-circle fallback renders.
+  // TODO: draw actual sprites for these enemy types.
 };
