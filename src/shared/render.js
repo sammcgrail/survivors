@@ -265,16 +265,22 @@ export function drawMeteorEffects(ctx, meteorEffects) {
 // identically to SP (vs. the old MP code which faked phase from
 // gameTime and hardcoded colors).
 //
+// Applies sizeMulti + projectileBonus at render time so SP (raw
+// w.radius) and MP (snapshot w.radius) both end up at the actual
+// effective damage-zone size under Amplify/Volley upgrades.
+//
 // Charge effect is NOT handled here — it's SP-only until the server
 // starts shipping speed/duration/chargeTimer/width for the charge
 // weapon. Callers add charge render inline after this.
 export function drawWeaponAuras(ctx, players, time) {
   for (const p of players) {
     if (!p.alive) continue;
+    const sm = p.sizeMulti || 1;
+    const pb = p.projectileBonus || 0;
     for (const w of (p.weapons || [])) {
       if (w.type === 'breath') {
         const pp = w.pulsePhase || 0;
-        const r = w.radius * (1 + Math.sin(pp) * 0.12);
+        const r = w.radius * sm * (1 + Math.sin(pp) * 0.12);
         const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
         grad.addColorStop(0,   'rgba(255, 200, 90, 0.30)');
         grad.addColorStop(0.5, 'rgba(230, 126, 34, 0.16)');
@@ -310,7 +316,7 @@ export function drawWeaponAuras(ctx, players, time) {
 
       if (w.type === 'dragon_storm') {
         const pulse = 1 + Math.sin(w.pulsePhase || 0) * 0.1;
-        const r = w.auraRadius * pulse;
+        const r = w.auraRadius * sm * pulse;
         const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
         grad.addColorStop(0,   'rgba(243, 156, 18, 0.2)');
         grad.addColorStop(0.6, 'rgba(231,  76, 60, 0.1)');
@@ -326,19 +332,21 @@ export function drawWeaponAuras(ctx, players, time) {
 
       if (w.type === 'orbit') {
         const phase = w.phase || 0;
+        const orbitR = w.radius * sm;
+        const count = w.bladeCount + pb;
         ctx.strokeStyle = w.color;
         ctx.lineWidth = 2;
-        for (let b = 0; b < w.bladeCount; b++) {
-          const angle = phase + (b * Math.PI * 2 / w.bladeCount);
+        for (let b = 0; b < count; b++) {
+          const angle = phase + (b * Math.PI * 2 / count);
           for (let t = 1; t <= 4; t++) {
             ctx.globalAlpha = 0.45 - t * 0.1;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, w.radius, angle - 0.05 * t, angle - 0.05 * (t - 1));
+            ctx.arc(p.x, p.y, orbitR, angle - 0.05 * t, angle - 0.05 * (t - 1));
             ctx.stroke();
           }
           ctx.globalAlpha = 1;
-          const bx = p.x + Math.cos(angle) * w.radius;
-          const by = p.y + Math.sin(angle) * w.radius;
+          const bx = p.x + Math.cos(angle) * orbitR;
+          const by = p.y + Math.sin(angle) * orbitR;
           ctx.save();
           ctx.translate(bx, by);
           ctx.rotate(angle + Math.PI / 2);
@@ -358,7 +366,7 @@ export function drawWeaponAuras(ctx, players, time) {
 
       if (w.type === 'shield') {
         const ph = w.phase || 0;
-        const r = w.radius * (1 + Math.sin(ph) * 0.08);
+        const r = w.radius * sm * (1 + Math.sin(ph) * 0.08);
         const grad = ctx.createRadialGradient(p.x, p.y, r * 0.7, p.x, p.y, r);
         grad.addColorStop(0,   'rgba(116, 185, 255, 0)');
         grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.12)');
@@ -382,11 +390,12 @@ export function drawWeaponAuras(ctx, players, time) {
       }
 
       if (w.type === 'lightning_field') {
+        const fr = w.radius * sm;
         if (Math.random() < 0.3) {
           const a1 = Math.random() * Math.PI * 2;
           const a2 = a1 + (Math.random() - 0.5) * 0.6;
-          const r1 = w.radius * (0.3 + Math.random() * 0.6);
-          const r2 = w.radius * (0.3 + Math.random() * 0.6);
+          const r1 = fr * (0.3 + Math.random() * 0.6);
+          const r2 = fr * (0.3 + Math.random() * 0.6);
           ctx.strokeStyle = 'rgba(255, 234, 167, 0.5)';
           ctx.lineWidth = 1;
           ctx.beginPath();
@@ -398,37 +407,40 @@ export function drawWeaponAuras(ctx, players, time) {
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 8]);
         ctx.beginPath();
-        ctx.arc(p.x, p.y, w.radius, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, fr, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
       }
 
       if (w.type === 'thunder_god') {
+        const tr = w.fieldRadius * sm;
         const fc = w.fireCount || 0;
         const overchargeReady = fc > 0 && (fc + 1) % 4 === 0;
         const a = 0.05 + Math.sin(time * 8) * 0.025;
         ctx.fillStyle = overchargeReady ? `rgba(255, 255, 255, ${a * 2})` : `rgba(0, 210, 211, ${a})`;
         ctx.beginPath();
-        ctx.arc(p.x, p.y, w.fieldRadius, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, tr, 0, Math.PI * 2);
         ctx.fill();
         ctx.strokeStyle = overchargeReady ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 210, 211, 0.3)';
         ctx.lineWidth = 2;
         ctx.setLineDash([6, 6]);
         ctx.beginPath();
-        ctx.arc(p.x, p.y, w.fieldRadius, 0, Math.PI * 2);
+        ctx.arc(p.x, p.y, tr, 0, Math.PI * 2);
         ctx.stroke();
         ctx.setLineDash([]);
       }
 
       if (w.type === 'meteor_orbit') {
-        for (let b = 0; b < w.bladeCount; b++) {
-          const angle = (w.phase || 0) + (b * Math.PI * 2 / w.bladeCount);
-          const bx = p.x + Math.cos(angle) * w.radius;
-          const by = p.y + Math.sin(angle) * w.radius;
+        const orbitR = w.radius * sm;
+        const count = w.bladeCount + pb;
+        for (let b = 0; b < count; b++) {
+          const angle = (w.phase || 0) + (b * Math.PI * 2 / count);
+          const bx = p.x + Math.cos(angle) * orbitR;
+          const by = p.y + Math.sin(angle) * orbitR;
           for (let t = 1; t <= 3; t++) {
             const ta = angle - t * 0.1;
-            const tx = p.x + Math.cos(ta) * w.radius;
-            const ty = p.y + Math.sin(ta) * w.radius;
+            const tx = p.x + Math.cos(ta) * orbitR;
+            const ty = p.y + Math.sin(ta) * orbitR;
             ctx.globalAlpha = 0.3 / t;
             ctx.fillStyle = '#ff6348';
             ctx.beginPath();
@@ -455,7 +467,7 @@ export function drawWeaponAuras(ctx, players, time) {
 
       if (w.type === 'fortress') {
         const ph = w.phase || 0;
-        const r = w.shieldRadius * (1 + Math.sin(ph) * 0.08);
+        const r = w.shieldRadius * sm * (1 + Math.sin(ph) * 0.08);
         const grad = ctx.createRadialGradient(p.x, p.y, r * 0.7, p.x, p.y, r);
         grad.addColorStop(0,   'rgba(116, 185, 255, 0)');
         grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.18)');

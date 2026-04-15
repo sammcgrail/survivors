@@ -681,8 +681,11 @@ function render(dt) {
     cy += (Math.random() - 0.5) * 8;
   }
 
-  // Snap to integer pixels — sub-pixel translation causes shimmer on retina.
-  ctx.translate(-Math.round(cx), -Math.round(cy));
+  // Snap to integer pixels — sub-pixel translation causes shimmer on
+  // retina. Math.round causes diagonal jitter because x and y
+  // independently flip between rounding up/down on different frames.
+  // Floor is monotonic.
+  ctx.translate(-Math.floor(cx), -Math.floor(cy));
 
   // --- background: tiled pattern, neon abstract render, or grid fallback ---
   if (bgCanvas) {
