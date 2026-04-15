@@ -54,6 +54,97 @@ function pushFx(particles, x, y, color, opts) {
   });
 }
 
+// Per-consumable pickup burst — distinct feel per type so the moment
+// reads at a glance: bomb explodes outward, magnet pulls inward,
+// shield rings out + glows. Players can tell what they grabbed
+// without reading the label.
+function consumablePickupBurst(particles, evt) {
+  const { x, y, ctype } = evt;
+  switch (ctype) {
+    case 'bomb': {
+      // Explosion — wide red+orange spread + white core sparks.
+      // Sells the actual blast (the damage already applied through
+      // ENEMY_HIT events).
+      for (let i = 0; i < 26; i++) {
+        const c = Math.random() < 0.5 ? '#e74c3c' : '#f39c12';
+        pushFx(particles, x, y, c, {
+          speedMin: 140, speedMax: 360,
+          lifeMin: 0.3, lifeMax: 0.6,
+          radiusMin: 2, radiusMax: 4.5,
+        });
+      }
+      for (let i = 0; i < 10; i++) {
+        pushFx(particles, x, y, '#ffffff', {
+          speedMin: 220, speedMax: 380,
+          lifeMin: 0.15, lifeMax: 0.3,
+          radiusMin: 1.2, radiusMax: 2.2,
+        });
+      }
+      break;
+    }
+    case 'shield': {
+      // Outward ring sweep + soft inner glow particles. The blue
+      // ring on the ground reads as the shield activating.
+      for (let i = 0; i < 24; i++) {
+        const angle = (Math.PI * 2 * i) / 24;
+        pushFx(particles, x, y, '#74b9ff', {
+          angle,
+          speedMin: 160, speedMax: 200,
+          lifeMin: 0.4, lifeMax: 0.55,
+          radiusMin: 2, radiusMax: 3,
+        });
+      }
+      for (let i = 0; i < 8; i++) {
+        pushFx(particles, x, y, '#dff3ff', {
+          speedMin: 30, speedMax: 90,
+          lifeMin: 0.4, lifeMax: 0.7,
+          radiusMin: 2.5, radiusMax: 4,
+        });
+      }
+      break;
+    }
+    case 'magnet': {
+      // Inward pull — particles spawn on a ring and converge on
+      // the pickup point. Negative speeds + outward angles do that
+      // in one go (vx,vy = -cos*speed, -sin*speed = inward motion
+      // from a position offset by +cos*startR, +sin*startR).
+      for (let i = 0; i < 16; i++) {
+        const angle = (Math.PI * 2 * i) / 16 + Math.random() * 0.3;
+        const startR = 60 + Math.random() * 30;
+        const sx = x + Math.cos(angle) * startR;
+        const sy = y + Math.sin(angle) * startR;
+        pushFx(particles, sx, sy, '#f39c12', {
+          angle: angle + Math.PI, // point back toward center
+          speedMin: 220, speedMax: 320,
+          lifeMin: 0.25, lifeMax: 0.4,
+          radiusMin: 1.5, radiusMax: 2.8,
+        });
+      }
+      // Center burst — gold pulse on arrival.
+      for (let i = 0; i < 8; i++) {
+        pushFx(particles, x, y, '#f1c40f', {
+          speedMin: 60, speedMax: 140,
+          lifeMin: 0.3, lifeMax: 0.5,
+          radiusMin: 2, radiusMax: 3.2,
+        });
+      }
+      break;
+    }
+    default: {
+      // Unknown / future consumable — fall back to the original
+      // generic burst.
+      for (let i = 0; i < 12; i++) {
+        pushFx(particles, x, y, evt.color || '#f39c12', {
+          speedMin: 80, speedMax: 200,
+          lifeMin: 0.3, lifeMax: 0.5,
+          radiusMin: 2, radiusMax: 3.2,
+        });
+      }
+      break;
+    }
+  }
+}
+
 // Per-enemy death VFX. Replaces the old uniform meteor-ring with
 // bursts shaped by the dying enemy's personality — swarm flickers
 // out fast, tank craters with chunky debris, brute violently
@@ -381,16 +472,22 @@ export function applySimEvent(evt, client) {
 
     case 'consumablePickup': {
       if (isMe) sfx('powerup');
-      // Floating text with the item label.
+      // Label always floats up — same shape across types so the
+      // text reads as a system-level pickup notification.
       client.floatingTexts.push({
         x: evt.x, y: evt.y,
-        text: evt.label || evt.type.toUpperCase(),
+        text: evt.label || (evt.ctype || '').toUpperCase(),
         color: evt.color || '#f39c12',
         life: 1.0, maxLife: 1.0, vy: -50,
       });
-      // Pickup burst — color-matched, generous.
-      spawn(evt.x, evt.y, evt.color || '#f39c12', 12);
-      if (isMe) shake(0.12);
+      // Per-type pickup burst — bomb explodes, shield rings out,
+      // magnet pulls in. Picker also gets a flavor-fitting shake.
+      consumablePickupBurst(client.particles, evt);
+      if (isMe) {
+        if (evt.ctype === 'bomb') shake(0.35);
+        else if (evt.ctype === 'magnet') shake(0.08);
+        else shake(0.12);
+      }
       break;
     }
   }
