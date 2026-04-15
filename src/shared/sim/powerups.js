@@ -43,7 +43,7 @@ export const POWERUPS = [
     apply(g, p) {
       p.weapons = p.weapons.filter(w => w.type !== 'spit' && w.type !== 'breath');
       p.weapons.push(createWeapon('dragon_storm'));
-      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'dragon_storm' });
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'dragon_storm', pid: p.id });
     }
   },
   { id: 'evo_thunder_god', name: 'THUNDER GOD', desc: 'Chain + Field fuse into omni-lightning with overcharge stun', icon: '⚡',
@@ -51,7 +51,7 @@ export const POWERUPS = [
     apply(g, p) {
       p.weapons = p.weapons.filter(w => w.type !== 'chain' && w.type !== 'lightning_field');
       p.weapons.push(createWeapon('thunder_god'));
-      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'thunder_god' });
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'thunder_god', pid: p.id });
     }
   },
   { id: 'evo_meteor_orbit', name: 'METEOR ORBIT', desc: 'Orbit + Meteor fuse into flame blades that trigger explosions on kill', icon: '🔥',
@@ -59,7 +59,7 @@ export const POWERUPS = [
     apply(g, p) {
       p.weapons = p.weapons.filter(w => w.type !== 'orbit' && w.type !== 'meteor');
       p.weapons.push(createWeapon('meteor_orbit'));
-      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'meteor_orbit' });
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'meteor_orbit', pid: p.id });
     }
   },
   { id: 'evo_fortress', name: 'FORTRESS', desc: 'Shield + Charge fuse into battering ram with shockwave', icon: '🏰',
@@ -67,7 +67,7 @@ export const POWERUPS = [
     apply(g, p) {
       p.weapons = p.weapons.filter(w => w.type !== 'shield' && w.type !== 'charge');
       p.weapons.push(createWeapon('fortress'));
-      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'fortress' });
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'fortress', pid: p.id });
     }
   },
 ];

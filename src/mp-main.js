@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
@@ -275,6 +275,12 @@ const mpEventClient = {
   sfx,
   shake(v) { screenShake = Math.max(screenShake, v); },
   isMe: (pid) => pid === myId,
+  // Suppress levelup sfx through the event path — the separate
+  // `levelup` server message already triggers it via
+  // showLevelUpChoices. Without this override, shared applySimEvent
+  // falls through to sfx('levelup') and the leveling player hears
+  // the cue twice.
+  onLevelUp: () => {},
   // onPlayerDeath: DOM flip handled in processStateChanges for now
   // (needs the `me` snapshot object that event alone doesn't carry).
 };
@@ -361,6 +367,13 @@ function connectWS() {
       // consumes — shared applySimEvent handles both modes via the
       // client shim (mpEventClient).
       if (msg.events) for (const evt of msg.events) applySimEvent(evt, mpEventClient);
+
+      // Evict trailState entries for players who have disconnected —
+      // otherwise the map grows unbounded over a long-running server.
+      if (trailState.size > msg.players.length) {
+        const live = new Set(msg.players.map(p => p.id));
+        for (const id of trailState.keys()) if (!live.has(id)) trailState.delete(id);
+      }
 
       // Death screen trigger still lives here since it's a DOM flip,
       // not a transient effect. Level-up menu also stays — server
@@ -695,21 +708,9 @@ function render(dt) {
     drawObstacle(ctx, obs);
   }
 
-  // --- gems ---
-  for (const gem of state.gems) {
-    if (gem.x < cx - 20 || gem.x > cx + W + 20 || gem.y < cy - 20 || gem.y > cy + H + 20) continue;
-    drawGem(ctx, gem, drawSprite);
-  }
-
-  drawHeartDrops(ctx, state.heartDrops || [], drawSprite, cx, cy, W, H);
-
-  drawWeaponAuras(ctx, state.players, state.time || 0, { cx, cy, W, H });
-
-  drawEnemies(ctx, state.enemies, drawSprite, cx, cy, W, H, (name) => markSeen(name, state.wave));
-  // Server now ships proj.color + vx/vy on the snapshot, so MP gets the
-  // same trail + ember treatment SP has had — no more flat circles.
-  drawProjectiles(ctx, state.projectiles, drawSprite, particles, cx, cy, W, H);
-
+  renderWorld(ctx, state, drawSprite, particles,
+              { cx, cy, W, H },
+              { onSeen: (name) => markSeen(name, state.wave) });
   drawChargeTrail(ctx, state.players);
   drawChainEffects(ctx, state.chainEffects || []);
   drawMeteorEffects(ctx, state.meteorEffects || []);

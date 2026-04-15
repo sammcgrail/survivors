@@ -31,7 +31,7 @@ export function damageEnemy(g, e, dmg, killerId) {
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
       spawnHeart(g, e.x, e.y, 15);
     }
-    emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name, radius: e.radius });
+    emit(g, EVT.ENEMY_KILLED, { x: e.x, y: e.y, color: e.color, name: e.name, radius: e.radius, killer: killerId });
     // Death shockwave — small expanding ring at the kill site. Sized
     // by enemy class so a boss death feels different from a swarm
     // death. Pushed onto meteorEffects so the existing render path
