@@ -50,8 +50,21 @@ function drawMinimap() {
   mmCtx.fillStyle = 'rgba(0,0,0,0.55)';
   mmCtx.fillRect(0, 0, MM, MM);
 
-  mmCtx.fillStyle = '#f1c40f';
-  for (const g of gems) mmCtx.fillRect(g.x * sx - 0.5, g.y * sy - 0.5, 1, 1);
+  // Trash gems as tiny gold pixels; tier-2 (boss/elite drops) get
+  // a bigger purple/yellow dot so players can spot the valuable
+  // pickups across the map.
+  for (const g of gems) {
+    if (g.tier === 2) {
+      mmCtx.fillStyle = '#f1c40f';
+      mmCtx.fillRect(g.x * sx - 1, g.y * sy - 1, 2, 2);
+    } else if (g.tier === 1) {
+      mmCtx.fillStyle = '#9b59b6';
+      mmCtx.fillRect(g.x * sx - 0.5, g.y * sy - 0.5, 1.5, 1.5);
+    } else {
+      mmCtx.fillStyle = '#5dade2';
+      mmCtx.fillRect(g.x * sx - 0.5, g.y * sy - 0.5, 1, 1);
+    }
+  }
 
   // Enemies — gray dots for trash mobs, scaled colored dots for
   // named threats (brute/elite/spawner/boss) so players can locate
