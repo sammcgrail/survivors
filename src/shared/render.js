@@ -259,6 +259,235 @@ export function drawMeteorEffects(ctx, meteorEffects) {
   }
 }
 
+// Per-weapon aura visuals that sit on top of the player. Reads live
+// sim fields from each weapon — the MP server ships phase/pulsePhase/
+// fireCount/active/chargeDx/Dy/color on the snapshot so MP renders
+// identically to SP (vs. the old MP code which faked phase from
+// gameTime and hardcoded colors).
+//
+// Charge effect is NOT handled here — it's SP-only until the server
+// starts shipping speed/duration/chargeTimer/width for the charge
+// weapon. Callers add charge render inline after this.
+export function drawWeaponAuras(ctx, players, time) {
+  for (const p of players) {
+    if (!p.alive) continue;
+    for (const w of (p.weapons || [])) {
+      if (w.type === 'breath') {
+        const pp = w.pulsePhase || 0;
+        const r = w.radius * (1 + Math.sin(pp) * 0.12);
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
+        grad.addColorStop(0,   'rgba(255, 200, 90, 0.30)');
+        grad.addColorStop(0.5, 'rgba(230, 126, 34, 0.16)');
+        grad.addColorStop(1,   'rgba(231,  76, 60, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        const wavePhase = (pp * 0.5) % 1;
+        ctx.strokeStyle = `rgba(255, 180, 90, ${0.4 * (1 - wavePhase)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r * (1 + wavePhase * 0.5), 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.strokeStyle = 'rgba(230, 126, 34, 0.4)';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = '#e67e22';
+        for (let i = 0; i < 8; i++) {
+          const a = pp * 0.7 + (Math.PI * 2 / 8) * i;
+          const dotR = 3 + Math.sin(pp * 2 + i) * 1.5;
+          ctx.globalAlpha = 0.6 + Math.sin(pp + i * 0.8) * 0.3;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, dotR, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
+
+      if (w.type === 'dragon_storm') {
+        const pulse = 1 + Math.sin(w.pulsePhase || 0) * 0.1;
+        const r = w.auraRadius * pulse;
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
+        grad.addColorStop(0,   'rgba(243, 156, 18, 0.2)');
+        grad.addColorStop(0.6, 'rgba(231,  76, 60, 0.1)');
+        grad.addColorStop(1,   'rgba(231,  76, 60, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(243, 156, 18, 0.4)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      if (w.type === 'orbit') {
+        const phase = w.phase || 0;
+        ctx.strokeStyle = w.color;
+        ctx.lineWidth = 2;
+        for (let b = 0; b < w.bladeCount; b++) {
+          const angle = phase + (b * Math.PI * 2 / w.bladeCount);
+          for (let t = 1; t <= 4; t++) {
+            ctx.globalAlpha = 0.45 - t * 0.1;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, w.radius, angle - 0.05 * t, angle - 0.05 * (t - 1));
+            ctx.stroke();
+          }
+          ctx.globalAlpha = 1;
+          const bx = p.x + Math.cos(angle) * w.radius;
+          const by = p.y + Math.sin(angle) * w.radius;
+          ctx.save();
+          ctx.translate(bx, by);
+          ctx.rotate(angle + Math.PI / 2);
+          ctx.fillStyle = w.color;
+          ctx.shadowColor = w.color;
+          ctx.shadowBlur = 8;
+          ctx.beginPath();
+          ctx.moveTo(0, -10);
+          ctx.lineTo(4, 4);
+          ctx.lineTo(-4, 4);
+          ctx.closePath();
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.restore();
+        }
+      }
+
+      if (w.type === 'shield') {
+        const ph = w.phase || 0;
+        const r = w.radius * (1 + Math.sin(ph) * 0.08);
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.7, p.x, p.y, r);
+        grad.addColorStop(0,   'rgba(116, 185, 255, 0)');
+        grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.12)');
+        grad.addColorStop(1,   'rgba(116, 185, 255, 0.25)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(116, 185, 255, 0.6)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(116, 185, 255, 0.8)';
+        for (let h = 0; h < 6; h++) {
+          const a = ph * 0.5 + (Math.PI * 2 / 6) * h;
+          ctx.beginPath();
+          ctx.arc(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r, 3, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (w.type === 'lightning_field') {
+        if (Math.random() < 0.3) {
+          const a1 = Math.random() * Math.PI * 2;
+          const a2 = a1 + (Math.random() - 0.5) * 0.6;
+          const r1 = w.radius * (0.3 + Math.random() * 0.6);
+          const r2 = w.radius * (0.3 + Math.random() * 0.6);
+          ctx.strokeStyle = 'rgba(255, 234, 167, 0.5)';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.moveTo(p.x + Math.cos(a1) * r1, p.y + Math.sin(a1) * r1);
+          ctx.lineTo(p.x + Math.cos(a2) * r2, p.y + Math.sin(a2) * r2);
+          ctx.stroke();
+        }
+        ctx.strokeStyle = 'rgba(255, 234, 167, 0.15)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 8]);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, w.radius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (w.type === 'thunder_god') {
+        const fc = w.fireCount || 0;
+        const overchargeReady = fc > 0 && (fc + 1) % 4 === 0;
+        const a = 0.05 + Math.sin(time * 8) * 0.025;
+        ctx.fillStyle = overchargeReady ? `rgba(255, 255, 255, ${a * 2})` : `rgba(0, 210, 211, ${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, w.fieldRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = overchargeReady ? 'rgba(255, 255, 255, 0.5)' : 'rgba(0, 210, 211, 0.3)';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 6]);
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, w.fieldRadius, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      if (w.type === 'meteor_orbit') {
+        for (let b = 0; b < w.bladeCount; b++) {
+          const angle = (w.phase || 0) + (b * Math.PI * 2 / w.bladeCount);
+          const bx = p.x + Math.cos(angle) * w.radius;
+          const by = p.y + Math.sin(angle) * w.radius;
+          for (let t = 1; t <= 3; t++) {
+            const ta = angle - t * 0.1;
+            const tx = p.x + Math.cos(ta) * w.radius;
+            const ty = p.y + Math.sin(ta) * w.radius;
+            ctx.globalAlpha = 0.3 / t;
+            ctx.fillStyle = '#ff6348';
+            ctx.beginPath();
+            ctx.arc(tx, ty, 4 - t, 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.globalAlpha = 1;
+          ctx.save();
+          ctx.translate(bx, by);
+          ctx.rotate(angle + Math.PI / 2);
+          ctx.fillStyle = w.color;
+          ctx.shadowColor = w.color;
+          ctx.shadowBlur = 10;
+          ctx.beginPath();
+          ctx.moveTo(0, -14);
+          ctx.lineTo(6, 6);
+          ctx.lineTo(-6, 6);
+          ctx.closePath();
+          ctx.fill();
+          ctx.shadowBlur = 0;
+          ctx.restore();
+        }
+      }
+
+      if (w.type === 'fortress') {
+        const ph = w.phase || 0;
+        const r = w.shieldRadius * (1 + Math.sin(ph) * 0.08);
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.7, p.x, p.y, r);
+        grad.addColorStop(0,   'rgba(116, 185, 255, 0)');
+        grad.addColorStop(0.8, 'rgba(116, 185, 255, 0.18)');
+        grad.addColorStop(1,   'rgba(116, 185, 255, 0.35)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(116, 185, 255, 0.8)';
+        ctx.lineWidth = 2.5;
+        ctx.beginPath();
+        for (let h = 0; h < 6; h++) {
+          const a = ph * 0.3 + (Math.PI * 2 / 6) * h;
+          const x = p.x + Math.cos(a) * r;
+          const y = p.y + Math.sin(a) * r;
+          if (h === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.stroke();
+        if (w.active) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.lineWidth = 4;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(p.x - w.chargeDx * 80, p.y - w.chargeDy * 80);
+          ctx.stroke();
+        }
+      }
+    }
+  }
+}
+
 // Gem render: sprite when loaded, blue diamond fallback. Fallback
 // radius defaults to 6 (MP snapshot omits radius); SP passes
 // gem.radius for sim-side visuals.

@@ -209,6 +209,7 @@ function snapshotWeapon(w, p) {
   const sm = p.sizeMulti || 1;
   const pb = p.projectileBonus || 0;
   const o = { type: w.type };
+  if (w.color !== undefined)        o.color = w.color;
   if (w.radius !== undefined)       o.radius = w.radius * sm;
   if (w.fieldRadius !== undefined)  o.fieldRadius = w.fieldRadius * sm;
   if (w.shieldRadius !== undefined) o.shieldRadius = w.shieldRadius * sm;
