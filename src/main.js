@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -1118,7 +1118,7 @@ function render() {
                        : skin === 'skin_shadow' ? (flickerHide ? 'rgba(100,30,150,0.5)' : '#6c3483')
                        : (flickerHide ? 'rgba(255,255,255,0.5)' : '#eee');
 
-    drawPlayerBody(ctx, drawSprite, p, g.time, {
+    drawPlayerBody(ctx, p, drawSprite, g.time, {
       skin,
       alpha: playerAlpha,
       radius: p.radius,

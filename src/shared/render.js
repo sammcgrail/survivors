@@ -2,10 +2,15 @@
 // (src/mp-main.js). Each helper takes its own ctx so callers don't
 // need to share state; no module-level canvas / state references.
 //
-// Roadmap (from the unification plan): blocks migrate here one batch
-// at a time. Already shared: drawSprite (factory), drawGem, drawSkinAura,
-// drawHpBar, drawParticles, drawChainEffects, drawMeteorEffects.
-// Pending: enemies, projectiles, weapon auras, player base.
+// The SP/MP unification roadmap is complete — everything that's
+// shareable between the two entry points lives here. Remaining SP-only
+// visuals: the charge-weapon dash trail (needs additional snapshot
+// fields) and SP's facing indicator (MP doesn't ship facing). Remaining
+// MP-only: the "YOU" arrow, level badge, per-player name coloring.
+//
+// Renderers treat their arguments as read-only. One carve-out is
+// drawProjectiles, which spawns ember particles into a passed-in
+// array for SP's visual trail — documented at the call site.
 
 import { SP, SPRITE_SIZE } from './sprites.js';
 
@@ -169,6 +174,10 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
       ctx.fill();
     }
     ctx.shadowBlur = 0;
+    // Renderer-as-writer carve-out: we mutate the passed-in particles
+    // array. The alternative (sim events for ember spawn) would ship
+    // cosmetic noise across the wire for every MP client, which isn't
+    // worth the bytes. Particles are transient + local per client.
     if (particles && Math.random() < 0.4) {
       particles.push({
         x: proj.x + (Math.random() - 0.5) * 4,
@@ -549,7 +558,7 @@ export function drawHeartDrops(ctx, heartDrops, drawSprite, cx, cy, W, H) {
 //
 // `opts` fields:
 //   skin, alpha, radius, glowColor, fallbackFill, strokeOnFallback
-export function drawPlayerBody(ctx, drawSprite, p, time, opts = {}) {
+export function drawPlayerBody(ctx, p, drawSprite, time, opts = {}) {
   const {
     skin,
     alpha = 1,

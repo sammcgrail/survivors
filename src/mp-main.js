@@ -10,7 +10,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -749,7 +749,7 @@ function render(dt) {
                     : skin === 'skin_shadow' ? '#9b59b6'
                     : (isMe ? '#3498db' : pl.color);
 
-    drawPlayerBody(ctx, drawSprite, pl, state.time || 0, {
+    drawPlayerBody(ctx, pl, drawSprite, state.time || 0, {
       skin,
       radius: playerRadius,
       glowColor,
