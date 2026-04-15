@@ -2,7 +2,7 @@
 /**
  * Stress-test harness for survivors v1a.
  *
- * Runs v1a.html in headless Chromium via playwright, drives a scripted
+ * Runs sp.html in headless Chromium via playwright, drives a scripted
  * autoplayer, samples performance metrics (fps, frame ms, GC), and can
  * inject extra enemies to probe the upper bound.
  *
@@ -46,7 +46,7 @@ function startServer(port) {
   return new Promise(resolve => {
     const s = createServer((req, res) => {
       let p = req.url.split('?')[0];
-      if (p === '/') p = '/v1a.html';
+      if (p === '/') p = '/sp.html';
       const f = join(ROOT, p);
       if (!existsSync(f) || statSync(f).isDirectory()) { res.writeHead(404); res.end(); return; }
       res.writeHead(200, { 'Content-Type': MIME[extname(f)] || 'application/octet-stream' });
@@ -292,7 +292,7 @@ async function main() {
     console.error(`[stress] scenario: ${name} (${def.seconds}s)  ${def.description ?? ''}`);
     const ctx = await browser.newContext({ viewport: def.viewport ?? { width: 1280, height: 720 } });
     const page = await ctx.newPage();
-    await page.goto('http://localhost:18889/v1a.html', { waitUntil: 'load' });
+    await page.goto('http://localhost:18889/sp.html', { waitUntil: 'load' });
     await installBot(page);
     const r = await runScenario(page, name, def.setup, def.seconds);
     results.push(r);
