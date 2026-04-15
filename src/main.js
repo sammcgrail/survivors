@@ -17,6 +17,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem } from './shared/render.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -44,25 +45,7 @@ spriteSheet.src = 'sprites.png';
 let spritesReady = false;
 spriteSheet.onload = () => { spritesReady = true; };
 
-// imageSmoothingEnabled is set once at canvas init (search for `ctx = canvas.getContext`).
-// drawSprite avoids per-call state churn: only touches globalAlpha when an explicit
-// alpha is passed, and skips the read-and-restore pair in the common case.
-function drawSprite(name, x, y, scale, alpha) {
-  if (!spritesReady || !SP[name]) return false;
-  const sp = SP[name];
-  const s = SPRITE_SIZE;
-  const drawSize = s * (scale || 2);
-  const half = drawSize * 0.5;
-  if (alpha !== undefined) {
-    const prev = ctx.globalAlpha;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
-    ctx.globalAlpha = prev;
-  } else {
-    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
-  }
-  return true;
-}
+const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
 // --- sound effects (Web Audio API) ---
 let audioCtx = null;
@@ -979,20 +962,7 @@ function render() {
   }
 
   // --- gems (sprites) ---
-  for (const gem of g.gems) {
-    if (!drawSprite('gem', gem.x, gem.y, 0.9, 0.85)) {
-      ctx.fillStyle = '#3498db';
-      ctx.globalAlpha = 0.8;
-      ctx.beginPath();
-      ctx.moveTo(gem.x, gem.y - gem.radius);
-      ctx.lineTo(gem.x + gem.radius, gem.y);
-      ctx.lineTo(gem.x, gem.y + gem.radius);
-      ctx.lineTo(gem.x - gem.radius, gem.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
-  }
+  for (const gem of g.gems) drawGem(ctx, gem, drawSprite);
 
   // --- heart pickups (sprites with bob) ---
   for (const h of g.heartDrops) {
@@ -1314,13 +1284,8 @@ function render() {
       ctx.fill();
     }
 
-    // hp bar
     if (e.hp < e.maxHp) {
-      const bw = e.radius * 2;
-      ctx.fillStyle = '#300';
-      ctx.fillRect(e.x - bw / 2, e.y - e.radius - 8, bw, 3);
-      ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#2ecc71' : '#e74c3c';
-      ctx.fillRect(e.x - bw / 2, e.y - e.radius - 8, bw * (e.hp / e.maxHp), 3);
+      drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
     }
   }
 
@@ -1425,32 +1390,7 @@ function render() {
     ctx.shadowColor = p.iframes > 0 ? '#fff' : glowColor;
     ctx.shadowBlur = skin === 'skin_shadow' ? 25 : 15;
 
-    // shadow skin: dark aura ring behind player
-    if (skin === 'skin_shadow') {
-      ctx.save();
-      ctx.globalAlpha = 0.3 * playerAlpha;
-      const auraR = p.radius * 2.2;
-      const grad = ctx.createRadialGradient(p.x, p.y, p.radius * 0.5, p.x, p.y, auraR);
-      grad.addColorStop(0, 'rgba(155, 89, 182, 0.5)');
-      grad.addColorStop(1, 'rgba(44, 0, 62, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, auraR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-
-    // gold skin: golden shimmer ring
-    if (skin === 'skin_gold') {
-      ctx.save();
-      ctx.globalAlpha = (0.25 + 0.1 * Math.sin(g.time * 4)) * playerAlpha;
-      ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.radius + 4, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
+    drawSkinAura(ctx, p.x, p.y, p.radius, skin, g.time, playerAlpha);
 
     // player sprite (tinted via compositing for skins)
     const spriteDrawn = drawSprite('player', p.x, p.y, 2, playerAlpha);
@@ -1511,23 +1451,10 @@ function render() {
     ctx.fillText(g.playerName, p.x, p.y - p.radius - 16);
     ctx.globalAlpha = 1;
 
-    // hp bar above player (always visible for MP readability)
-    const bw = 30;
-    ctx.fillStyle = '#222';
-    ctx.fillRect(p.x - bw / 2, p.y - p.radius - 10, bw, 4);
-    ctx.fillStyle = p.hp / p.maxHp > 0.3 ? '#2ecc71' : '#e74c3c';
-    ctx.fillRect(p.x - bw / 2, p.y - p.radius - 10, bw * (p.hp / p.maxHp), 4);
+    drawHpBar(ctx, p.x, p.y - p.radius - 10, 30, p.hp / p.maxHp);
   }
 
-  // --- particles ---
-  for (const pt of g.particles) {
-    ctx.globalAlpha = pt.life / pt.maxLife;
-    ctx.fillStyle = pt.color;
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, pt.radius * (pt.life / pt.maxLife), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+  drawParticles(ctx, g.particles);
 
   // --- floating texts ---
   for (const ft of g.floatingTexts) {

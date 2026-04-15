@@ -11,6 +11,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
+import { makeDrawSprite, drawSkinAura, drawHpBar, drawParticles, drawGem } from './shared/render.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -33,22 +34,7 @@ spriteSheet.onload = () => { spritesReady = true; };
 // skull sprite). Server doesn't broadcast `sprite`, so we derive it.
 const ENEMY_SPRITES = { ghost: 'skull' };
 
-function drawSprite(name, x, y, scale, alpha) {
-  if (!spritesReady || !SP[name]) return false;
-  const sp = SP[name];
-  const s = SPRITE_SIZE;
-  const drawSize = s * (scale || 2);
-  const half = drawSize * 0.5;
-  if (alpha !== undefined) {
-    const prev = ctx.globalAlpha;
-    ctx.globalAlpha = alpha;
-    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
-    ctx.globalAlpha = prev;
-  } else {
-    ctx.drawImage(spriteSheet, sp[0] * s, sp[1] * s, s, s, x - half, y - half, drawSize, drawSize);
-  }
-  return true;
-}
+const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
 // --- sound effects (Web Audio API) ---
 let audioCtx = null;
@@ -661,19 +647,7 @@ function render(dt) {
   // --- gems ---
   for (const gem of state.gems) {
     if (gem.x < cx - 20 || gem.x > cx + W + 20 || gem.y < cy - 20 || gem.y > cy + H + 20) continue;
-    if (!drawSprite('gem', gem.x, gem.y, 0.9, 0.85)) {
-      ctx.fillStyle = '#3498db';
-      ctx.globalAlpha = 0.8;
-      ctx.beginPath();
-      const r = 6;
-      ctx.moveTo(gem.x, gem.y - r);
-      ctx.lineTo(gem.x + r, gem.y);
-      ctx.lineTo(gem.x, gem.y + r);
-      ctx.lineTo(gem.x - r, gem.y);
-      ctx.closePath();
-      ctx.fill();
-      ctx.globalAlpha = 1;
-    }
+    drawGem(ctx, gem, drawSprite);
   }
 
   // --- heart drops ---
@@ -884,13 +858,8 @@ function render(dt) {
       ctx.fill();
     }
 
-    // hp bar
     if (e.hp < e.maxHp) {
-      const bw = e.radius * 2;
-      ctx.fillStyle = '#300';
-      ctx.fillRect(e.x - bw / 2, e.y - e.radius - 8, bw, 3);
-      ctx.fillStyle = e.hp / e.maxHp > 0.3 ? '#2ecc71' : '#e74c3c';
-      ctx.fillRect(e.x - bw / 2, e.y - e.radius - 8, bw * (e.hp / e.maxHp), 3);
+      drawHpBar(ctx, e.x, e.y - e.radius - 8, e.radius * 2, e.hp / e.maxHp, 3, '#300');
     }
   }
 
@@ -962,31 +931,7 @@ function render(dt) {
     const playerRadius = 14;
     const skin = pl.activeSkin;
 
-    // Shadow-skin aura behind sprite (matches SP render).
-    if (skin === 'skin_shadow') {
-      ctx.save();
-      ctx.globalAlpha = 0.3;
-      const auraR = playerRadius * 2.2;
-      const grad = ctx.createRadialGradient(pl.x, pl.y, playerRadius * 0.5, pl.x, pl.y, auraR);
-      grad.addColorStop(0, 'rgba(155, 89, 182, 0.5)');
-      grad.addColorStop(1, 'rgba(44, 0, 62, 0)');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.arc(pl.x, pl.y, auraR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-    // Gold-skin shimmer ring.
-    if (skin === 'skin_gold') {
-      ctx.save();
-      ctx.globalAlpha = 0.25 + 0.1 * Math.sin(gameTime * 4);
-      ctx.strokeStyle = '#f1c40f';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(pl.x, pl.y, playerRadius + 4, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.restore();
-    }
+    drawSkinAura(ctx, pl.x, pl.y, playerRadius, skin, gameTime);
 
     // Glow color tracks skin.
     const glowColor = skin === 'skin_gold' ? '#f39c12'
@@ -1056,23 +1001,10 @@ function render(dt) {
     ctx.fillText('Lv' + pl.level, pl.x, pl.y + playerRadius + 14);
     ctx.globalAlpha = 1;
 
-    // HP bar
-    const bw = 30;
-    ctx.fillStyle = '#222';
-    ctx.fillRect(pl.x - bw / 2, pl.y - playerRadius - 10, bw, 4);
-    ctx.fillStyle = pl.hp / pl.maxHp > 0.3 ? '#2ecc71' : '#e74c3c';
-    ctx.fillRect(pl.x - bw / 2, pl.y - playerRadius - 10, bw * Math.max(0, pl.hp / pl.maxHp), 4);
+    drawHpBar(ctx, pl.x, pl.y - playerRadius - 10, 30, pl.hp / pl.maxHp);
   }
 
-  // --- client-side particles ---
-  for (const pt of particles) {
-    ctx.globalAlpha = pt.life / pt.maxLife;
-    ctx.fillStyle = pt.color;
-    ctx.beginPath();
-    ctx.arc(pt.x, pt.y, pt.radius * (pt.life / pt.maxLife), 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-  }
+  drawParticles(ctx, particles);
 
   ctx.restore();
 
