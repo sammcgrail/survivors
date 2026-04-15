@@ -616,6 +616,7 @@ function render() {
   const H = canvas.height;
   const g = game;
   if (!g) return;
+  if (PERF_ON) _phaseT = performance.now();
 
   ctx.save();
   ctx.fillStyle = '#0a0a0f';
@@ -673,14 +674,16 @@ function render() {
     if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
     drawObstacle(ctx, obs);
   }
+  _phase('bg');
 
   const p = g.player;
   renderWorld(ctx, synthesizeView(g), drawSprite, g.particles,
               { cx, cy, W, H },
-              { onSeen: (name) => markSeen(name, g.wave) });
+              { onSeen: (name) => markSeen(name, g.wave), onPhase: PERF_ON ? _phase : null });
   drawChargeTrail(ctx, g.players);
   drawChainEffects(ctx, g.chainEffects);
   drawMeteorEffects(ctx, g.meteorEffects);
+  _phase('worldfx');
 
   // --- player ---
   if (p.alive) {
@@ -707,10 +710,13 @@ function render() {
 
     drawHpBar(ctx, p.x, p.y - p.radius - 10, 30, p.hp / p.maxHp);
   }
+  _phase('player');
 
   drawParticles(ctx, g.particles);
+  _phase('particles');
 
   drawFloatingTexts(ctx, g.floatingTexts);
+  _phase('floats');
 
   ctx.restore();
 
@@ -782,6 +788,7 @@ function render() {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
   }
+  _phase('hud');
 
 }
 
@@ -881,13 +888,70 @@ document.addEventListener('contextmenu', e => e.preventDefault());
 // --- game loop (unified: update + render in single rAF to prevent camera/render desync) ---
 let lastTime = 0;
 
+// Lightweight perf-profile harness — opt-in via ?perf=1. Samples
+// update() vs render() vs each render phase (background, world,
+// players, hud) into rolling buckets and logs avg/p95/max every
+// 120 frames. Off by default so production has zero overhead
+// beyond a single boolean check per gameLoop call.
+const PERF_ON = typeof location !== 'undefined' && /[?&]perf=1\b/.test(location.search);
+const _perfBuckets = PERF_ON ? Object.create(null) : null;
+let _perfFrames = 0;
+let _phaseT = 0; // last phase boundary timestamp, reset at render start
+
+function _perfMark(label, ms) {
+  let b = _perfBuckets[label];
+  if (!b) { b = _perfBuckets[label] = []; }
+  b.push(ms);
+  if (b.length > 600) b.shift(); // keep last ~10s at 60fps
+}
+
+// Call between render phases to close out the previous bucket. No-op
+// unless PERF_ON. Keeps the call-site ergonomic: `_phase('world')`.
+function _phase(label) {
+  if (!PERF_ON) return;
+  const n = performance.now();
+  _perfMark('r.' + label, n - _phaseT);
+  _phaseT = n;
+}
+
+function _perfReport() {
+  const out = ['[perf]'];
+  for (const label of Object.keys(_perfBuckets)) {
+    const b = _perfBuckets[label];
+    if (b.length === 0) continue;
+    const sorted = [...b].sort((a, b) => a - b);
+    const avg = b.reduce((s, x) => s + x, 0) / b.length;
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    const max = sorted[sorted.length - 1];
+    out.push(`${label}: avg=${avg.toFixed(2)} p95=${p95.toFixed(2)} max=${max.toFixed(2)}`);
+  }
+  console.log(out.join('  '));
+}
+
 function gameLoop(ts) {
   if (lastTime === 0) lastTime = ts; // prevent huge dt spike on first frame
   const dt = Math.min((ts - lastTime) / 1000, 0.05); // cap at 50ms
   lastTime = ts;
-  update(dt);
-  render();
+  if (PERF_ON) {
+    const t0 = performance.now();
+    update(dt);
+    const t1 = performance.now();
+    render();
+    const t2 = performance.now();
+    _perfMark('update', t1 - t0);
+    _perfMark('render', t2 - t1);
+    _perfMark('frame',  t2 - t0);
+    if (++_perfFrames % 120 === 0) _perfReport();
+  } else {
+    update(dt);
+    render();
+  }
   requestAnimationFrame(gameLoop);
+}
+
+// Expose a quick console hook for ad-hoc profiling: window._perf.report()
+if (PERF_ON && typeof window !== 'undefined') {
+  window._perf = { mark: _perfMark, report: _perfReport, buckets: _perfBuckets };
 }
 
 // --- prestige shop ---

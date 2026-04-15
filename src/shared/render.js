@@ -863,17 +863,25 @@ export function drawFacingIndicator(ctx, p, color, radius = 14) {
 // optional — SP wires it to the bestiary discovery hook.
 export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {}) {
   const { cx, cy, W, H } = viewport;
+  // Optional per-subphase marker for the SP perf harness. No-op in
+  // prod / MP. Caller supplies `onPhase(label)` which closes the
+  // previous bucket each time it's invoked.
+  const mark = opts.onPhase || null;
   for (const gem of view.gems) {
     if (gem.x < cx - 20 || gem.x > cx + W + 20 || gem.y < cy - 20 || gem.y > cy + H + 20) continue;
     drawGem(ctx, gem, drawSprite);
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
   drawConsumables(ctx, view.consumables || [], drawSprite, cx, cy, W, H);
+  if (mark) mark('gems');
   drawChargeTrailWake(ctx, view.chargeTrails || [], particles, view.time || 0, viewport);
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);
+  if (mark) mark('auras');
   drawEnemies(ctx, view.enemies, drawSprite, cx, cy, W, H, opts.onSeen);
+  if (mark) mark('enemies');
   drawProjectiles(ctx, view.projectiles, drawSprite, particles, cx, cy, W, H);
   drawEnemyProjectiles(ctx, view.enemyProjectiles || [], particles, cx, cy, W, H, view.time || 0);
+  if (mark) mark('projectiles');
 }
 
 // Charge fire-wake render — lingering damage zones left behind a
