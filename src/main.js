@@ -403,6 +403,22 @@ function selectWeapon(type) {
     c.classList.toggle('selected', c.dataset.weapon === type);
   });
 }
+// Map dropdown handler. Persists choice across reloads via localStorage
+// so users don't have to re-pick every time. Bundle loads at end of
+// body, so the DOM lookup below is safe to run synchronously.
+function selectMap(id) {
+  if (!MAPS[id]) return;
+  selectedMapId = id;
+  try { localStorage.setItem('survivors_map', id); } catch (e) {}
+}
+try {
+  const saved = localStorage.getItem('survivors_map');
+  if (saved && MAPS[saved]) {
+    selectedMapId = saved;
+    const el = document.getElementById('map-select');
+    if (el) el.value = saved;
+  }
+} catch (e) {}
 let gameStarted = false;
 
 // --- init game ---
@@ -1676,3 +1692,4 @@ if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
 // Expose handlers used by inline HTML onclick attributes.
 window.startGame = startGame;
 window.selectWeapon = selectWeapon;
+window.selectMap = selectMap;
