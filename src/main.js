@@ -16,7 +16,7 @@ import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawGem, drawChainEffects, drawMeteorEffects, drawEnemies, drawProjectiles, drawWeaponAuras, drawHeartDrops, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail } from './shared/render.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 
 const canvas = document.getElementById('c');
@@ -527,7 +527,7 @@ function initGame() {
     // Active cosmetics from prestige (read once at game start)
     _activeSkin: loadPrestige().activeSkin,
     _activeTrail: loadPrestige().activeTrail,
-    _trailTimer: 0,
+    _trailState: new Map(),
   };
 }
 
@@ -588,24 +588,8 @@ function update(dt) {
   //     load-bearing; see src/shared/sim/tick.js for rationale.
   tickSim(g, dt);
 
-  // --- fire trail cosmetic ---
   if (p.alive && g._activeTrail === 'trail_fire') {
-    g._trailTimer = (g._trailTimer || 0) - dt;
-    const speed = Math.sqrt(p.facing.x ** 2 + p.facing.y ** 2);
-    if (g._trailTimer <= 0 && speed > 0.1) {
-      g._trailTimer = 0.03; // ~33 particles/sec
-      const spread = 4;
-      g.particles.push({
-        x: p.x + (Math.random() - 0.5) * spread,
-        y: p.y + (Math.random() - 0.5) * spread,
-        vx: (Math.random() - 0.5) * 30,
-        vy: -40 - Math.random() * 60,
-        life: 0.3 + Math.random() * 0.3,
-        maxLife: 0.6,
-        radius: 2 + Math.random() * 2,
-        color: Math.random() > 0.4 ? '#f39c12' : '#e74c3c',
-      });
-    }
+    spawnFireTrail(p, dt, g.particles, g._trailState);
   }
 
   // --- update particles ---
