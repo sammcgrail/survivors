@@ -699,6 +699,48 @@ suite('Enemy Projectiles', () => {
     assert(g.enemyProjectiles[0].homing === true, 'phase 3 projectiles should be homing');
     assert(g.enemyProjectiles[0].turnRate === 1.5, 'phase 3 turnRate should be 1.5');
   });
+
+  test('boss enters phase 4 + summons 2 healers at <25% HP', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const boss = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'boss'), 20, rng);
+    boss.x = g.player.x + 200;
+    boss.y = g.player.y;
+    boss.hp = boss.maxHp * 0.5;
+    boss.phase = 1; boss.baseSpeed = boss.speed;
+    g.enemies.push(boss);
+    const startCount = g.enemies.length;
+    // Force the HP under the phase-4 threshold and tick — phase
+    // transitions run inside updateEnemies → updateBossAi.
+    boss.hp = boss.maxHp * 0.20;
+    tickN(g, 2);
+    assert(boss.phase === 4, `boss should be in phase 4, got ${boss.phase}`);
+    assert(boss.enraged === true, 'boss should be enraged in phase 4');
+    const healers = g.enemies.slice(startCount).filter(e => e.name === 'healer');
+    assert(healers.length === 2, `expected 2 healers summoned, got ${healers.length}`);
+    assert(boss.shootCooldown === 1.2, `expected shootCooldown 1.2 in phase 4, got ${boss.shootCooldown}`);
+  });
+
+  test('phase 4 enraged boss fires homing projectiles like phase 3', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const boss = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'boss'), 20, rng);
+    boss.x = g.player.x + 200;
+    boss.y = g.player.y;
+    boss.phase = 4;
+    boss.shootTimer = 0;
+    boss.stunTimer = 0;
+    boss.aimTimer = 0;
+    g.enemies.push(boss);
+
+    const target = { p: g.player, dx: g.player.x - boss.x, dy: 0, dist: 200 };
+    enemyShootingAi(g, boss, 1/60, target);
+    boss.aimTimer = 0.001;
+    enemyShootingAi(g, boss, 0.002, target);
+
+    assert(g.enemyProjectiles.length === 3, `expected 3 homing projectiles for phase 4, got ${g.enemyProjectiles.length}`);
+    assert(g.enemyProjectiles[0].homing === true, 'phase 4 projectiles should be homing');
+  });
 });
 
 suite('Prestige System', () => {

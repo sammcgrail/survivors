@@ -117,7 +117,29 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
   }
 
   const hpPct = e.hp / e.maxHp;
-  if (hpPct <= 1 / 3 && e.phase < 3) {
+  if (hpPct <= 0.25 && e.phase < 4) {
+    // Phase 4 — enrage. Speed and movement unchanged on purpose
+    // (per VoX scope); only the attack pattern tightens. Faster
+    // shoot cadence + drop the charge telegraph so dodges become
+    // pure reaction. One-time summon of 2 healers at the boss
+    // position so killing those becomes the new prerequisite to
+    // safely chip the last quarter HP.
+    e.phase = 4;
+    e.enraged = true;
+    if (e.shootCooldown) e.shootCooldown = 1.2;
+    const baseHealer = ENEMY_TYPES.find(t => t.name === 'healer');
+    if (baseHealer) {
+      for (let s = 0; s < 2; s++) {
+        const sa = g.rng.random() * Math.PI * 2;
+        const sr = 50 + g.rng.random() * 30;
+        const minion = scaleEnemy(baseHealer, g.wave, g.rng);
+        minion.x = e.x + Math.cos(sa) * sr;
+        minion.y = e.y + Math.sin(sa) * sr;
+        g.enemies.push(minion);
+      }
+    }
+    emit(g, EVT.BOSS_PHASE, { phase: 4, x: e.x, y: e.y });
+  } else if (hpPct <= 1 / 3 && e.phase < 3) {
     e.phase = 3;
     // +30% from phase 2, then another +20% = ×1.56 total vs baseSpeed
     e.speed = e.baseSpeed * 1.56;
@@ -171,8 +193,14 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
     e.chargeDx = edx / dist;
     e.chargeDy = edy / dist;
     e.charging = 0.8;
-    e.chargeTimer = 4 + g.rng.random() * 3;
-    emit(g, EVT.BOSS_TELEGRAPH, { x: e.x, y: e.y });
+    // Enrage compresses the gap between charges and skips the windup
+    // telegraph — players can't pre-dodge, only react to the dash itself.
+    if (e.enraged) {
+      e.chargeTimer = 1.5 + g.rng.random() * 1.5;
+    } else {
+      e.chargeTimer = 4 + g.rng.random() * 3;
+      emit(g, EVT.BOSS_TELEGRAPH, { x: e.x, y: e.y });
+    }
   }
 }
 

@@ -83,9 +83,11 @@ function releaseShot(g, e, tx, ty) {
     const baseAngle = Math.atan2(dy, dx);
     const phase = e.phase || 1;
 
-    if (phase === 3) {
+    if (phase >= 3) {
       // 3 homing projectiles — curve toward nearest player at up to
-      // 1.5 rad/s so they're threatening but still jukeable.
+      // 1.5 rad/s so they're threatening but still jukeable. Phase 4
+      // (enrage) keeps the homing pattern but fires at the lower
+      // shootCooldown set in updateBossAi.
       for (let s = -1; s <= 1; s++) {
         const a = baseAngle + s * 0.25;
         const sx = e.x + Math.cos(a) * 500;
