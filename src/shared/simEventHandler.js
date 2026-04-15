@@ -534,6 +534,29 @@ export function applySimEvent(evt, client) {
       sfx('hive_burst');
       break;
 
+    case 'bossSpawn':
+      // Boss arrival — reuse boss_telegraph sfx for the ominous
+      // beat, big shake for everyone in the world (a boss's arrival
+      // affects every player), and a deep red telegraph burst at
+      // the spawn point so anyone panning over sees where it landed.
+      sfx('boss_telegraph');
+      shake(0.35);
+      for (let i = 0; i < 24; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#d63031', {
+          speedMin: 80, speedMax: 220,
+          lifeMin: 0.5, lifeMax: 0.9,
+          radiusMin: 2, radiusMax: 4,
+        });
+      }
+      for (let i = 0; i < 8; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#7b1212', {
+          speedMin: 30, speedMax: 100,
+          lifeMin: 0.7, lifeMax: 1.1,
+          radiusMin: 3, radiusMax: 5,
+        });
+      }
+      break;
+
     case 'evolution':
       if (isMe) shake(0.5);
       spawn(evt.x, evt.y, '#f39c12', 20);
