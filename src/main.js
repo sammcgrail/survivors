@@ -9,6 +9,7 @@ import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
+import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -263,6 +264,10 @@ function initGame() {
     iframes: 0, // invincibility frames after hit
     facing: { x: 1, y: 0 },
     id: 0, kills: 0, score: 0, // shared shape with MP — sim attributes kills via id
+    // Death-screen highlight tracking — written by damageEnemy, read
+    // by showDeathScreen. Must init to zero/empty so MVP/overkill/
+    // max-hit reads stay safe for untouched runs.
+    dmgByWeapon: {}, overkills: 0, maxHit: 0, maxHitEnemy: null,
     // Per-player powerup stack counts. Starting weapon = stack 1 so its
     // upgrade powerups (e.g. spit_up) unlock immediately.
     powerupStacks: { ['weapon_' + selectedWeapon]: 1 },
@@ -638,6 +643,10 @@ function showDeathScreen(g) {
     <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
     ${powerupList ? `<div style="font-size:0.65rem;color:#555">Powerups: ${powerupList}</div>` : ''}
   `;
+
+  // Highlights — MVP weapon, biggest hit, overkill count. Rendered via
+  // shared helper so MP's death screen uses identical markup.
+  renderDeathHighlights(document.getElementById('death-highlights'), g.player);
 
   // best run display
   const bestMins = Math.floor(best.time / 60);

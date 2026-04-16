@@ -173,7 +173,7 @@ export function buildSpatialHash(entities) {
 function applyHit(g, s, e) {
   const owner = g.players.find(p => p.id === s.owner);
   const dmg = s.damage * (owner ? owner.damageMulti : 1);
-  damageEnemy(g, e, dmg, s.owner);
+  damageEnemy(g, e, dmg, s.owner, s.weaponType);
   if (s.statusOnHit) applyStatus(g, e, s.statusOnHit);
   s.pierce--;
   if (!s.hit) s.hit = new Set();

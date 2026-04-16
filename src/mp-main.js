@@ -6,6 +6,7 @@
 
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
+import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { PLAYER_RADIUS, MAX_PARTICLES } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
@@ -693,6 +694,11 @@ function showDeathScreen(state, me) {
     Kills: ${me.kills}<br>
     <div style="margin-top:8px;font-size:0.7rem;color:#666">Weapons: ${weaponList}</div>
   `;
+
+  // Highlights — MVP weapon, biggest hit, overkill count. Server ships
+  // dmgByWeapon / overkills / maxHit / maxHitEnemy on `me` only when
+  // dead, so these fields are populated at this point in the flow.
+  renderDeathHighlights(document.getElementById('death-highlights'), me);
 
   // Achievement badges — read-only from localStorage (earned in SP, displayed here)
   const screen = document.getElementById('death-screen');

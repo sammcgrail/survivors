@@ -57,7 +57,7 @@ function applyEffect(g, c, p) {
         if (e.dying !== undefined) continue;
         const dx = e.x - c.x, dy = e.y - c.y;
         if (dx * dx + dy * dy < blastR * blastR) {
-          damageEnemy(g, e, blastDmg, p.id);
+          damageEnemy(g, e, blastDmg, p.id, 'bomb');
         }
       }
       break;

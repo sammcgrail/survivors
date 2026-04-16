@@ -80,6 +80,13 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
     level: 1,
     kills: 0,
     score: 0,
+    // Death-screen highlight tracking — damageEnemy writes, snapshots
+    // ship these to the MP client for its death-screen payoff. Must
+    // match SP init shape (src/main.js).
+    dmgByWeapon: {},
+    overkills: 0,
+    maxHit: 0,
+    maxHitEnemy: null,
     weapons: [createWeapon(weaponType)],
     alive: true,
     iframes: 2.0, // spawn protection
@@ -286,6 +293,15 @@ function gameSnapshot() {
       weapons: p.weapons.map(snapshotWeapon),
       activeSkin: p.activeSkin,
       activeTrail: p.activeTrail,
+      // Death-screen highlight payload — only ride when the player is
+      // dead and actually needs them, so the live-tick snapshot stays
+      // light. Client's showDeathScreen reads these for MVP weapon +
+      // biggest-hit + overkill cards.
+      ...(!p.alive && p.dmgByWeapon && Object.keys(p.dmgByWeapon).length
+        ? { dmgByWeapon: p.dmgByWeapon } : {}),
+      ...(!p.alive && p.overkills ? { overkills: p.overkills } : {}),
+      ...(!p.alive && p.maxHit ? { maxHit: r1(p.maxHit) } : {}),
+      ...(!p.alive && p.maxHitEnemy ? { maxHitEnemy: p.maxHitEnemy } : {}),
     })),
     enemies: game.enemies.map(e => ({
       name: e.name,

@@ -59,6 +59,13 @@ body[data-mode="mp"] .sp-only { display: none !important; }
 #start-screen button:hover, #death-screen button:hover { background: #c0392b; }
 
 #death-screen .stats { color: #aaa; font-size: 1rem; margin-bottom: 16px; text-align: center; line-height: 2; }
+#death-screen .highlights { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-bottom: 20px; max-width: 440px; }
+#death-screen .highlight { background: #181825; border: 1px solid #333; border-radius: 6px; padding: 8px 14px; min-width: 120px; text-align: center; }
+#death-screen .highlight.hl-mvp { border-color: #f1c40f; box-shadow: 0 0 10px rgba(241,196,15,0.2); }
+#death-screen .highlight .hl-label { color: #666; font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 3px; }
+#death-screen .highlight .hl-value { color: #f1c40f; font-size: 1.1rem; font-weight: 700; line-height: 1.2; }
+#death-screen .highlight .hl-sub { color: #888; font-size: 0.65rem; margin-top: 2px; }
+#death-screen .highlight .hl-role { display: inline-block; font-size: 8px; letter-spacing: 0.1em; color: #f1c40f; border: 1px solid rgba(241,196,15,0.4); background: rgba(241,196,15,0.08); padding: 1px 5px; border-radius: 3px; margin-top: 3px; text-transform: uppercase; }
 #death-screen .best-run { background: #1a1a2e; border: 1px solid #333; border-radius: 8px; padding: 10px 20px; margin-bottom: 16px; text-align: center; font-size: 0.75rem; color: #666; }
 #death-screen .best-run .best-label { text-transform: uppercase; letter-spacing: 2px; font-size: 0.6rem; color: #555; margin-bottom: 4px; }
 #death-screen .best-run .best-value { color: #f39c12; font-size: 0.85rem; }
@@ -305,6 +312,7 @@ canvas { touch-action: none; }
   <h1>DEAD</h1>
   <div id="death-new-best" class="sp-only"></div>
   <div class="stats" id="death-stats"></div>
+  <div class="highlights" id="death-highlights"></div>
   <div class="loadout-label sp-only">loadout</div>
   <div class="loadout sp-only" id="death-loadout"></div>
   <div class="best-run sp-only" id="death-best-run"></div>
