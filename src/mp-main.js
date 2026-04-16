@@ -13,7 +13,8 @@ import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
-import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
+import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
+import { drawBackground } from './shared/backgroundRenderer.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
@@ -1132,26 +1133,8 @@ function render(dt) {
   // Floor is monotonic.
   ctx.translate(-Math.floor(cx), -Math.floor(cy));
 
-  // --- background: tiled pattern, neon abstract render, or grid fallback ---
-  if (bgCanvas) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(bgCanvas, 0, 0, bgCanvas.width, bgCanvas.height, 0, 0, arena.w, arena.h);
-    ctx.imageSmoothingEnabled = true;
-  } else if (MAPS[mapId]?.abstractRender === 'neon') {
-    drawNeonBackground(ctx, cx, cy, W, H, arena);
-  } else {
-    const gridSize = 60;
-    const startX = Math.floor(cx / gridSize) * gridSize;
-    const startY = Math.floor(cy / gridSize) * gridSize;
-    ctx.strokeStyle = '#12121a';
-    ctx.lineWidth = 1;
-    for (let x = startX; x < cx + W + gridSize; x += gridSize) {
-      ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x, cy + H); ctx.stroke();
-    }
-    for (let y = startY; y < cy + H + gridSize; y += gridSize) {
-      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + W, y); ctx.stroke();
-    }
-  }
+  // --- background: 3-tier fallback (tileset / neon / grid) ---
+  drawBackground(ctx, bgCanvas, mapId, arena, cx, cy, W, H);
 
   // --- world border ---
   ctx.strokeStyle = '#333';
