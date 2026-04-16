@@ -30,6 +30,7 @@ import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 import { saveRunEntry } from './shared/runHistory.js';
+import { createBaseGameState } from './shared/gameState.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -293,8 +294,7 @@ function initGame() {
     heartDrops: [],
     consumables: [],
     enemyProjectiles: [],
-    particles: [],
-    floatingTexts: [],
+    ...createBaseGameState(),
     time: 0,
     wave: 1,
     waveTimer: 0,
@@ -309,11 +309,6 @@ function initGame() {
     playerName: 'you',
     deathFeed: [], // { text, time } — fading event log
     camera: { x: p.x, y: p.y },
-    screenShake: 0,
-    // Event queue drained by client each frame. Sim modules push typed
-    // events here; client handles sfx/particles/HUD flashes from the
-    // queue. See src/shared/sim/events.js for the EVT enum.
-    events: [],
     rng,
     // Visual effect arrays — chain bolts and meteor warn/explode rings.
     // Eager-init here so sim modules don't need defensive `|| []` checks.

@@ -21,6 +21,7 @@ import { getAmbient } from './shared/mapAmbient.js';
 import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
+import { createBaseGameState } from './shared/gameState.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -359,14 +360,17 @@ let stateTime = 0;      // time we received currState
 let interpAlpha = 1;     // 0..1 blend between prev and curr
 const TICK_DT = 1 / 20;  // server sends at 20Hz
 
-// Client-side particles + floating text (decorative only).
-let particles = [];
-let floatingTexts = [];
-let screenShake = 0;
+// Client-side visual state — same zero-shape as SP (main.js). SP owns
+// these inside the game object; MP owns them at module scope since
+// there's no client-side game object (server drives all sim state).
+// Arrays are live references; scalars are copied to mutable lets.
+const _clientBase = createBaseGameState();
+let { particles, floatingTexts } = _clientBase;
+let screenShake = _clientBase.screenShake;
 // fork #19 — level-up white-wash flash, parity with SP (src/main.js).
 // Driven by applySimEvent → mpEventClient.flash(v). Decays each frame
 // in render() and paints a yellow full-screen overlay while >0.
-let levelFlash = 0;
+let levelFlash = _clientBase.levelFlash;
 // Per-player fire-trail throttle, shared helper owns the write — we
 // just own the Map so state survives between render frames.
 const trailState = new Map();
