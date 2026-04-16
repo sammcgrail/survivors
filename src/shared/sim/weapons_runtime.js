@@ -59,7 +59,7 @@ function fireSpit(g, w, p) {
       vx: fx * w.speed, vy: fy * w.speed,
       speed: w.speed, damage: w.damage, range: w.range,
       dist: 0, pierce: w.pierce, radius: 5, color: w.color,
-      owner: p.id,
+      owner: p.id, weaponType: w.type,
     });
   }
 }
@@ -93,7 +93,7 @@ function fireCharge(g, w, p) {
       radius: effectiveWidth * 0.6,
       damage: w.damage * 0.5 * (p.damageMulti || 1),
       life: 1.0,     // 1 second lingering trail
-      owner: p.id,
+      owner: p.id, weaponType: w.type,
       color: w.color,
     });
   }
@@ -129,7 +129,7 @@ function fireChain(g, w, p) {
   const chainPoints = [{ x: p.x, y: p.y }];
   for (const t of targets) {
     chainPoints.push({ x: t.x, y: t.y });
-    damageEnemy(g, t, w.damage * p.damageMulti, p.id);
+    damageEnemy(g, t, w.damage * p.damageMulti, p.id, w.type);
     applyStatus(g, t, { type: 'slow', remaining: 2.0, magnitude: 0.4, tickRate: 0 });
   }
   g.chainEffects.push({ points: chainPoints, life: 0.32, maxLife: 0.32, color: w.color });
@@ -145,7 +145,7 @@ function fireMeteor(g, w, p) {
     life: 0.5,
     phase: 'warn',
     color: w.color,
-    owner: p.id,
+    owner: p.id, weaponType: w.type,
   });
   emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius * (p.sizeMulti || 1) });
 }
@@ -173,7 +173,7 @@ function fireDragonStorm(g, w, p) {
       vx: fx * w.speed, vy: fy * w.speed,
       speed: w.speed, damage: w.damage, range: w.range,
       dist: 0, pierce: w.pierce, radius: 7, color: w.color,
-      owner: p.id,
+      owner: p.id, weaponType: w.type,
       // Burn applied per hit in projectiles.js via statusOnHit.
       statusOnHit: { type: 'burn', remaining: 3.0, magnitude: 8, tickRate: 0.5 },
     });
@@ -226,7 +226,7 @@ function tickOrbit(g, w, p, dt) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
       if (dx * dx + dy * dy < (10 + e.radius) ** 2) {
-        damageEnemy(g, e, w.damage * p.damageMulti * dt * 8, p.id);
+        damageEnemy(g, e, w.damage * p.damageMulti * dt * 8, p.id, w.type);
       }
     }
   }
@@ -247,7 +247,7 @@ function tickShield(g, w, p, dt) {
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
-      damageEnemy(g, e, w.damage * p.damageMulti * dt * 2, p.id);
+      damageEnemy(g, e, w.damage * p.damageMulti * dt * 2, p.id, w.type);
     }
   }
   if (hit) {
@@ -264,7 +264,7 @@ function tickLightningField(g, w, p) {
   const zapCount = w.zapCount + (p.projectileBonus || 0);
   const targets = randomEnemiesInRange(g, p.x, p.y, effectiveRadius, zapCount);
   for (const t of targets) {
-    damageEnemy(g, t, w.damage * p.damageMulti, p.id);
+    damageEnemy(g, t, w.damage * p.damageMulti, p.id, w.type);
     applyStatus(g, t, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
   }
@@ -293,7 +293,7 @@ function tickBreathAura(g, w, p, dt) {
     const edx = p.x - e.x, edy = p.y - e.y;
     const sum = effectiveRadius + e.radius;
     if (edx * edx + edy * edy < sum * sum) {
-      damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id);
+      damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id, w.type);
     }
   }
 }
@@ -307,7 +307,7 @@ function tickChargeSweep(g, w, p, dt) {
     const forward = ex * cdx + ey * cdy;
     const lateral = Math.abs(ex * (-cdy) + ey * cdx);
     if (forward > -effectiveWidth && forward < w.speed * w.duration && lateral < effectiveWidth + e.radius) {
-      damageEnemy(g, e, w.damage * p.damageMulti * dt * 3, p.id);
+      damageEnemy(g, e, w.damage * p.damageMulti * dt * 3, p.id, w.type);
     }
   }
 }
@@ -318,7 +318,7 @@ function tickDragonStormAura(g, w, p, dt) {
     const e = g.enemies[j];
     const dx = p.x - e.x, dy = p.y - e.y;
     if (dx * dx + dy * dy < (effectiveAura + e.radius) ** 2) {
-      damageEnemy(g, e, w.auraDamage * p.damageMulti * dt, p.id);
+      damageEnemy(g, e, w.auraDamage * p.damageMulti * dt, p.id, w.type);
     }
   }
 }
@@ -343,7 +343,7 @@ function tickThunderField(g, w, p) {
       const dx = e.x - p.x, dy = e.y - p.y;
       if (dx * dx + dy * dy >= effectiveFieldR * effectiveFieldR) continue;
       any = true;
-      damageEnemy(g, e, w.fieldDamage * 2 * p.damageMulti, p.id);
+      damageEnemy(g, e, w.fieldDamage * 2 * p.damageMulti, p.id, w.type);
       e.stunTimer = Math.max(e.stunTimer || 0, 0.3);
     }
     if (any) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god_overcharge', pid: p.id });
@@ -353,7 +353,7 @@ function tickThunderField(g, w, p) {
   const tgZapCount = w.zapCount + (p.projectileBonus || 0);
   const targets = randomEnemiesInRange(g, p.x, p.y, effectiveFieldR2, tgZapCount);
   for (const t of targets) {
-    damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id);
+    damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id, w.type);
     g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god', pid: p.id });
@@ -374,7 +374,7 @@ function tickMeteorOrbit(g, w, p, dt) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
       if (dx * dx + dy * dy < (10 + e.radius) ** 2) {
-        const killed = damageEnemy(g, e, w.bladeDamage * p.damageMulti * dt * 8, p.id);
+        const killed = damageEnemy(g, e, w.bladeDamage * p.damageMulti * dt * 8, p.id, w.type);
         // Chain-reaction trigger: mini-meteor at the kill site. Queued as
         // a normal meteor with `warn` phase 0 → explode in 0.15s.
         if (killed) {
@@ -383,7 +383,7 @@ function tickMeteorOrbit(g, w, p, dt) {
             radius: w.miniMeteorRadius,
             damage: w.miniMeteorDamage * p.damageMulti,
             life: 0.15, phase: 'warn',
-            color: w.color, owner: p.id,
+            color: w.color, owner: p.id, weaponType: w.type,
           });
           emit(g, EVT.METEOR_WARN, { x: e.x, y: e.y, radius: w.miniMeteorRadius });
         }
@@ -410,7 +410,7 @@ function tickFortressShield(g, w, p, dt) {
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
-      damageEnemy(g, e, w.shieldDamage * p.damageMulti * dt * 2, p.id);
+      damageEnemy(g, e, w.shieldDamage * p.damageMulti * dt * 2, p.id, w.type);
     }
   }
   if (hit) {
@@ -433,7 +433,7 @@ function fortressShockwave(g, w, p) {
     const dist2 = dx * dx + dy * dy;
     const sum = effectiveShockR + e.radius;
     if (dist2 < sum * sum) {
-      damageEnemy(g, e, w.shockwaveDamage * p.damageMulti, p.id);
+      damageEnemy(g, e, w.shockwaveDamage * p.damageMulti, p.id, w.type);
       if (dist2 > 1) {
         const dist = Math.sqrt(dist2); // sqrt only for enemies in range
         const push = 200;
@@ -448,7 +448,7 @@ function fortressShockwave(g, w, p) {
     x: p.x, y: p.y,
     radius: w.shockwaveRadius,
     damage: 0, life: 0.25, phase: 'explode',
-    color: w.color, owner: p.id,
+    color: w.color, owner: p.id, weaponType: w.type,
   });
   emit(g, EVT.METEOR_EXPLODE, { x: p.x, y: p.y, color: w.color, radius: w.shockwaveRadius, pid: p.id });
 }
@@ -471,7 +471,7 @@ function tickInfernoWheel(g, w, p, dt) {
       const e = g.enemies[j];
       const dx = bx - e.x, dy = by - e.y;
       if (dx * dx + dy * dy < (effectiveBladeR + e.radius) ** 2) {
-        damageEnemy(g, e, w.bladeDamage * p.damageMulti * dt * 8, p.id);
+        damageEnemy(g, e, w.bladeDamage * p.damageMulti * dt * 8, p.id, w.type);
         applyStatus(g, e, { type: 'burn', remaining: w.burnDuration, magnitude: w.burnDps, tickRate: 0.5 });
       }
     }
@@ -500,7 +500,7 @@ function tickTeslaAegis(g, w, p, dt) {
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
-      damageEnemy(g, e, w.shieldDamage * p.damageMulti * dt * 2, p.id);
+      damageEnemy(g, e, w.shieldDamage * p.damageMulti * dt * 2, p.id, w.type);
     }
   }
   if (hit) {
@@ -526,7 +526,7 @@ function fireTeslaAegisPulse(g, w, p) {
     for (const e of g.enemies) {
       const dx = e.x - p.x, dy = e.y - p.y;
       if (dx * dx + dy * dy >= expandR * expandR) continue;
-      damageEnemy(g, e, w.chainDamage * 2 * p.damageMulti, p.id);
+      damageEnemy(g, e, w.chainDamage * 2 * p.damageMulti, p.id, w.type);
       e.stunTimer = Math.max(e.stunTimer || 0, w.overchargeStun);
       applyStatus(g, e, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
     }
@@ -536,7 +536,7 @@ function fireTeslaAegisPulse(g, w, p) {
     g.meteorEffects.push({
       x: p.x, y: p.y, radius: expandR,
       damage: 0, life: w.overchargeExpandLife, phase: 'explode',
-      color: w.color, owner: p.id,
+      color: w.color, owner: p.id, weaponType: w.type,
     });
     emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis_overcharge', pid: p.id });
     // Muzzle/cast bloom on overcharge only — normal pulses fire every
@@ -561,7 +561,7 @@ function fireTeslaAegisPulse(g, w, p) {
     }
     if (!nearest) break;
     hitSet.add(nearest);
-    damageEnemy(g, nearest, w.chainDamage * p.damageMulti, p.id);
+    damageEnemy(g, nearest, w.chainDamage * p.damageMulti, p.id, w.type);
     applyStatus(g, nearest, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
     points.push({ x: nearest.x, y: nearest.y });
     prevX = nearest.x; prevY = nearest.y;
@@ -586,7 +586,7 @@ function fireVoidAnchor(g, w, p) {
     const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
     if (d2 < nearestDist2) { nearest = e; nearestDist2 = d2; }
   }
-  if (nearest) damageEnemy(g, nearest, w.baseDamage * p.damageMulti, p.id);
+  if (nearest) damageEnemy(g, nearest, w.baseDamage * p.damageMulti, p.id, w.type);
   if (!g.pendingPulls) g.pendingPulls = [];
   g.pendingPulls.push({
     x: p.x, y: p.y,
@@ -603,7 +603,7 @@ function fireVoidAnchor(g, w, p) {
     life: 0.7, warnLife: 0.7,
     phase: 'warn',
     color: w.color,
-    owner: p.id,
+    owner: p.id, weaponType: w.type,
   });
   emit(g, EVT.METEOR_WARN, { x: p.x, y: p.y, radius: impactR });
 }
@@ -649,7 +649,7 @@ export function updateChargeTrails(g, dt) {
       if (e.dying !== undefined) continue;
       const dx = e.x - t.x, dy = e.y - t.y;
       if (dx * dx + dy * dy < (t.radius + e.radius) ** 2) {
-        damageEnemy(g, e, t.damage * dt, t.owner);
+        damageEnemy(g, e, t.damage * dt, t.owner, t.weaponType);
       }
     }
   }
@@ -682,7 +682,7 @@ export function updateMeteorEffects(g, dt) {
           const e = g.enemies[j];
           const dx = m.x - e.x, dy = m.y - e.y;
           if (dx * dx + dy * dy < (m.radius + e.radius) ** 2) {
-            damageEnemy(g, g.enemies[j], m.damage, m.owner);
+            damageEnemy(g, g.enemies[j], m.damage, m.owner, m.weaponType);
             // Meteor freeze — hard landing stuns enemies in the blast zone.
             if (m.damage > 0) applyStatus(g, e, { type: 'freeze', remaining: 0.8, magnitude: 0, tickRate: 0 });
           }

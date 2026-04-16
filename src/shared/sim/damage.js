@@ -65,8 +65,11 @@ function applyExplodeOnDeath(g, e) {
 
 // Returns true when this call killed the enemy (enables on-kill hooks
 // like meteor_orbit's mini-meteor trigger); false on hit-but-alive or
-// already-dying calls.
-export function damageEnemy(g, e, dmg, killerId) {
+// already-dying calls. `weaponType` is the damage source (e.g. 'spit',
+// 'chain') and drives per-weapon kill + damage attribution for the
+// death screen's MVP panel; omit / pass null for untracked sources
+// (consumables, death-effect AoE, status ticks — bucketed as 'other').
+export function damageEnemy(g, e, dmg, killerId, weaponType) {
   if (e.dying) return false;
   // Overkill metric: compare the dealt damage against the enemy's
   // remaining HP BEFORE the hit. A 3x-or-more overkill flags the kill
@@ -77,6 +80,22 @@ export function damageEnemy(g, e, dmg, killerId) {
   const preHitHp = e.hp;
   e.hp -= dmg;
   e.hitFlash = 1;
+  // Per-player damage-screen stats: MVP weapon (total damage by type),
+  // biggest single hit (with victim), overkill count. Lookup of the
+  // killing player is by id; O(N players) where N ≤ 8 in MP.
+  if (killerId != null) {
+    for (const p of g.players) {
+      if (p.id !== killerId) continue;
+      if (!p.dmgByWeapon) p.dmgByWeapon = {};
+      const bucket = weaponType || 'other';
+      p.dmgByWeapon[bucket] = (p.dmgByWeapon[bucket] || 0) + dmg;
+      if (dmg > (p.maxHit || 0)) {
+        p.maxHit = dmg;
+        p.maxHitEnemy = e.name;
+      }
+      break;
+    }
+  }
   // dmg < 5 hits never trigger client visuals (text/sfx/crit gated
   // at >= 5), so skip emission server-side. Drops the bandwidth
   // pressure from breath weapons fanning out across many enemies
@@ -119,24 +138,29 @@ export function damageEnemy(g, e, dmg, killerId) {
     // explosion. Velocity / motion direction lets the renderer
     // shape an asymmetric burst (forward shred for fast enemies,
     // chunky downward debris for tanks, etc).
+    // Overkill flag — only set when:
+    //   (a) the killing blow dealt 3x+ the pre-hit hp, AND
+    //   (b) absolute floor of 50 dmg OR enemy is a threat tier
+    //       (elite / brute / spawner / boss / healer)
+    // The (b) gate keeps spit one-shotting a 10-hp blob from
+    // punch-framing every kill in early game. Drives a client
+    // punch-frame flash + bumped burst count, and the death-screen
+    // overkill total.
+    const isOverkill = dmg >= preHitHp * 3 && (dmg >= 50 || IS_THREAT_TIER[e.name]);
     emit(g, EVT.ENEMY_KILLED, {
       x: e.x, y: e.y,
       color: e.color, name: e.name, radius: e.radius,
       vx: e.vx, vy: e.vy,
       killer: killerId,
-      // Overkill flag — only set when:
-      //   (a) the killing blow dealt 3x+ the pre-hit hp, AND
-      //   (b) absolute floor of 50 dmg OR enemy is a threat tier
-      //       (elite / brute / spawner / boss / healer)
-      // The (b) gate keeps spit one-shotting a 10-hp blob from
-      // punch-framing every kill in early game. Lets the client add
-      // a punch-frame flash + bumped burst count when it matters.
-      ...(dmg >= preHitHp * 3 && (dmg >= 50 || IS_THREAT_TIER[e.name])
-          ? { overkill: true } : {}),
+      ...(isOverkill ? { overkill: true } : {}),
     });
     e.dying = 0.2; // 200ms death animation
     g.kills++;
-    for (const p of g.players) if (p.id === killerId) { p.kills++; break; }
+    for (const p of g.players) if (p.id === killerId) {
+      p.kills++;
+      if (isOverkill) p.overkills = (p.overkills || 0) + 1;
+      break;
+    }
     return true;
   }
   return false;

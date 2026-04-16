@@ -15,6 +15,7 @@ import { EVT } from '../src/shared/sim/events.js';
 import { MAPS, resolveMapObstacles } from '../src/shared/maps.js';
 import { generateClusterScatter, generateCorridor } from '../src/shared/mapGen.js';
 import { damageEnemy } from '../src/shared/sim/damage.js';
+import { computeDeathHighlights } from '../src/shared/deathHighlights.js';
 import { spawnGem } from '../src/shared/sim/gems.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
@@ -1185,6 +1186,94 @@ suite('Lobby Anti-Repeat', () => {
     // pool.length > wantCount is false → no exclusion branch runs
     const pool = lobbyPool(['arena', 'forest', 'ruins'], 'arena', 3);
     assert(pool.length === 3, 'should return 3 options regardless');
+  });
+});
+
+suite('Death-screen Stat Tracking', () => {
+  function setupGame() {
+    const rng = createRng(1);
+    const p = {
+      id: 1, hp: 100, maxHp: 100, damageMulti: 1, radius: 14, x: 0, y: 0,
+      alive: true, kills: 0,
+      dmgByWeapon: {}, overkills: 0, maxHit: 0, maxHitEnemy: null,
+    };
+    const g = {
+      players: [p], enemies: [], kills: 0, events: [], rng, wave: 1,
+      // damage.js's on-kill path touches gems + consumables + drops,
+      // so the harness must init every sink it pushes to.
+      gems: [], heartDrops: [], consumables: [], meteorEffects: [],
+    };
+    return { g, p };
+  }
+
+  test('dmgByWeapon accumulates per weapon type', () => {
+    const { g, p } = setupGame();
+    const e1 = { name: 'blob', hp: 100, x: 0, y: 0, radius: 8 };
+    const e2 = { name: 'blob', hp: 100, x: 0, y: 0, radius: 8 };
+    g.enemies.push(e1, e2);
+    damageEnemy(g, e1, 10, 1, 'spit');
+    damageEnemy(g, e1, 15, 1, 'spit');
+    damageEnemy(g, e2, 20, 1, 'chain');
+    assert(p.dmgByWeapon.spit === 25, `spit total: ${p.dmgByWeapon.spit}`);
+    assert(p.dmgByWeapon.chain === 20, `chain total: ${p.dmgByWeapon.chain}`);
+  });
+
+  test('untagged damage lands in "other" bucket', () => {
+    const { g, p } = setupGame();
+    const e = { name: 'blob', hp: 100, x: 0, y: 0, radius: 8 };
+    g.enemies.push(e);
+    damageEnemy(g, e, 42, 1); // no weaponType arg
+    assert(p.dmgByWeapon.other === 42, `other bucket: ${p.dmgByWeapon.other}`);
+  });
+
+  test('maxHit tracks biggest single hit + victim name', () => {
+    const { g, p } = setupGame();
+    const blob  = { name: 'blob',  hp: 100, x: 0, y: 0, radius: 8 };
+    const brute = { name: 'brute', hp: 500, x: 0, y: 0, radius: 8 };
+    g.enemies.push(blob, brute);
+    damageEnemy(g, blob, 25, 1, 'spit');
+    damageEnemy(g, brute, 150, 1, 'meteor');
+    damageEnemy(g, brute, 40, 1, 'spit');
+    assert(p.maxHit === 150, `maxHit: ${p.maxHit}`);
+    assert(p.maxHitEnemy === 'brute', `maxHitEnemy: ${p.maxHitEnemy}`);
+  });
+
+  test('overkills only counts gated threat-tier / high-damage kills', () => {
+    const { g, p } = setupGame();
+    const blob  = { name: 'blob',  hp: 10, x: 0, y: 0, radius: 8 };
+    const elite = { name: 'elite', hp: 30, x: 0, y: 0, radius: 8 };
+    const boss  = { name: 'boss',  hp: 40, x: 0, y: 0, radius: 8 };
+    g.enemies.push(blob, elite, boss);
+    // blob 10hp + 30dmg → 3x overkill BUT dmg<50 and not threat-tier
+    // → gate fails, not counted
+    damageEnemy(g, blob, 30, 1, 'spit');
+    // elite 30hp + 100dmg → 3.3x overkill, threat-tier → counted
+    damageEnemy(g, elite, 100, 1, 'meteor');
+    // boss 40hp + 200dmg → 5x overkill, threat-tier → counted
+    damageEnemy(g, boss, 200, 1, 'meteor');
+    assert(p.overkills === 2, `overkills (expect 2): ${p.overkills}`);
+  });
+
+  test('computeDeathHighlights picks MVP by highest weapon damage', () => {
+    const p = {
+      dmgByWeapon: { spit: 500, chain: 1200, other: 800 },
+      overkills: 3, maxHit: 250, maxHitEnemy: 'elite',
+    };
+    const h = computeDeathHighlights(p);
+    assert(h.mvp.weapon === 'chain', `mvp: ${h.mvp.weapon}`);
+    assert(h.mvp.dmg === 1200, `mvp dmg: ${h.mvp.dmg}`);
+    assert(h.mvp.role === 'CAST', `mvp role: ${h.mvp.role}`);
+    // 'other' bucket ignored even when numerically larger than spit —
+    // MVP should reflect weapon choice, not generic damage
+    assert(h.overkills === 3, `overkills: ${h.overkills}`);
+    assert(h.maxHit === 250, `maxHit: ${h.maxHit}`);
+    assert(h.maxHitEnemy === 'elite', `maxHitEnemy: ${h.maxHitEnemy}`);
+  });
+
+  test('computeDeathHighlights returns null MVP when no weapon damage', () => {
+    const p = { dmgByWeapon: { other: 42 }, overkills: 0, maxHit: 0, maxHitEnemy: null };
+    const h = computeDeathHighlights(p);
+    assert(h.mvp === null, `mvp should be null: ${JSON.stringify(h.mvp)}`);
   });
 });
 
