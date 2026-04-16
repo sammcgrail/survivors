@@ -16,6 +16,7 @@ import { MAPS, resolveMapObstacles } from '../src/shared/maps.js';
 import { generateClusterScatter, generateCorridor } from '../src/shared/mapGen.js';
 import { damageEnemy } from '../src/shared/sim/damage.js';
 import { computeDeathHighlights } from '../src/shared/deathHighlights.js';
+import { computeWeaponHistogram } from '../src/shared/weaponPickHistogram.js';
 import { spawnGem } from '../src/shared/sim/gems.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
@@ -1274,6 +1275,70 @@ suite('Death-screen Stat Tracking', () => {
     const p = { dmgByWeapon: { other: 42 }, overkills: 0, maxHit: 0, maxHitEnemy: null };
     const h = computeDeathHighlights(p);
     assert(h.mvp === null, `mvp should be null: ${JSON.stringify(h.mvp)}`);
+  });
+});
+
+suite('Top-run Weapon Histogram', () => {
+  test('counts weapon appearances across runs', () => {
+    const runs = [
+      { wave: 25, weapons: ['spit', 'chain'] },
+      { wave: 30, weapons: ['spit', 'breath', 'orbit'] },
+      { wave: 15, weapons: ['chain'] },
+    ];
+    const hist = computeWeaponHistogram(runs);
+    const byW = Object.fromEntries(hist.rows.map(r => [r.weapon, r.runs]));
+    assert(byW.spit === 2, `spit: ${byW.spit}`);
+    assert(byW.chain === 2, `chain: ${byW.chain}`);
+    assert(byW.breath === 1, `breath: ${byW.breath}`);
+    assert(byW.orbit === 1, `orbit: ${byW.orbit}`);
+    assert(hist.totalRuns === 3, `totalRuns: ${hist.totalRuns}`);
+  });
+
+  test('rollup mode expands evolutions to source pair', () => {
+    // A run with thunder_god should also count chain + lightning_field
+    // so the histogram doesn't "lose" those picks to evolution.
+    const runs = [{ wave: 30, weapons: ['thunder_god'] }];
+    const asRec = computeWeaponHistogram(runs, { mode: 'asRecorded' });
+    const asRecMap = Object.fromEntries(asRec.rows.map(r => [r.weapon, r.runs]));
+    assert(asRecMap.thunder_god === 1, 'as-recorded has thunder_god');
+    assert(!asRecMap.chain && !asRecMap.lightning_field, 'as-recorded omits sources');
+
+    const rollup = computeWeaponHistogram(runs, { mode: 'rollup' });
+    const rollupMap = Object.fromEntries(rollup.rows.map(r => [r.weapon, r.runs]));
+    assert(rollupMap.thunder_god === 1, 'rollup keeps thunder_god');
+    assert(rollupMap.chain === 1, 'rollup adds chain source');
+    assert(rollupMap.lightning_field === 1, 'rollup adds field source');
+  });
+
+  test('rows are sorted by frequency desc', () => {
+    const runs = [
+      { wave: 25, weapons: ['spit'] },
+      { wave: 25, weapons: ['spit'] },
+      { wave: 25, weapons: ['spit'] },
+      { wave: 25, weapons: ['chain'] },
+      { wave: 25, weapons: ['breath'] },
+    ];
+    const hist = computeWeaponHistogram(runs);
+    assert(hist.rows[0].weapon === 'spit', `top: ${hist.rows[0].weapon}`);
+    assert(hist.rows[0].runs === 3, `top count: ${hist.rows[0].runs}`);
+  });
+
+  test('empty runs → empty rows', () => {
+    const hist = computeWeaponHistogram([]);
+    assert(hist.rows.length === 0, 'no rows');
+    assert(hist.totalRuns === 0, 'zero runs');
+  });
+
+  test('share is fraction of total runs', () => {
+    const runs = [
+      { wave: 25, weapons: ['spit'] },
+      { wave: 25, weapons: ['chain'] },
+      { wave: 25, weapons: ['chain'] },
+      { wave: 25, weapons: ['chain'] },
+    ];
+    const hist = computeWeaponHistogram(runs);
+    const chainRow = hist.rows.find(r => r.weapon === 'chain');
+    assert(chainRow.share === 0.75, `chain share: ${chainRow.share}`);
   });
 });
 
