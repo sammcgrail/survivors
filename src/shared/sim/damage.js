@@ -70,6 +70,18 @@ export function damageEnemy(g, e, dmg, killerId) {
   if (dmg >= 5) {
     emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
   }
+  // Phase 5 resurrection — intercept the first kill in final form
+  // and revive at 25% HP with a dramatic burst. Fires once:
+  // e.resurrected guards against an infinite revive loop on the next
+  // hit. After revival the boss dies normally.
+  if (e.hp <= 0 && e.name === 'boss' && e.phase === 5 && !e.resurrected) {
+    e.resurrected = true;
+    e.hp = Math.ceil(e.maxHp * 0.25);
+    e.hitFlash = 1;
+    emit(g, EVT.BOSS_RESURRECT, { x: e.x, y: e.y });
+    return false;
+  }
+
   if (e.hp <= 0) {
     spawnGem(g, e.x, e.y, e.xp, e.name);
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {

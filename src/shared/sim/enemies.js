@@ -115,7 +115,39 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
   }
 
   const hpPct = e.hp / e.maxHp;
-  if (hpPct <= 0.25 && e.phase < 4) {
+  if (hpPct <= 0.20 && e.phase === 4) {
+    // Phase 5 — Final Form. Requires phase 4 (enrage) to have already
+    // triggered so players always see the healer mechanic. Three new
+    // pressures: rapid teleport bursts (damage zone left at each old
+    // position), minion rain (2 elites + 3 brutes), arena-wide nova
+    // with a telegraphed safe corner. HP resurrection intercept in
+    // damageEnemy lets the boss survive the first kill attempt.
+    e.phase = 5;
+    e.speed = e.baseSpeed * 1.80;
+    if (e.shootCooldown) e.shootCooldown = 0.9;
+    e.teleportTimer = 1.5; // grace window before first teleport
+    e.novaTimer = 10;      // first nova after 10s
+    // Minion rain — 2 elites + 3 brutes scattered around the boss.
+    const eliteBase = ENEMY_TYPES.find(t => t.name === 'elite');
+    const bruteBase = ENEMY_TYPES.find(t => t.name === 'brute');
+    for (let s = 0; s < 2 && eliteBase; s++) {
+      const sa = g.rng.random() * Math.PI * 2;
+      const sr = 80 + g.rng.random() * 60;
+      const minion = scaleEnemy(eliteBase, g.wave, g.rng);
+      minion.x = e.x + Math.cos(sa) * sr;
+      minion.y = e.y + Math.sin(sa) * sr;
+      g.enemies.push(minion);
+    }
+    for (let s = 0; s < 3 && bruteBase; s++) {
+      const sa = g.rng.random() * Math.PI * 2;
+      const sr = 80 + g.rng.random() * 80;
+      const minion = scaleEnemy(bruteBase, g.wave, g.rng);
+      minion.x = e.x + Math.cos(sa) * sr;
+      minion.y = e.y + Math.sin(sa) * sr;
+      g.enemies.push(minion);
+    }
+    emit(g, EVT.BOSS_PHASE, { phase: 5, x: e.x, y: e.y });
+  } else if (hpPct <= 0.25 && e.phase < 4) {
     // Phase 4 — enrage. Speed and movement unchanged on purpose
     // (per VoX scope); only the attack pattern tightens. Faster
     // shoot cadence + drop the charge telegraph so dodges become
@@ -167,6 +199,93 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
         minion.x = e.x + Math.cos(sa) * sr;
         minion.y = e.y + Math.sin(sa) * sr;
         g.enemies.push(minion);
+      }
+    }
+  }
+
+  // Phase 5 — teleport bursts + arena nova.
+  if (e.phase === 5) {
+    // Rapid teleport: boss vanishes, leaves a damage zone, reappears
+    // near a player. Damage zone uses the existing meteor warn→explode
+    // path with targetsPlayer so the renderer and collision are free.
+    e.teleportTimer -= dt;
+    if (e.teleportTimer <= 0) {
+      e.teleportTimer = 1.0 + g.rng.random() * 1.0;
+      const oldX = e.x, oldY = e.y;
+      const tgt = nearestAlivePlayer(g, e.x, e.y);
+      if (tgt) {
+        const ta = g.rng.random() * Math.PI * 2;
+        const tr = 120 + g.rng.random() * 100;
+        const W = g.arena ? g.arena.w : WORLD_W;
+        const H = g.arena ? g.arena.h : WORLD_H;
+        e.x = Math.max(e.radius, Math.min(W - e.radius, tgt.p.x + Math.cos(ta) * tr));
+        e.y = Math.max(e.radius, Math.min(H - e.radius, tgt.p.y + Math.sin(ta) * tr));
+      }
+      g.meteorEffects.push({
+        x: oldX, y: oldY,
+        radius: 80,
+        damage: Math.round(e.damage * 0.6),
+        life: 0.5, phase: 'warn',
+        color: '#6c0000',
+        targetsPlayer: true, sourceName: 'boss',
+      });
+      emit(g, EVT.METEOR_WARN, { x: oldX, y: oldY, radius: 80 });
+      emit(g, EVT.BOSS_TELEPORT, { fromX: oldX, fromY: oldY, toX: e.x, toY: e.y });
+    }
+
+    // Arena-wide nova: 2.5s warn window, then everyone outside the
+    // safe corner takes heavy damage. Safe zone is the arena corner
+    // farthest from the boss at warn time.
+    e.novaTimer -= dt;
+    if (e.novaTimer <= 0) {
+      e.novaTimer = 12 + g.rng.random() * 4;
+      const W = g.arena ? g.arena.w : WORLD_W;
+      const H = g.arena ? g.arena.h : WORLD_H;
+      const corners = [
+        { x: 300, y: 300 }, { x: W - 300, y: 300 },
+        { x: 300, y: H - 300 }, { x: W - 300, y: H - 300 },
+      ];
+      let safePt = corners[0], bestD2 = 0;
+      for (const c of corners) {
+        const cdx = c.x - e.x, cdy = c.y - e.y;
+        if (cdx * cdx + cdy * cdy > bestD2) { bestD2 = cdx * cdx + cdy * cdy; safePt = c; }
+      }
+      e.novaSafeZone = { x: safePt.x, y: safePt.y, radius: 280 };
+      e.novaWarnTimer = 2.5;
+      emit(g, EVT.BOSS_AOE_WARN, {
+        x: e.x, y: e.y,
+        safeX: safePt.x, safeY: safePt.y, safeRadius: 280,
+        warnDuration: 2.5,
+      });
+    }
+
+    // Tick down warn, then apply nova damage.
+    if (e.novaWarnTimer > 0) {
+      e.novaWarnTimer -= dt;
+      if (e.novaWarnTimer <= 0) {
+        e.novaWarnTimer = 0;
+        for (const p of g.players) {
+          if (!p.alive || p.iframes > 0) continue;
+          if (e.novaSafeZone) {
+            const sx = e.novaSafeZone.x - p.x, sy = e.novaSafeZone.y - p.y;
+            if (sx * sx + sy * sy < e.novaSafeZone.radius ** 2) continue;
+          }
+          const dmg = Math.max(1, Math.round(e.damage * 2.5) - (p.armor || 0));
+          p.hp -= dmg;
+          p.iframes = 0.5;
+          emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: 'boss', pid: p.id });
+          if (p.hp <= 0) {
+            p.hp = 0;
+            p.alive = false;
+            emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: 'boss', pid: p.id });
+          }
+        }
+        emit(g, EVT.BOSS_AOE_EXPLODE, {
+          x: e.x, y: e.y,
+          safeX: e.novaSafeZone?.x, safeY: e.novaSafeZone?.y,
+          safeRadius: e.novaSafeZone?.radius,
+        });
+        e.novaSafeZone = undefined;
       }
     }
   }

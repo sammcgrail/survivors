@@ -743,15 +743,65 @@ suite('Enemy Projectiles', () => {
     boss.phase = 1; boss.baseSpeed = boss.speed;
     g.enemies.push(boss);
     const startCount = g.enemies.length;
-    // Force the HP under the phase-4 threshold and tick — phase
-    // transitions run inside updateEnemies → updateBossAi.
-    boss.hp = boss.maxHp * 0.20;
+    // Use 22% — within the 20-25% phase-4 window so phase 5 doesn't
+    // trigger during the same 2-tick window (phase 5 requires e.phase === 4
+    // AND hpPct <= 0.20, so 22% is safely above that threshold).
+    boss.hp = boss.maxHp * 0.22;
     tickN(g, 2);
     assert(boss.phase === 4, `boss should be in phase 4, got ${boss.phase}`);
     assert(boss.enraged === true, 'boss should be enraged in phase 4');
     const healers = g.enemies.slice(startCount).filter(e => e.name === 'healer');
     assert(healers.length === 2, `expected 2 healers summoned, got ${healers.length}`);
     assert(boss.shootCooldown === 1.2, `expected shootCooldown 1.2 in phase 4, got ${boss.shootCooldown}`);
+  });
+
+  test('boss enters phase 5 (final form) at ≤20% HP after phase 4', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const boss = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'boss'), 20, rng);
+    boss.x = g.player.x + 200;
+    boss.y = g.player.y;
+    boss.hp = boss.maxHp * 0.5;
+    boss.phase = 4; // already in phase 4 (enrage pre-applied)
+    boss.baseSpeed = boss.speed;
+    boss.enraged = true;
+    boss.shootCooldown = 1.2;
+    g.enemies.push(boss);
+    const startCount = g.enemies.length;
+    boss.hp = boss.maxHp * 0.18;
+    tickN(g, 2);
+    assert(boss.phase === 5, `boss should be in phase 5, got ${boss.phase}`);
+    assert(boss.shootCooldown === 0.9, `expected shootCooldown 0.9 in phase 5, got ${boss.shootCooldown}`);
+    // Minion rain: 2 elites + 3 brutes
+    const p5Minions = g.enemies.slice(startCount);
+    const elites = p5Minions.filter(e => e.name === 'elite');
+    const brutes = p5Minions.filter(e => e.name === 'brute');
+    assert(elites.length === 2, `expected 2 elites in minion rain, got ${elites.length}`);
+    assert(brutes.length === 3, `expected 3 brutes in minion rain, got ${brutes.length}`);
+    assert(boss.teleportTimer !== undefined, 'phase 5 boss should have teleportTimer');
+    assert(boss.novaTimer !== undefined, 'phase 5 boss should have novaTimer');
+  });
+
+  test('boss phase 5 resurrection: survives first kill, revives at 25% HP', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const boss = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'boss'), 20, rng);
+    boss.x = g.player.x + 200;
+    boss.y = g.player.y;
+    boss.phase = 5;
+    boss.baseSpeed = boss.speed;
+    g.enemies.push(boss);
+    // Kill the boss — resurrection should intercept and revive at 25% HP.
+    damageEnemy(g, boss, boss.maxHp * 2, null);
+    assert(boss.dying === undefined, 'boss should not be dying after first kill in phase 5');
+    assert(boss.resurrected === true, 'boss.resurrected should be true after revival');
+    assert(boss.hp > 0, 'boss should have HP after resurrection');
+    assert(Math.abs(boss.hp - Math.ceil(boss.maxHp * 0.25)) < 1, `boss HP should be ~25% maxHp after resurrection, got ${boss.hp}`);
+    const resurrectEvt = g.events.find(ev => ev.type === 'bossResurrect');
+    assert(resurrectEvt !== undefined, 'BOSS_RESURRECT event should be emitted');
+    // Second kill should be final — no more resurrection.
+    damageEnemy(g, boss, boss.hp + 100, null);
+    assert(boss.dying !== undefined, 'boss should die for real on second kill in phase 5');
   });
 
   test('phase 4 enraged boss fires homing projectiles like phase 3', () => {

@@ -27,6 +27,10 @@ export const EVT = {
   ENEMY_SHOOT:         'enemyShoot',
   ENEMY_AIM:           'enemyAim',
   BOSS_PHASE:          'bossPhase',
+  BOSS_TELEPORT:       'bossTeleport',
+  BOSS_RESURRECT:      'bossResurrect',
+  BOSS_AOE_WARN:       'bossAoeWarn',
+  BOSS_AOE_EXPLODE:    'bossAoeExplode',
   STATUS_APPLIED:      'statusApplied',
   STATUS_EXPIRED:      'statusExpired',
 };

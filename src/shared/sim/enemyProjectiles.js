@@ -83,7 +83,26 @@ function releaseShot(g, e, tx, ty) {
     const baseAngle = Math.atan2(dy, dx);
     const phase = e.phase || 1;
 
-    if (phase >= 3) {
+    if (phase === 5) {
+      // 5 tight homing projectiles — dense spread at ±0.15 rad,
+      // higher turn rate than phases 3-4. Fast enough that threading
+      // the gaps requires deliberate movement, not just lateral drift.
+      for (let s = -2; s <= 2; s++) {
+        const a = baseAngle + s * 0.15;
+        const sx = e.x + Math.cos(a) * 500;
+        const sy = e.y + Math.sin(a) * 500;
+        fireEnemyProjectile(g, e.x, e.y, sx, sy, {
+          speed: (e.shootSpeed || 160) * 1.25,
+          damage: e.shootDamage || 20,
+          radius: 7,
+          color: '#6c0000',
+          range: e.shootRange,
+          source: e.name,
+          homing: true,
+          turnRate: 2.2,
+        });
+      }
+    } else if (phase >= 3) {
       // 3 homing projectiles — curve toward nearest player at up to
       // 1.5 rad/s so they're threatening but still jukeable. Phase 4
       // (enrage) keeps the homing pattern but fires at the lower

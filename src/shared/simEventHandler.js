@@ -697,43 +697,48 @@ export function applySimEvent(evt, client) {
       //   phase 2 → small burst, brief flash
       //   phase 3 → bigger crimson burst + white sparks + minimap flash
       //   phase 4 → ENRAGED — biggest shake, white screen flash, full
-      //             crimson burst with a "ENRAGED" floating banner above
-      //             the boss so players know the rules just changed.
+      //             crimson burst with "ENRAGED" floating banner
+      //   phase 5 → FINAL FORM — everything maxed, black-red burst,
+      //             "FINAL FORM" banner, longest minimap pulse
       const phase = evt.phase || 2;
+      const p5 = phase === 5;
       const p4 = phase === 4;
       const p3 = phase === 3;
-      shake(p4 ? 0.5 : p3 ? 0.25 : 0.15);
-      flash(p4 ? 0.4 : p3 ? 0.20 : 0.12);
-      sfx(p4 ? 'boss_step' : 'boss_telegraph');
-      const burstColor = p4 ? '#ff2424' : p3 ? '#7b1212' : '#e17055';
-      const burstCount = p4 ? 56 : p3 ? 32 : 20;
+      shake(p5 ? 0.8 : p4 ? 0.5 : p3 ? 0.25 : 0.15);
+      flash(p5 ? 0.6 : p4 ? 0.4 : p3 ? 0.20 : 0.12);
+      sfx(p4 || p5 ? 'boss_step' : 'boss_telegraph');
+      const burstColor = p5 ? '#1a0000' : p4 ? '#ff2424' : p3 ? '#7b1212' : '#e17055';
+      const burstCount = p5 ? 80 : p4 ? 56 : p3 ? 32 : 20;
       for (let i = 0; i < burstCount; i++) {
         pushFx(client.particles, evt.x, evt.y, burstColor, {
-          speedMin: p4 ? 140 : 100, speedMax: p4 ? 380 : 300,
+          speedMin: p5 ? 180 : p4 ? 140 : 100,
+          speedMax: p5 ? 500 : p4 ? 380 : 300,
           lifeMin: 0.4, lifeMax: 0.9,
-          radiusMin: 2, radiusMax: p4 ? 5.5 : 4.5,
+          radiusMin: 2, radiusMax: p5 ? 7 : p4 ? 5.5 : 4.5,
         });
       }
-      if (p3 || p4) {
-        // White-hot sparks for the high-stakes phases. Phase 4 doubles
-        // the count to read as another step up.
-        const sparks = p4 ? 24 : 12;
+      if (p3 || p4 || p5) {
+        // White-hot sparks scale with phase intensity.
+        const sparks = p5 ? 40 : p4 ? 24 : 12;
         for (let i = 0; i < sparks; i++) {
           pushFx(client.particles, evt.x, evt.y, '#ffffff', {
-            speedMin: 200, speedMax: 450,
+            speedMin: 200, speedMax: p5 ? 600 : 450,
             lifeMin: 0.15, lifeMax: 0.35,
             radiusMin: 1.2, radiusMax: 2.4,
           });
         }
-        if (client.minimapBorderFlash) client.minimapBorderFlash(p4 ? 1.0 : 0.6);
+        if (client.minimapBorderFlash) client.minimapBorderFlash(p5 ? 2.0 : p4 ? 1.0 : 0.6);
       }
       if (p4) {
-        // Floating "ENRAGED" banner above the boss — long life so
-        // players have time to register the threshold change before
-        // the silent dashes start landing.
         client.floatingTexts.push({
           x: evt.x, y: evt.y - 60, text: 'ENRAGED',
           color: '#ff5050', life: 1.6, maxLife: 1.6, vy: -32,
+        });
+      }
+      if (p5) {
+        client.floatingTexts.push({
+          x: evt.x, y: evt.y - 60, text: 'FINAL FORM',
+          color: '#ff0000', life: 2.2, maxLife: 2.2, vy: -32,
         });
       }
       break;
@@ -787,6 +792,106 @@ export function applySimEvent(evt, client) {
         });
       }
       break;
+
+    case 'bossTeleport': {
+      // Arrival burst at the new position. Departure is already covered
+      // by the METEOR_WARN damage zone left at the old position — client
+      // sees the warn ring there and the arrival bloom here.
+      for (let i = 0; i < 20; i++) {
+        pushFx(client.particles, evt.toX, evt.toY, '#6c0000', {
+          speedMin: 80, speedMax: 240,
+          lifeMin: 0.2, lifeMax: 0.5,
+          radiusMin: 2, radiusMax: 4.5,
+        });
+      }
+      for (let i = 0; i < 8; i++) {
+        pushFx(client.particles, evt.toX, evt.toY, '#ffffff', {
+          speedMin: 150, speedMax: 340,
+          lifeMin: 0.1, lifeMax: 0.2,
+          radiusMin: 1, radiusMax: 2.2,
+        });
+      }
+      sfx('boss_telegraph');
+      break;
+    }
+
+    case 'bossResurrect': {
+      // The single biggest moment in the fight — boss comes back from 0.
+      // Max shake, near-full flash, 100-particle eruption + sparks +
+      // 3s minimap border + RESURRECTED banner. Players who haven't seen
+      // phase 5 should feel genuinely surprised.
+      shake(1.2);
+      flash(0.9);
+      sfx('boss_step');
+      for (let i = 0; i < 100; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#8b0000', {
+          speedMin: 200, speedMax: 600,
+          lifeMin: 0.5, lifeMax: 1.2,
+          radiusMin: 3, radiusMax: 8,
+        });
+      }
+      for (let i = 0; i < 50; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#ffffff', {
+          speedMin: 300, speedMax: 700,
+          lifeMin: 0.15, lifeMax: 0.4,
+          radiusMin: 1, radiusMax: 3,
+        });
+      }
+      if (client.minimapBorderFlash) client.minimapBorderFlash(3.0);
+      client.floatingTexts.push({
+        x: evt.x, y: evt.y - 60, text: 'RESURRECTED',
+        color: '#ff0000', life: 2.5, maxLife: 2.5, vy: -28,
+      });
+      break;
+    }
+
+    case 'bossAoeWarn': {
+      // Arena-wide nova incoming — tell players where the safe corner is.
+      // Shake + sfx for urgency; "RUN!" banner above the boss; green
+      // particle ring + "SAFE ZONE" text at the safe corner so players
+      // know exactly where to go, even mid-panic.
+      shake(0.25);
+      sfx('boss_telegraph');
+      client.floatingTexts.push({
+        x: evt.x, y: evt.y - 80, text: 'RUN!',
+        color: '#ff4040', life: evt.warnDuration || 2.5,
+        maxLife: evt.warnDuration || 2.5, vy: -18,
+      });
+      if (evt.safeX !== undefined && evt.safeY !== undefined) {
+        const r = evt.safeRadius || 280;
+        for (let i = 0; i < 20; i++) {
+          const angle = (Math.PI * 2 * i) / 20;
+          client.particles.push({
+            x: evt.safeX + Math.cos(angle) * r,
+            y: evt.safeY + Math.sin(angle) * r,
+            vx: 0, vy: -15,
+            life: evt.warnDuration || 2.5, maxLife: evt.warnDuration || 2.5,
+            color: '#00ff88', radius: 4,
+          });
+        }
+        client.floatingTexts.push({
+          x: evt.safeX, y: evt.safeY, text: 'SAFE ZONE',
+          color: '#00ff88', life: evt.warnDuration || 2.5,
+          maxLife: evt.warnDuration || 2.5, vy: -10,
+        });
+      }
+      break;
+    }
+
+    case 'bossAoeExplode': {
+      // Nova detonation — everything outside the safe zone just got hit.
+      shake(0.6);
+      flash(0.35);
+      sfx('boss_step');
+      for (let i = 0; i < 40; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#8b0000', {
+          speedMin: 150, speedMax: 500,
+          lifeMin: 0.4, lifeMax: 1.0,
+          radiusMin: 3, radiusMax: 7,
+        });
+      }
+      break;
+    }
 
     case 'evolution':
       // Evolution — 3-stage: (1) inward-sucking source particles
