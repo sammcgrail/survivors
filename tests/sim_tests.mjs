@@ -1097,6 +1097,97 @@ suite('Deterministic RNG', () => {
   });
 });
 
+// ── Lobby vote resolution (tiebreaker + anti-repeat) ───────────
+// Pure logic tests: mirrors server.mjs resolveLobby + initLobby.
+
+function lobbyResolve(mapVotes, options) {
+  const tally = {};
+  for (const mapId of Object.values(mapVotes)) {
+    tally[mapId] = (tally[mapId] || 0) + 1;
+  }
+  const max = Math.max(0, ...options.map(id => tally[id] || 0));
+  const candidates = max === 0
+    ? options
+    : options.filter(id => (tally[id] || 0) === max);
+  return candidates;
+}
+
+function lobbyPool(rotation, last, wantCount = 3) {
+  // Mirrors server.mjs initLobby (without shuffle so tests are deterministic).
+  const pool = [...rotation];
+  if (last && pool.length > wantCount) {
+    const idx = pool.indexOf(last);
+    if (idx !== -1) { pool.splice(idx, 1); pool.push(last); }
+  }
+  return pool.slice(0, wantCount);
+}
+
+suite('Lobby Vote Resolution', () => {
+  const OPTIONS = ['arena', 'forest', 'ruins'];
+
+  test('no votes → all options are candidates', () => {
+    const c = lobbyResolve({}, OPTIONS);
+    assert(c.length === 3, `expected 3 candidates, got ${c.length}`);
+    assert(OPTIONS.every(id => c.includes(id)), 'all options should be candidates');
+  });
+
+  test('clear winner → only winner returned', () => {
+    const votes = { 1: 'forest', 2: 'forest', 3: 'ruins' };
+    const c = lobbyResolve(votes, OPTIONS);
+    assert(c.length === 1, `expected 1 candidate, got ${c.length}`);
+    assert(c[0] === 'forest', `expected forest, got ${c[0]}`);
+  });
+
+  test('two-way tie → both maps in candidates (not first-seen)', () => {
+    const votes = { 1: 'arena', 2: 'forest', 3: 'arena', 4: 'forest' };
+    const c = lobbyResolve(votes, OPTIONS);
+    assert(c.length === 2, `expected 2 tied candidates, got ${c.length}`);
+    assert(c.includes('arena') && c.includes('forest'), 'both tied maps must be candidates');
+    assert(!c.includes('ruins'), 'non-tied map must be excluded');
+  });
+
+  test('three-way tie → all options in candidates', () => {
+    const votes = { 1: 'arena', 2: 'forest', 3: 'ruins' };
+    const c = lobbyResolve(votes, OPTIONS);
+    assert(c.length === 3, `expected 3 candidates, got ${c.length}`);
+  });
+
+  test('votes for one map only → that map is the sole candidate', () => {
+    const votes = { 1: 'ruins', 2: 'ruins' };
+    const c = lobbyResolve(votes, OPTIONS);
+    assert(c.length === 1 && c[0] === 'ruins', `expected ['ruins'], got [${c}]`);
+  });
+});
+
+suite('Lobby Anti-Repeat', () => {
+  const ROTATION = ['arena', 'forest', 'ruins', 'graveyard', 'wilderness', 'catacombs'];
+
+  test('last map absent from options when rotation has >3 maps', () => {
+    for (const last of ROTATION) {
+      const pool = lobbyPool(ROTATION, last, 3);
+      assert(!pool.includes(last), `last map "${last}" appeared in options: [${pool}]`);
+      assert(pool.length === 3, `expected 3 options, got ${pool.length}`);
+    }
+  });
+
+  test('no last map → plain slice of rotation, no filtering', () => {
+    const pool = lobbyPool(ROTATION, null, 3);
+    assert(pool.length === 3, `expected 3 options, got ${pool.length}`);
+  });
+
+  test('last map pushed to end, absent from first 3', () => {
+    const pool = lobbyPool(['arena', 'forest', 'ruins', 'neon'], 'forest', 3);
+    assert(!pool.includes('forest'), `"forest" (last) should not appear in options: [${pool}]`);
+    assert(pool.length === 3, 'should still have 3 options');
+  });
+
+  test('rotation ≤ wantCount: last map may appear (no safe slot to exclude)', () => {
+    // pool.length > wantCount is false → no exclusion branch runs
+    const pool = lobbyPool(['arena', 'forest', 'ruins'], 'arena', 3);
+    assert(pool.length === 3, 'should return 3 options regardless');
+  });
+});
+
 // ── Summary ─────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`Tests: ${totalPassed} passed, ${totalFailed} failed`);

@@ -731,6 +731,143 @@ function showSpectateOverlay(pid) {
 // LOBBY UI
 // ============================================================
 
+// Per-map preview config: background color + a list of shapes to draw.
+// Shape types: 'circle' {x,y,r,fill}, 'rect' {x,y,w,h,fill},
+//              'line' {x1,y1,x2,y2,stroke,lw}, 'cross' {x,y,s,fill}
+// Coords are 0-1 fractions of the canvas size (W=80, H=52).
+const MAP_PREVIEW = {
+  arena: {
+    bg: '#1a1a1a',
+    shapes: [
+      // Faint arena boundary ring
+      { type: 'circle', x: 0.5, y: 0.5, r: 0.36, fill: null, stroke: '#333', lw: 1.5 },
+      { type: 'circle', x: 0.5, y: 0.5, r: 0.08, fill: '#3a3a3a' },
+    ],
+  },
+  forest: {
+    bg: '#111a11',
+    shapes: [
+      { type: 'circle', x: 0.18, y: 0.25, r: 0.09, fill: '#1e4d1e' },
+      { type: 'circle', x: 0.32, y: 0.20, r: 0.07, fill: '#245a24' },
+      { type: 'circle', x: 0.70, y: 0.30, r: 0.10, fill: '#1e4d1e' },
+      { type: 'circle', x: 0.80, y: 0.22, r: 0.07, fill: '#2a6a2a' },
+      { type: 'circle', x: 0.15, y: 0.72, r: 0.08, fill: '#245a24' },
+      { type: 'circle', x: 0.55, y: 0.78, r: 0.09, fill: '#1e4d1e' },
+      { type: 'circle', x: 0.75, y: 0.70, r: 0.08, fill: '#2a6a2a' },
+    ],
+  },
+  ruins: {
+    bg: '#1a1710',
+    shapes: [
+      // Broken courtyard walls (thick rectangles with gaps)
+      { type: 'rect', x: 0.22, y: 0.22, w: 0.20, h: 0.06, fill: '#4a4030' },
+      { type: 'rect', x: 0.22, y: 0.22, w: 0.05, h: 0.22, fill: '#4a4030' },
+      { type: 'rect', x: 0.58, y: 0.22, w: 0.20, h: 0.06, fill: '#4a4030' },
+      { type: 'rect', x: 0.73, y: 0.22, w: 0.05, h: 0.22, fill: '#4a4030' },
+      { type: 'rect', x: 0.22, y: 0.72, w: 0.20, h: 0.06, fill: '#4a4030' },
+      { type: 'rect', x: 0.22, y: 0.56, w: 0.05, h: 0.22, fill: '#4a4030' },
+      // Centre pillars
+      { type: 'rect', x: 0.44, y: 0.40, w: 0.06, h: 0.06, fill: '#5a5040' },
+      { type: 'rect', x: 0.56, y: 0.54, w: 0.06, h: 0.06, fill: '#5a5040' },
+    ],
+  },
+  neon: {
+    bg: '#05050f',
+    shapes: [
+      // Outer ring of pillars (6 of 12 for readability)
+      { type: 'circle', x: 0.5,  y: 0.13, r: 0.04, fill: '#00cccc' },
+      { type: 'circle', x: 0.82, y: 0.32, r: 0.04, fill: '#00cccc' },
+      { type: 'circle', x: 0.82, y: 0.68, r: 0.04, fill: '#00cccc' },
+      { type: 'circle', x: 0.5,  y: 0.87, r: 0.04, fill: '#00cccc' },
+      { type: 'circle', x: 0.18, y: 0.68, r: 0.04, fill: '#00cccc' },
+      { type: 'circle', x: 0.18, y: 0.32, r: 0.04, fill: '#00cccc' },
+      // Inner square walls
+      { type: 'rect', x: 0.38, y: 0.34, w: 0.24, h: 0.02, fill: '#00aaff' },
+      { type: 'rect', x: 0.38, y: 0.64, w: 0.24, h: 0.02, fill: '#00aaff' },
+      { type: 'rect', x: 0.36, y: 0.36, w: 0.02, h: 0.28, fill: '#00aaff' },
+      { type: 'rect', x: 0.62, y: 0.36, w: 0.02, h: 0.28, fill: '#00aaff' },
+    ],
+  },
+  wilderness: {
+    bg: '#101810',
+    shapes: [
+      // Scattered tree blobs — slightly more spread than forest
+      { type: 'circle', x: 0.12, y: 0.30, r: 0.08, fill: '#1e4d1e' },
+      { type: 'circle', x: 0.28, y: 0.55, r: 0.09, fill: '#245a24' },
+      { type: 'circle', x: 0.50, y: 0.20, r: 0.07, fill: '#1e4d1e' },
+      { type: 'circle', x: 0.65, y: 0.60, r: 0.10, fill: '#2a6a2a' },
+      { type: 'circle', x: 0.82, y: 0.30, r: 0.08, fill: '#1e4d1e' },
+      { type: 'circle', x: 0.40, y: 0.80, r: 0.07, fill: '#245a24' },
+    ],
+  },
+  catacombs: {
+    bg: '#111115',
+    shapes: [
+      // Parallel corridor walls
+      { type: 'rect', x: 0.10, y: 0.20, w: 0.80, h: 0.10, fill: '#2e2e3e' },
+      { type: 'rect', x: 0.10, y: 0.70, w: 0.80, h: 0.10, fill: '#2e2e3e' },
+      // Scattered interior pillars
+      { type: 'rect', x: 0.28, y: 0.42, w: 0.07, h: 0.14, fill: '#3a3a4a' },
+      { type: 'rect', x: 0.48, y: 0.42, w: 0.07, h: 0.14, fill: '#3a3a4a' },
+      { type: 'rect', x: 0.68, y: 0.42, w: 0.07, h: 0.14, fill: '#3a3a4a' },
+    ],
+  },
+  graveyard: {
+    bg: '#130f18',
+    shapes: [
+      // Tombstone rows
+      { type: 'cross', x: 0.20, y: 0.28, s: 0.07, fill: '#4a4050' },
+      { type: 'cross', x: 0.35, y: 0.28, s: 0.07, fill: '#4a4050' },
+      { type: 'cross', x: 0.65, y: 0.28, s: 0.07, fill: '#4a4050' },
+      { type: 'cross', x: 0.20, y: 0.55, s: 0.07, fill: '#4a4050' },
+      { type: 'cross', x: 0.65, y: 0.55, s: 0.07, fill: '#4a4050' },
+      // Mausoleum walls
+      { type: 'rect', x: 0.34, y: 0.42, w: 0.32, h: 0.05, fill: '#3a3040' },
+      { type: 'rect', x: 0.34, y: 0.56, w: 0.32, h: 0.05, fill: '#3a3040' },
+    ],
+  },
+};
+
+/**
+ * Draw a small map preview onto a 80×52 canvas.
+ * @param {HTMLCanvasElement} cvs
+ * @param {string} mapId
+ */
+function drawMapPreview(cvs, mapId) {
+  const W = cvs.width;
+  const H = cvs.height;
+  const ctx2 = cvs.getContext('2d');
+  const cfg = MAP_PREVIEW[mapId] ?? { bg: '#1a1a1a', shapes: [] };
+
+  ctx2.fillStyle = cfg.bg;
+  ctx2.fillRect(0, 0, W, H);
+
+  for (const s of cfg.shapes) {
+    ctx2.beginPath();
+    if (s.type === 'circle') {
+      ctx2.ellipse(s.x * W, s.y * H, s.r * W, s.r * H, 0, 0, Math.PI * 2);
+      if (s.fill) { ctx2.fillStyle = s.fill; ctx2.fill(); }
+      if (s.stroke) { ctx2.strokeStyle = s.stroke; ctx2.lineWidth = s.lw ?? 1; ctx2.stroke(); }
+    } else if (s.type === 'rect') {
+      if (s.fill) { ctx2.fillStyle = s.fill; ctx2.fillRect(s.x * W, s.y * H, s.w * W, s.h * H); }
+      if (s.stroke) { ctx2.strokeStyle = s.stroke; ctx2.lineWidth = s.lw ?? 1; ctx2.strokeRect(s.x * W, s.y * H, s.w * W, s.h * H); }
+    } else if (s.type === 'cross') {
+      const cx = s.x * W, cy = s.y * H, half = s.s * Math.min(W, H) / 2, t = half * 0.35;
+      ctx2.fillStyle = s.fill;
+      // Vertical bar
+      ctx2.fillRect(cx - t, cy - half, t * 2, half * 2);
+      // Horizontal crossbar (upper third)
+      ctx2.fillRect(cx - half, cy - half * 0.5, half * 2, t * 2);
+    } else if (s.type === 'line') {
+      ctx2.moveTo(s.x1 * W, s.y1 * H);
+      ctx2.lineTo(s.x2 * W, s.y2 * H);
+      ctx2.strokeStyle = s.stroke;
+      ctx2.lineWidth = s.lw ?? 1;
+      ctx2.stroke();
+    }
+  }
+}
+
 function renderLobby() {
   const el = document.getElementById('mp-lobby');
   if (!el || !lobbyData) return;
@@ -749,9 +886,27 @@ function renderLobby() {
   for (const mId of lobbyData.mapOptions) {
     const voteCount = lobbyData.votes.filter(v => v.mapId === mId).length;
     const isMyVote = myMapVote === mId;
+
     const card = document.createElement('div');
     card.className = 'lobby-map-card' + (isMyVote ? ' lobby-map-card--selected' : '');
-    card.innerHTML = `<div class="lmc-name">${mId}</div><div class="lmc-votes">${voteCount} vote${voteCount !== 1 ? 's' : ''}</div>`;
+
+    const preview = document.createElement('canvas');
+    preview.width = 80;
+    preview.height = 52;
+    preview.className = 'lmc-preview';
+    drawMapPreview(preview, mId);
+    card.appendChild(preview);
+
+    const nameEl = document.createElement('div');
+    nameEl.className = 'lmc-name';
+    nameEl.textContent = MAPS[mId]?.name ?? mId;
+    card.appendChild(nameEl);
+
+    const votesEl = document.createElement('div');
+    votesEl.className = 'lmc-votes';
+    votesEl.textContent = `${voteCount} vote${voteCount !== 1 ? 's' : ''}`;
+    card.appendChild(votesEl);
+
     card.addEventListener('click', () => {
       myMapVote = mId;
       if (ws && ws.readyState === WebSocket.OPEN) {

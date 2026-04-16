@@ -51,6 +51,7 @@ const lobbyQueue = new Map(); // ws -> { pid, name, weapon, prestige } (waiting 
 let game = null;
 let lobbyTimer = null;
 let nextId = 0;
+let lastMapId = null; // anti-repeat: deprioritize this in the next lobby pool
 
 function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
   const p = {
@@ -413,11 +414,16 @@ function broadcast() {
 
 function initLobby() {
   const rng = createRng(Date.now() & 0x7fffffff);
-  // Pick 3 distinct random map options from the rotation.
+  // Shuffle MAP_ROTATION, then push lastMapId to end so the first 3
+  // options (the vote candidates) exclude it when rotation has >3 maps.
   const pool = [...MAP_ROTATION];
   for (let i = pool.length - 1; i > 0; i--) {
     const j = rng.int(i + 1);
     [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  if (lastMapId && pool.length > 3) {
+    const idx = pool.indexOf(lastMapId);
+    if (idx !== -1) { pool.splice(idx, 1); pool.push(lastMapId); }
   }
   return { lobbyPhase: true, lobbyCountdown: 10, mapVotes: {}, mapOptions: pool.slice(0, 3), rng };
 }
@@ -442,6 +448,7 @@ function broadcastLobbyState() {
 
 function startGame(selectedMapId) {
   const mapId = selectedMapId;
+  lastMapId = mapId; // record for anti-repeat in next lobby
   const map = MAPS[mapId];
   const rng = game.rng; // reuse lobby rng for obstacle seeding
   console.log(`[*] map: ${mapId} (${map.name})`);
@@ -498,17 +505,17 @@ function startGame(selectedMapId) {
 
 function resolveLobby() {
   if (!game || !game.lobbyPhase) return;
-  // Tally votes; random tiebreak among options.
+  // Tally votes; pick randomly among all options tied for the most votes.
   const tally = {};
   for (const mapId of Object.values(game.mapVotes)) {
     tally[mapId] = (tally[mapId] || 0) + 1;
   }
   const options = game.mapOptions;
-  let winner = options[Math.floor(Math.random() * options.length)];
-  let max = 0;
-  for (const [mapId, count] of Object.entries(tally)) {
-    if (count > max) { max = count; winner = mapId; }
-  }
+  const max = Math.max(0, ...options.map(id => tally[id] || 0));
+  const candidates = max === 0
+    ? options
+    : options.filter(id => (tally[id] || 0) === max);
+  const winner = candidates[Math.floor(Math.random() * candidates.length)];
   console.log(`[*] lobby resolved → ${winner} (tally: ${JSON.stringify(tally)})`);
   startGame(winner);
 }
