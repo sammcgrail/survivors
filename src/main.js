@@ -12,6 +12,10 @@ import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { bindResize } from './shared/viewport.js';
+import {
+  clampSliderVol, readPersistedBgmVol, readPersistedMute,
+  persistBgmVol, persistMute, updateMuteBtn, initVolSliders, toggleVolPanel,
+} from './shared/volPanel.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -96,31 +100,19 @@ const MAP_TRACKS = {
 };
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
-// BGM volume — persisted per-slider in localStorage. SFX volume
+// BGM volume — persisted per-slider via shared/volPanel. SFX volume
 // lives in shared/sfx.js (since the gain node is created there).
-let bgmVol = 0.45;
-try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) bgmVol = +v; } catch (_) {}
+let bgmVol = readPersistedBgmVol();
 const MENU_VOL_RATIO = 0.67; // menu music plays at 67% of bgm slider
 
 let menuMusicStarted = false;
-let musicMuted = false;
-try { musicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
-function updateMuteBtn() {
-  const b = document.getElementById('mute-btn');
-  if (b) b.textContent = musicMuted ? '🔇' : '🔊';
-}
-function initVolSliders() {
-  const bs = document.getElementById('vol-bgm');
-  const ss = document.getElementById('vol-sfx');
-  if (bs) bs.value = Math.round(bgmVol * 100);
-  if (ss) ss.value = Math.round(getSfxVol() * 100);
-}
-updateMuteBtn();
-initVolSliders();
+let musicMuted = readPersistedMute();
+updateMuteBtn(musicMuted);
+initVolSliders(bgmVol, getSfxVol());
 
 function setBgmVol(v) {
-  bgmVol = Math.max(0, Math.min(1, v / 100));
-  try { localStorage.setItem('survivors_bgm_vol', bgmVol.toFixed(2)); } catch (_) {}
+  bgmVol = clampSliderVol(v);
+  persistBgmVol(bgmVol);
   if (!musicMuted) {
     battlePlayer.setVol(bgmVol);
     menuPlayer.setVol(bgmVol * MENU_VOL_RATIO);
@@ -128,11 +120,7 @@ function setBgmVol(v) {
 }
 function setSfxVol(v) {
   // Slider is 0..100; shared module owns persistence + gain wiring.
-  _setSfxVol(Math.max(0, Math.min(1, v / 100)));
-}
-function toggleVolPanel() {
-  const p = document.getElementById('vol-panel');
-  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  _setSfxVol(clampSliderVol(v));
 }
 
 // Menu music — plays on the start/death screen. Fades out when game
@@ -161,8 +149,8 @@ function fadeOutMusic() { battlePlayer.fadeOut(); }
 
 function toggleMuteMusic() {
   musicMuted = !musicMuted;
-  try { localStorage.setItem('survivors_mute', musicMuted ? '1' : '0'); } catch (_) {}
-  updateMuteBtn();
+  persistMute(musicMuted);
+  updateMuteBtn(musicMuted);
   battlePlayer.setVol(musicMuted ? 0 : bgmVol, 0.3);
   menuPlayer.setVol(musicMuted ? 0 : bgmVol * MENU_VOL_RATIO, 0.3);
 }

@@ -288,36 +288,20 @@ const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg', wilderness: 'forest_theme.ogg', catacombs: 'ruins_theme.ogg' };
 const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
 // SFX vol lives in the shared module now — only BGM stays local.
-let mpBgmVol = 0.45;
-try { const v = localStorage.getItem('survivors_bgm_vol'); if (v !== null) mpBgmVol = +v; } catch (_) {}
+let mpBgmVol = readPersistedBgmVol();
 const mpBattlePlayer = makeBgmPlayer();
-let mpMusicMuted = false;
-try { mpMusicMuted = localStorage.getItem('survivors_mute') === '1'; } catch (_) {}
-function updateMpMuteBtn() {
-  const b = document.getElementById('mute-btn');
-  if (b) b.textContent = mpMusicMuted ? '🔇' : '🔊';
-}
-function initMpVolSliders() {
-  const bs = document.getElementById('vol-bgm');
-  const ss = document.getElementById('vol-sfx');
-  if (bs) bs.value = Math.round(mpBgmVol * 100);
-  if (ss) ss.value = Math.round(getSfxVol() * 100);
-}
-updateMpMuteBtn();
-initMpVolSliders();
+let mpMusicMuted = readPersistedMute();
+updateMuteBtn(mpMusicMuted);
+initVolSliders(mpBgmVol, getSfxVol());
 
 function setBgmVol(v) {
-  mpBgmVol = Math.max(0, Math.min(1, v / 100));
-  try { localStorage.setItem('survivors_bgm_vol', mpBgmVol.toFixed(2)); } catch (_) {}
+  mpBgmVol = clampSliderVol(v);
+  persistBgmVol(mpBgmVol);
   if (!mpMusicMuted) mpBattlePlayer.setVol(mpBgmVol);
 }
 function setSfxVol(v) {
   // Slider is 0..100; shared module owns persistence + gain wiring.
-  _setSfxVol(Math.max(0, Math.min(1, v / 100)));
-}
-function toggleVolPanel() {
-  const p = document.getElementById('vol-panel');
-  if (p) p.style.display = p.style.display === 'none' ? 'block' : 'none';
+  _setSfxVol(clampSliderVol(v));
 }
 
 function startMpMusic(mapId) {
@@ -327,8 +311,8 @@ function startMpMusic(mapId) {
 
 function toggleMpMute() {
   mpMusicMuted = !mpMusicMuted;
-  try { localStorage.setItem('survivors_mute', mpMusicMuted ? '1' : '0'); } catch (_) {}
-  updateMpMuteBtn();
+  persistMute(mpMusicMuted);
+  updateMuteBtn(mpMusicMuted);
   mpBattlePlayer.setVol(mpMusicMuted ? 0 : mpBgmVol, 0.3);
 }
 
