@@ -312,11 +312,11 @@ function drawStatusTint(ctx, e, particles) {
       ctx.beginPath();
       ctx.arc(e.x, e.y, e.radius * 0.95, 0, Math.PI * 2);
       ctx.fill();
-      // Continuous rising embers — small chance per frame per burning
-      // enemy so the fire visibly emits smoke over the whole burn
-      // duration, not just the apply pop. Capped by probability so a
-      // mass-burn doesn't flood the particle buffer.
-      if (particles && Math.random() < 0.15) {
+      // Continuous rising embers — small chance per frame per burning enemy.
+      // 0.04 (was 0.15) — at wave 25 with 30+ burning enemies the 0.15 rate
+      // was adding ~5 particles/frame/enemy. 0.04 keeps the visual read
+      // without flooding the particle buffer.
+      if (particles && Math.random() < 0.04) {
         const ex = e.x + (Math.random() - 0.5) * e.radius * 1.2;
         const ey = e.y + (Math.random() - 0.5) * e.radius * 0.4;
         particles.push({
