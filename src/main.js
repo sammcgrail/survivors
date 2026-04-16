@@ -14,7 +14,8 @@ import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
-import { POWERUPS, getAvailableChoices } from './shared/sim/powerups.js';
+import { POWERUPS } from './shared/sim/powerups.js';
+import { buildLevelUpChoices } from './shared/levelUp.js';
 import { tickSim } from './shared/sim/tick.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { MAPS, resolveMapObstacles } from './shared/maps.js';
@@ -501,15 +502,7 @@ function showLevelUp(g) {
   sfx('levelup');
   paused = true;
   const stacks = g.player.powerupStacks;
-  // pick 3 random valid options — Fisher-Yates shuffle (the
-  // sort(() => Math.random()-0.5) one-liner is biased, doesn't even
-  // produce a uniform distribution). Matches server.mjs:175.
-  const available = getAvailableChoices(stacks);
-  for (let i = available.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [available[i], available[j]] = [available[j], available[i]];
-  }
-  const choices = available.slice(0, 3);
+  const choices = buildLevelUpChoices(stacks);
 
   const container = document.getElementById('level-choices');
   container.innerHTML = '';
