@@ -12,6 +12,7 @@ import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { bindResize } from './shared/viewport.js';
+import { bindTouchJoystick } from './shared/joystick.js';
 import {
   clampSliderVol, readPersistedBgmVol, readPersistedMute,
   persistBgmVol, persistMute, updateMuteBtn, initVolSliders, toggleVolPanel,
@@ -958,81 +959,11 @@ installKeyboardInput(keys, {
   onClear() { analogMove.x = 0; analogMove.y = 0; },
 });
 
-// --- mobile invisible touch joystick ---
-const joyZone = document.getElementById('joystick-zone');
-const touchHint = document.getElementById('touch-hint');
-let joyTouchId = null;
-let joyOrigin = null;
-let hintShown = false;
-const JOY_DEAD = 15;
-
-joyZone.addEventListener('touchstart', e => {
-  if (joyTouchId !== null) return;
-  const t = e.changedTouches[0];
-  joyTouchId = t.identifier;
-  joyOrigin = { x: t.clientX, y: t.clientY };
-  // fade hint on first touch
-  if (!hintShown && touchHint) {
-    hintShown = true;
-    touchHint.style.opacity = '0';
-    setTimeout(() => { touchHint.style.display = 'none'; }, 1000);
-  }
-  e.preventDefault();
-}, { passive: false });
-
-joyZone.addEventListener('touchmove', e => {
-  for (const t of e.changedTouches) {
-    if (t.identifier !== joyTouchId) continue;
-    const dx = t.clientX - joyOrigin.x;
-    const dy = t.clientY - joyOrigin.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > JOY_DEAD) {
-      // analog: normalized direction vector, magnitude clamped to 1
-      const mag = Math.min(dist / 60, 1); // 60px = full speed
-      analogMove.x = (dx / dist) * mag;
-      analogMove.y = (dy / dist) * mag;
-      // keep boolean keys in sync for weapon aim logic
-      keys.left = analogMove.x < -0.3;
-      keys.right = analogMove.x > 0.3;
-      keys.up = analogMove.y < -0.3;
-      keys.down = analogMove.y > 0.3;
-    } else {
-      analogMove.x = analogMove.y = 0;
-      keys.left = keys.right = keys.up = keys.down = false;
-    }
-  }
-  e.preventDefault();
-}, { passive: false });
-
-function joyEnd(e) {
-  for (const t of e.changedTouches) {
-    if (t.identifier !== joyTouchId) continue;
-    joyTouchId = null;
-    joyOrigin = null;
-    analogMove.x = analogMove.y = 0;
-    keys.left = keys.right = keys.up = keys.down = false;
-  }
-}
-joyZone.addEventListener('touchend', joyEnd, { passive: false });
-joyZone.addEventListener('touchcancel', joyEnd, { passive: false });
-
-// prevent default touch behaviors on the whole page
-document.addEventListener('touchmove', e => {
-  if (e.target === canvas || e.target === joyZone || joyZone.contains(e.target)) {
-    e.preventDefault();
-  }
-}, { passive: false });
-
-// prevent double-tap zoom
-let lastTap = 0;
-document.addEventListener('touchend', e => {
-  const now = Date.now();
-  if (now - lastTap < 300) e.preventDefault();
-  lastTap = now;
-}, { passive: false });
-
-// prevent context menu / long press
-document.addEventListener('contextmenu', e => e.preventDefault());
+// Mobile invisible touch joystick + page-level touch defaults — both
+// shared with MP via shared/joystick.js. analogMove is passed in
+// so SP gets analog magnitude reads (weapon aim by heading); MP omits
+// the param and only writes boolean keys.
+bindTouchJoystick({ canvas, keys, analogMove });
 
 // --- game loop (unified: update + render in single rAF to prevent camera/render desync) ---
 let lastTime = 0;
