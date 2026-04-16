@@ -692,6 +692,43 @@ export function drawWeaponAuras(ctx, players, time, viewport) {
         ctx.globalAlpha = 1;
       }
 
+      if (w.type === 'frost_cascade') {
+        // Frost Cascade aura — pale ice radial gradient + slow crystalline
+        // motes orbiting the rim. Calmer pulse than breath (flame) to
+        // read as "cold" instead of "heat".
+        const pp = w.pulsePhase || 0;
+        const r = w.radius * sm * (1 + Math.sin(pp) * 0.08);
+        const grad = ctx.createRadialGradient(p.x, p.y, r * 0.2, p.x, p.y, r);
+        grad.addColorStop(0,   'rgba(230, 247, 255, 0.30)');
+        grad.addColorStop(0.5, 'rgba(168, 230, 255, 0.14)');
+        grad.addColorStop(1,   'rgba(136, 184, 212, 0)');
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = 'rgba(168, 230, 255, 0.45)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // Crystalline motes — small diamonds (rotated squares) at
+        // 6 slow-rotating positions. Rotated rectangle reads as a
+        // crystal shard rather than a generic dot.
+        ctx.fillStyle = '#e6f7ff';
+        for (let i = 0; i < 6; i++) {
+          const a = pp * 0.4 + (Math.PI * 2 / 6) * i;
+          ctx.globalAlpha = 0.65 + Math.sin(pp * 0.8 + i) * 0.2;
+          ctx.save();
+          ctx.translate(p.x + Math.cos(a) * r, p.y + Math.sin(a) * r);
+          ctx.rotate(pp + i);
+          ctx.fillRect(-3, -3, 6, 6);
+          ctx.restore();
+        }
+        ctx.globalAlpha = 1;
+      }
+
       if (w.type === 'dragon_storm') {
         const pulse = 1 + Math.sin(w.pulsePhase || 0) * 0.1;
         const r = w.auraRadius * sm * pulse;

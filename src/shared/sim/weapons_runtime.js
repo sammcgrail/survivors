@@ -35,6 +35,68 @@ function fireWeapon(g, w, p) {
   else if (w.type === 'meteor_orbit') fireMeteor(g, w, p);
   else if (w.type === 'fortress')     fireCharge(g, w, p);
   else if (w.type === 'void_anchor')  fireVoidAnchor(g, w, p);
+  else if (w.type === 'ice_lance')    fireIceLance(g, w, p);
+  else if (w.type === 'nova_strike')  fireNovaStrike(g, w, p);
+}
+
+// Ice Lance — precision shot at the nearest enemy. Pierces 2, applies
+// slow on hit via `statusOnHit` (the existing projectile pipeline in
+// projectiles.js reads statusOnHit automatically). High damage + long
+// cooldown means missing hurts — deliberate skill floor.
+function fireIceLance(g, w, p) {
+  let nearest = null, nearestDist = w.range;
+  for (const e of g.enemies) {
+    const d = Math.hypot(e.x - p.x, e.y - p.y);
+    if (d < nearestDist) { nearest = e; nearestDist = d; }
+  }
+  if (!nearest) return;
+  emit(g, EVT.WEAPON_FIRE, { weapon: 'ice_lance', x: p.x, y: p.y, pid: p.id });
+  const dx = nearest.x - p.x, dy = nearest.y - p.y;
+  const d = Math.hypot(dx, dy);
+  const nx = dx / d, ny = dy / d;
+  const count = w.count + (p.projectileBonus || 0);
+  for (let i = 0; i < count; i++) {
+    const spread = count > 1 ? (i - (count - 1) / 2) * 0.08 : 0;
+    const cos = Math.cos(spread), sin = Math.sin(spread);
+    const fx = nx * cos - ny * sin;
+    const fy = nx * sin + ny * cos;
+    g.projectiles.push({
+      x: p.x + fx * 20, y: p.y + fy * 20,
+      vx: fx * w.speed, vy: fy * w.speed,
+      speed: w.speed, damage: w.damage, range: w.range,
+      dist: 0, pierce: w.pierce, radius: 4, color: w.color,
+      owner: p.id, weaponType: w.type,
+      statusOnHit: { type: 'slow', remaining: w.slowDuration, magnitude: w.slowMagnitude, tickRate: 0 },
+    });
+  }
+}
+
+// Nova Strike — meteor + ring of ice fragments. fireMeteor spawns the
+// main AoE via the existing meteorEffects path; the fragment spawn
+// happens in updateMeteorEffects when the 'explode' phase fires (see
+// novaStrikeOnExplode hook below). Keeping fireWeapon simple here and
+// letting the explode handler do the fragment work avoids dual code
+// paths for meteor and ensures freshly-spawned fragments inherit the
+// same tick ordering as projectiles from fires.
+function fireNovaStrike(g, w, p) {
+  if (g.enemies.length === 0) return;
+  const target = g.enemies[g.rng.int(g.enemies.length)];
+  g.meteorEffects.push({
+    x: target.x, y: target.y,
+    radius: w.blastRadius * (p.sizeMulti || 1),
+    damage: w.damage * p.damageMulti,
+    life: 0.5,
+    phase: 'warn',
+    color: w.color,
+    owner: p.id, weaponType: w.type,
+    // Nova fragment spec — read by updateMeteorEffects on explode.
+    novaFragments: {
+      count: w.fragmentCount, damage: w.fragmentDamage,
+      speed: w.fragmentSpeed, life: w.fragmentLife,
+      pierce: w.fragmentPierce,
+    },
+  });
+  emit(g, EVT.METEOR_WARN, { x: target.x, y: target.y, radius: w.blastRadius * (p.sizeMulti || 1) });
 }
 
 function fireSpit(g, w, p) {
@@ -194,6 +256,7 @@ export function updateWeapons(g, dt) {
       }
       if (w.type === 'breath') w.pulsePhase = (w.pulsePhase || 0) + dt * 3;
       if (w.type === 'dragon_storm') w.pulsePhase = (w.pulsePhase || 0) + dt * 4;
+      if (w.type === 'frost_cascade') w.pulsePhase = (w.pulsePhase || 0) + dt * 2;
 
       if ((w.type === 'charge' || w.type === 'fortress') && w.active) {
         w.chargeTimer -= dt;
@@ -282,6 +345,7 @@ export function updateAuras(g, dt) {
       if (w.type === 'breath') tickBreathAura(g, w, p, dt);
       else if ((w.type === 'charge' || w.type === 'fortress') && w.active) tickChargeSweep(g, w, p, dt);
       else if (w.type === 'dragon_storm') tickDragonStormAura(g, w, p, dt);
+      else if (w.type === 'frost_cascade') tickFrostCascadeAura(g, w, p, dt);
     }
   }
 }
@@ -294,6 +358,30 @@ function tickBreathAura(g, w, p, dt) {
     const sum = effectiveRadius + e.radius;
     if (edx * edx + edy * edy < sum * sum) {
       damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id, w.type);
+    }
+  }
+}
+
+// Frost Cascade — Ice Lance + Breath fusion aura. Chips damage like
+// breath but swaps the burn status for a deep slow (read as "frozen"
+// without needing a new hard-stun type — 90% magnitude is ~15u/s for
+// a 150u/s fast enemy, effectively a crawl). Fresh slow refreshes
+// duration on every tick the enemy stays in range, so standing in
+// range is a soft-stun lock while they also take breath damage.
+function tickFrostCascadeAura(g, w, p, dt) {
+  const effectiveRadius = w.radius * (p.sizeMulti || 1);
+  for (let j = g.enemies.length - 1; j >= 0; j--) {
+    const e = g.enemies[j];
+    const edx = p.x - e.x, edy = p.y - e.y;
+    const sum = effectiveRadius + e.radius;
+    if (edx * edx + edy * edy < sum * sum) {
+      damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id, w.type);
+      applyStatus(g, e, {
+        type: 'slow',
+        remaining: w.freezeDuration,
+        magnitude: w.freezeMagnitude,
+        tickRate: 0,
+      });
     }
   }
 }
@@ -685,6 +773,28 @@ export function updateMeteorEffects(g, dt) {
             damageEnemy(g, g.enemies[j], m.damage, m.owner, m.weaponType);
             // Meteor freeze — hard landing stuns enemies in the blast zone.
             if (m.damage > 0) applyStatus(g, e, { type: 'freeze', remaining: 0.8, magnitude: 0, tickRate: 0 });
+          }
+        }
+        // Nova Strike fragment spawn — on explode, fire a ring of
+        // ice projectiles outward from the impact point. Each carries
+        // a slow statusOnHit so they extend the AoE's crowd-control
+        // reach beyond the blast radius. Reuses the normal projectile
+        // pipeline (collision.js::applyHit reads statusOnHit) so no
+        // new entity or tick path is needed.
+        if (m.novaFragments) {
+          const f = m.novaFragments;
+          for (let k = 0; k < f.count; k++) {
+            const a = (k / f.count) * Math.PI * 2;
+            g.projectiles.push({
+              x: m.x, y: m.y,
+              vx: Math.cos(a) * f.speed,
+              vy: Math.sin(a) * f.speed,
+              speed: f.speed, damage: f.damage,
+              range: f.speed * f.life, dist: 0,
+              pierce: f.pierce, radius: 4, color: m.color,
+              owner: m.owner, weaponType: m.weaponType,
+              statusOnHit: { type: 'slow', remaining: 1.2, magnitude: 0.4, tickRate: 0 },
+            });
           }
         }
       }
