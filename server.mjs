@@ -21,7 +21,7 @@ import { applyUnlocks, sanitizePrestige } from './src/shared/prestige.js';
 
 // Map rotation. Tomorrow this'll be a vote / lobby choice; for now the
 // server picks a random one each session reset.
-const MAP_ROTATION = ['arena', 'forest', 'ruins', 'graveyard', 'wilderness', 'catacombs'];
+const MAP_ROTATION = ['arena', 'forest', 'ruins', 'graveyard', 'wilderness', 'catacombs', 'neon'];
 function pickMapId(rng) {
   return MAP_ROTATION[rng.int(MAP_ROTATION.length)];
 }
@@ -241,7 +241,7 @@ function snapshotWeapon(w) {
   // enough fields for drawChargeTrail to reconstruct the tapered
   // streak + speed lines + slash arc (speed/duration static per run,
   // chargeTimer is the animated one).
-  if (w.type === 'charge' && w.active) {
+  if ((w.type === 'charge' || w.type === 'fortress') && w.active) {
     o.speed = w.speed;
     o.duration = w.duration;
     o.chargeTimer = r2(w.chargeTimer);

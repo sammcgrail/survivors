@@ -1296,7 +1296,7 @@ export function drawChargeTrail(ctx, players) {
   for (const p of players) {
     if (!p.alive) continue;
     for (const w of (p.weapons || [])) {
-      if (w.type !== 'charge' || !w.active) continue;
+      if ((w.type !== 'charge' && w.type !== 'fortress') || !w.active) continue;
       const trailDist = w.speed * w.duration;
       const progress = 1 - (w.chargeTimer / w.duration);
       const perpX = -w.chargeDy;

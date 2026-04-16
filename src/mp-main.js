@@ -361,6 +361,10 @@ const TICK_DT = 1 / 20;  // server sends at 20Hz
 let particles = [];
 let floatingTexts = [];
 let screenShake = 0;
+// fork #19 — level-up white-wash flash, parity with SP (src/main.js).
+// Driven by applySimEvent → mpEventClient.flash(v). Decays each frame
+// in render() and paints a yellow full-screen overlay while >0.
+let levelFlash = 0;
 // Per-player fire-trail throttle, shared helper owns the write — we
 // just own the Map so state survives between render frames.
 const trailState = new Map();
@@ -381,6 +385,7 @@ const mpEventClient = {
   floatingTexts,
   sfx,
   shake(v) { screenShake = Math.max(screenShake, v); },
+  flash(v) { levelFlash = Math.max(levelFlash, v); },
   isMe: (pid) => pid === myId,
   // Suppress levelup sfx through the event path — the separate
   // `levelup` server message already triggers it via
@@ -954,6 +959,7 @@ function updateParticles(dt) {
     if (ft.life <= 0) floatingTexts.splice(i, 1);
   }
   if (screenShake > 0) screenShake -= dt;
+  if (levelFlash > 0) levelFlash -= dt;
 }
 
 // ============================================================
@@ -1268,6 +1274,18 @@ function render(dt) {
     ctx.font = '10px "Chakra Petch", sans-serif';
     ctx.textAlign = 'left';
     ctx.fillText(entry.text, 12, H - 20 - (recent.length - 1 - i) * 16);
+  }
+
+  // fork #19 — level-up flash overlay, parity with SP (src/main.js:980).
+  // Paints a yellow full-screen wash that decays 0.15 → 0. Reset transform
+  // so the wash fills the viewport regardless of camera state.
+  if (levelFlash > 0) {
+    ctx.save();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.globalAlpha = levelFlash / 0.15 * 0.3;
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(0, 0, W, H);
+    ctx.restore();
   }
 
   // --- HUD ---
