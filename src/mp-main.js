@@ -7,6 +7,7 @@
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
+import { bindResize } from './shared/viewport.js';
 import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
@@ -331,13 +332,7 @@ function toggleMpMute() {
   mpBattlePlayer.setVol(mpMusicMuted ? 0 : mpBgmVol, 0.3);
 }
 
-// --- resize ---
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resize);
-resize();
+bindResize(canvas);
 
 // ============================================================
 // NETWORK STATE

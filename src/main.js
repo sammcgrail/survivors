@@ -11,6 +11,7 @@ import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
+import { bindResize } from './shared/viewport.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -166,13 +167,7 @@ function toggleMuteMusic() {
   menuPlayer.setVol(musicMuted ? 0 : bgmVol * MENU_VOL_RATIO, 0.3);
 }
 
-// --- resize ---
-function resize() {
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-}
-window.addEventListener('resize', resize);
-resize();
+bindResize(canvas);
 
 // --- constants ---
 // --- game state ---
