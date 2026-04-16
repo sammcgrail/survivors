@@ -70,12 +70,15 @@ break server purity) or by `server.mjs`.
 | `input.js` | Keyboard + touch input capture | ✓ | ✓ |
 | `sfx.js` | WebAudio SFX trigger | ✓ | ✓ |
 | `bgm.js` | Background music player | ✓ | ✓ |
-| `view.js` | Synthesize a sim-shaped `g` from MP snapshots | ✗ | ✓ |
+| `view.js` | View-shape contract; `synthesizeView` adapts SP's `g` into the MP-snapshot shape | ✓ | ✗ |
 | `runHistory.js` | Local-storage run log (SP only, no remote persistence) | ✓ | ✗ |
 | `htmlEscape.js` | `escapeHTML` | ✓ | ✓ |
 
-Note: `view.js` is MP-only, `runHistory.js` is SP-only — these are the
-intentional exceptions to "shared → used by both".
+Note: `view.js` defines a shape both runtimes rely on — but only SP
+*imports* it (to adapt its in-process `g` into snapshot shape). MP
+receives that shape natively from the server. `runHistory.js` is the
+other intentional exception, SP-only because it writes to local
+storage.
 
 ## Data catalogs — used by everyone (SP, MP, server)
 
@@ -126,14 +129,15 @@ in one runtime:
 
 - **Hardcoded constants in MP that exist in SP via `constants.js`** —
   e.g. `playerRadius = 14` in `mp-main.js` instead of `PLAYER_RADIUS`
-  import. Fixed in PR #17/#18 audit.
+  import. Landed in `abefdaa`.
 - **`makePlayer()` init missing stats** — SP sets `projectileBonus:0`,
   `sizeMulti:1`, `armor:0`; MP server forgot these, so Barrage /
   Amplify / Iron Skin silently no-op'd in MP. Always grep for every
-  field a powerup mutates and ensure both runtimes init them.
+  field a powerup mutates and ensure both runtimes init them. Landed in
+  `abefdaa`.
 - **Map rotation vs catalog** — a new map in `MAPS` is only playable
   in MP if it's also in `MAP_ROTATION` + `MAP_VOTE_EMOJIS` in
-  `server.mjs`. Neon slipped through (PR #19).
+  `server.mjs`. Neon slipped through; fixed in `1988dfa`.
 - **Fork main vs `sammcgrail/main`** — fork audits must diff against
   `sammcgrail/main`, not the fork's own `main`, or findings can be
   "stale PRs catching up to main" rather than real drift.
