@@ -302,7 +302,7 @@ function shadeHex(hex, pct) {
 // orange (sin-driven so it reads as flames), slow gets a steady blue
 // glow, freeze gets a cyan-white frost shell + 4 ice shards on the
 // rim. Multiple statuses stack — burn over slow over freeze.
-function drawStatusTint(ctx, e, particles) {
+export function drawStatusTint(ctx, e, particles) {
   for (const s of e.statusEffects) {
     if (s.type === 'burn') {
       const flick = 0.3 + Math.sin(performance.now() / 80 + e.x * 0.05) * 0.15;
