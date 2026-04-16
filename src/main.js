@@ -33,6 +33,7 @@ import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 import { saveRunEntry } from './shared/runHistory.js';
 import { createBaseGameState } from './shared/gameState.js';
+import { renderDeathFeed } from './shared/deathFeed.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -931,22 +932,7 @@ function render() {
   }
 
   // --- death feed (bottom-left, fading) ---
-  const feedMax = 5;
-  const feedDuration = 6; // seconds visible
-  const recentFeed = g.deathFeed.slice(-feedMax);
-  for (let i = 0; i < recentFeed.length; i++) {
-    const entry = recentFeed[i];
-    const age = g.time - entry.time;
-    if (age > feedDuration) continue;
-    const alpha = age > feedDuration - 1 ? (feedDuration - age) : 1;
-    ctx.save();
-    ctx.globalAlpha = alpha * 0.7;
-    ctx.fillStyle = '#ccc';
-    ctx.font = '10px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(entry.text, 12, H - 20 - (recentFeed.length - 1 - i) * 16);
-    ctx.restore();
-  }
+  renderDeathFeed(ctx, g.deathFeed, g.time, H);
 
   // --- HUD ---
   // setHud only writes to DOM when the value changed — saves ~300

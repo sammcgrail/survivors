@@ -24,6 +24,7 @@ import { markSeen } from './shared/bestiary.js';
 import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 import { createBaseGameState } from './shared/gameState.js';
+import { renderDeathFeed } from './shared/deathFeed.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -1269,17 +1270,7 @@ function render(dt) {
   }
 
   // --- death feed (bottom-left) ---
-  const recent = (state.deathFeed || []);
-  for (let i = 0; i < recent.length; i++) {
-    const entry = recent[i];
-    const age = state.time - entry.time;
-    if (age > 6) continue;
-    const alpha = age > 5 ? (6 - age) : 1;
-    ctx.fillStyle = `rgba(204, 204, 204, ${alpha * 0.7})`;
-    ctx.font = '10px "Chakra Petch", sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(entry.text, 12, H - 20 - (recent.length - 1 - i) * 16);
-  }
+  renderDeathFeed(ctx, state.deathFeed || [], state.time, H);
 
   // fork #19 — level-up flash overlay, parity with SP (src/main.js:980).
   // Paints a yellow full-screen wash that decays 0.15 → 0. Reset transform
