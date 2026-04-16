@@ -576,6 +576,30 @@ export function applySimEvent(evt, client) {
       if (killedIt && huge)      shake(0.4);
       else if (killedIt && big)  shake(0.15);
       if (killedIt && huge)      flash(0.12);
+      // Overkill punch-frame — fires when sim flagged this kill as
+      // 3x+ pre-hit hp (threat-tier or 50+ dmg only — gated sim-side
+      // so trash spit-kills don't spam). Short bright white overlay
+      // + bonus sparks at the kill site for extra kinetic punch.
+      if (evt.overkill && killedIt) {
+        flash(0.28);
+        // 10 bonus high-speed white sparks radiating out, fast + tiny.
+        for (let i = 0; i < 10; i++) {
+          pushFx(client.particles, evt.x, evt.y, '#ffffff', {
+            speedMin: 280, speedMax: 460,
+            lifeMin: 0.12, lifeMax: 0.22,
+            radiusMin: 1.4, radiusMax: 2.6,
+          });
+        }
+        // 6 yellow core afterglow particles, slightly longer-lived,
+        // so the punch-frame doesn't end clean-cold.
+        for (let i = 0; i < 6; i++) {
+          pushFx(client.particles, evt.x, evt.y, '#ffe066', {
+            speedMin: 100, speedMax: 200,
+            lifeMin: 0.25, lifeMax: 0.4,
+            radiusMin: 1.6, radiusMax: 2.4,
+          });
+        }
+      }
       break;
     }
 

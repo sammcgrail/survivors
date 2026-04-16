@@ -380,7 +380,7 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
       }
     }
     ctx.shadowColor = proj.color;
-    ctx.shadowBlur = 10;
+    ctx.shadowBlur = 14;
     if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
       ctx.fillStyle = proj.color;
       ctx.beginPath();
@@ -388,6 +388,14 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
       ctx.fill();
     }
     ctx.shadowBlur = 0;
+    // Bright inner core on top of the sprite — small near-white dot
+    // that punches through at wave density when the body color gets
+    // lost in the swarm. One extra arc/fill per projectile, no new
+    // state, no new shadow passes.
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, proj.radius * 0.45, 0, Math.PI * 2);
+    ctx.fill();
     // Renderer-as-writer carve-out: we mutate the passed-in particles
     // array. The alternative (sim events for ember spawn) would ship
     // cosmetic noise across the wire for every MP client, which isn't
@@ -507,18 +515,38 @@ export function drawChainEffects(ctx, chainEffects) {
         }
       }
     } else {
-      // Residual phase — small random-direction spark arcs at each
-      // struck endpoint. Skip index 0 (the player/source). Alpha rises
-      // into the phase then fades linearly.
+      // Residual phase — two passes.
+      //
+      // (1) Ghost afterimage: one thin straight line along the
+      // original bolt path, no jitter, faint white. Makes the zap
+      // legible at wave-30+ density where the jagged bolt fades
+      // faster than the eye can track. Cheap — one stroke per
+      // segment per frame. Cost per chainEffect in residual =
+      // (points.length - 1) strokes; typical chain = 3, so ≤3
+      // strokes/frame per effect.
+      //
+      // (2) Spark arcs at struck endpoints (existing behavior, kept
+      // for the "impact is still crackling" read).
       const rf = lifeFrac / 0.4; // 1→0
       ctx.shadowColor = ce.color;
-      ctx.shadowBlur = 6;
+      ctx.shadowBlur = 4;
+      // (1) Ghost afterimage — static, straight, thin.
       ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1.2;
+      ctx.globalAlpha = rf * 0.5;
+      for (let i = 0; i < ce.points.length - 1; i++) {
+        const a = ce.points[i];
+        const b = ce.points[i + 1];
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+      // (2) Endpoint spark arcs — skip index 0 (source).
       ctx.lineWidth = 1.3;
       ctx.globalAlpha = rf * 0.8;
       for (let i = 1; i < ce.points.length; i++) {
         const p = ce.points[i];
-        // 2 short arcs in random directions per endpoint
         for (let j = 0; j < 2; j++) {
           const a = Math.random() * Math.PI * 2;
           const len = 4 + Math.random() * 6;
