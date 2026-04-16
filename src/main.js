@@ -3,7 +3,7 @@
 // Bundled by scripts/build.cjs → bundle.js (loaded by v1a.html)
 // ============================================================
 
-import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
+import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED, MAX_PARTICLES } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
@@ -23,7 +23,7 @@ import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlo
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
 import { synthesizeView } from './shared/view.js';
-import { applySimEvent } from './shared/simEventHandler.js';
+import { applySimEvent, resetParticleOverflow } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 import { saveRunEntry } from './shared/runHistory.js';
@@ -328,6 +328,7 @@ function initGame() {
 // --- spawn particles ---
 function spawnParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
+    if (game.particles.length >= MAX_PARTICLES) game.particles.shift();
     const angle = Math.random() * Math.PI * 2;
     const speed = 50 + Math.random() * 150;
     game.particles.push({
@@ -387,12 +388,18 @@ function update(dt) {
   }
 
   // --- update particles ---
+  // Swap-delete: replace dead particle with the last array element then
+  // pop — O(1) removal vs O(n) splice. Safe in a reverse loop because the
+  // swapped-in element (formerly at [length-1]) was already visited.
   for (let i = g.particles.length - 1; i >= 0; i--) {
     const pt = g.particles[i];
     pt.x += pt.vx * dt;
     pt.y += pt.vy * dt;
     pt.life -= dt;
-    if (pt.life <= 0) g.particles.splice(i, 1);
+    if (pt.life <= 0) {
+      g.particles[i] = g.particles[g.particles.length - 1];
+      g.particles.pop();
+    }
   }
 
   // --- update floating texts ---
@@ -426,6 +433,7 @@ function update(dt) {
   // spawns, screen shake triggers); client decides what to do. Empty
   // until PR #12 starts emitting from extracted sim code.
   if (g.events.length > 0) {
+    resetParticleOverflow(); // one overflow log per drain, not per event
     for (const evt of g.events) {
       applySimEvent(evt, spEventClient);
       // Achievement checks on per-event triggers.

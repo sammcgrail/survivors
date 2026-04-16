@@ -6,7 +6,7 @@
 
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
-import { PLAYER_RADIUS } from './shared/constants.js';
+import { PLAYER_RADIUS, MAX_PARTICLES } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
@@ -17,7 +17,7 @@ import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
-import { applySimEvent } from './shared/simEventHandler.js';
+import { applySimEvent, resetParticleOverflow } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 
@@ -513,6 +513,7 @@ function connectWS() {
       // consumes — shared applySimEvent handles both modes via the
       // client shim (mpEventClient).
       if (msg.events) {
+        resetParticleOverflow(); // one overflow log per snapshot drain
         for (const evt of msg.events) {
           // Intercept notable kills for the client-side kill feed before
           // delegating to applySimEvent. currState is already set above so
@@ -950,12 +951,17 @@ function spawnParticles(x, y, color, count) {
 }
 
 function updateParticles(dt) {
+  // Swap-delete: O(1) removal vs O(n) splice. Safe in reverse loop —
+  // swapped-in element was already visited (higher original index).
   for (let i = particles.length - 1; i >= 0; i--) {
     const pt = particles[i];
     pt.x += pt.vx * dt;
     pt.y += pt.vy * dt;
     pt.life -= dt;
-    if (pt.life <= 0) particles.splice(i, 1);
+    if (pt.life <= 0) {
+      particles[i] = particles[particles.length - 1];
+      particles.pop();
+    }
   }
   for (let i = floatingTexts.length - 1; i >= 0; i--) {
     const ft = floatingTexts[i];

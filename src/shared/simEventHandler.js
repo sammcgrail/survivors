@@ -1,3 +1,28 @@
+import { MAX_PARTICLES } from './constants.js';
+
+// One flag per tick drain to throttle PARTICLE_OVERFLOW logs — avoids
+// a console storm when the cap is hit by many events in the same frame.
+// Callers reset this with resetParticleOverflow() before draining events.
+let _particleOverflowThisDrain = false;
+
+// Reset at the start of each tick's event drain. SP calls this before the
+// g.events loop; MP calls it before iterating msg.events.
+export function resetParticleOverflow() { _particleOverflowThisDrain = false; }
+
+// Drop-in replacement for particles.push(p) that enforces MAX_PARTICLES.
+// When at cap, evicts the oldest particle (lowest index) so new, bright
+// particles replace stale ones rather than being silently dropped.
+function safeParticlePush(particles, p) {
+  if (particles.length >= MAX_PARTICLES) {
+    if (!_particleOverflowThisDrain) {
+      _particleOverflowThisDrain = true;
+      console.debug('[perf] PARTICLE_OVERFLOW: cap reached at', MAX_PARTICLES);
+    }
+    particles.shift(); // drop oldest
+  }
+  particles.push(p);
+}
+
 // Client-side handler for sim events. SP drains `g.events` directly;
 // MP drains `state.events` shipped on each snapshot (Tier C). Both
 // land here so sfx, particles, floating text, screen shake, and
@@ -51,7 +76,7 @@ function spawnParticleBurst(particles, x, y, color, count) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 50 + Math.random() * 150;
     const life = 0.3 + Math.random() * 0.4;
-    particles.push({
+    safeParticlePush(particles, {
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
@@ -71,7 +96,7 @@ function pushFx(particles, x, y, color, opts) {
   const speed = opts.speedMin + Math.random() * (opts.speedMax - opts.speedMin);
   const life = opts.lifeMin + Math.random() * (opts.lifeMax - opts.lifeMin);
   const r = opts.radiusMin + Math.random() * (opts.radiusMax - opts.radiusMin);
-  particles.push({
+  safeParticlePush(particles, {
     x, y,
     vx: Math.cos(angle) * speed + (opts.biasX || 0),
     vy: Math.sin(angle) * speed + (opts.biasY || 0),
@@ -401,7 +426,7 @@ function enemyDeathBurst(particles, evt) {
         const a = (Math.PI * 2 * i) / 28 + Math.random() * 0.15;
         const r0 = 80 + Math.random() * 30;
         const inward = 380 + Math.random() * 100;
-        particles.push({
+        safeParticlePush(particles, {
           x: x + Math.cos(a) * r0,
           y: y + Math.sin(a) * r0,
           vx: -Math.cos(a) * inward,
@@ -418,7 +443,7 @@ function enemyDeathBurst(particles, evt) {
       for (let i = 0; i < 36; i++) {
         const a = (Math.PI * 2 * i) / 36 + Math.random() * 0.08;
         const shock = 260 + Math.random() * 180;
-        particles.push({
+        safeParticlePush(particles, {
           x, y,
           vx: Math.cos(a) * shock,
           vy: Math.sin(a) * shock,
@@ -502,7 +527,7 @@ export function applySimEvent(evt, client) {
           const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.25;
           const r0 = 14 + Math.random() * 6;
           const inward = 140 + Math.random() * 40;
-          client.particles.push({
+          client.safeParticlePush(particles, {
             x: evt.x + Math.cos(a) * r0,
             y: evt.y + Math.sin(a) * r0,
             vx: -Math.cos(a) * inward,
@@ -529,7 +554,7 @@ export function applySimEvent(evt, client) {
         const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.25;
         const r0 = 14 + Math.random() * 6;
         const inward = 130 + Math.random() * 40;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + Math.cos(a) * r0,
           y: evt.y + Math.sin(a) * r0,
           vx: -Math.cos(a) * inward,
@@ -754,7 +779,7 @@ export function applySimEvent(evt, client) {
         // the circle; particle fade handles the pulse feel.
         for (let i = 0; i < 22; i++) {
           const a = (Math.PI * 2 * i) / 22;
-          client.particles.push({
+          client.safeParticlePush(particles, {
             x: evt.x + Math.cos(a) * r,
             y: evt.y + Math.sin(a) * r,
             vx: Math.cos(a) * 80,
@@ -805,7 +830,7 @@ export function applySimEvent(evt, client) {
       const segments = Math.max(6, Math.min(14, Math.round(dist / 35)));
       for (let i = 1; i <= segments; i++) {
         const t = i / (segments + 1);
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + dx * t,
           y: evt.y + dy * t,
           vx: 0, vy: 0,
@@ -819,7 +844,7 @@ export function applySimEvent(evt, client) {
       for (let i = 0; i < 6; i++) {
         const angle = Math.random() * Math.PI * 2;
         const startR = 14 + Math.random() * 10;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + Math.cos(angle) * startR,
           y: evt.y + Math.sin(angle) * startR,
           vx: -Math.cos(angle) * 60,
@@ -900,7 +925,7 @@ export function applySimEvent(evt, client) {
         const a = (Math.PI * 2 * i) / 14 + Math.random() * 0.3;
         const r0 = 60 + Math.random() * 40;
         const inward = 280 + Math.random() * 80;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + Math.cos(a) * r0,
           y: evt.y + Math.sin(a) * r0,
           vx: -Math.cos(a) * inward,
@@ -922,7 +947,7 @@ export function applySimEvent(evt, client) {
       for (let i = 0; i < 10; i++) {
         const vx = (Math.random() - 0.5) * 50;
         const vy = -30 - Math.random() * 60;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + (Math.random() - 0.5) * 30,
           y: evt.y + (Math.random() - 0.5) * 20,
           vx, vy,
@@ -1001,7 +1026,7 @@ export function applySimEvent(evt, client) {
         const r = evt.safeRadius || 280;
         for (let i = 0; i < 20; i++) {
           const angle = (Math.PI * 2 * i) / 20;
-          client.particles.push({
+          client.safeParticlePush(particles, {
             x: evt.safeX + Math.cos(angle) * r,
             y: evt.safeY + Math.sin(angle) * r,
             vx: 0, vy: -15,
@@ -1045,7 +1070,7 @@ export function applySimEvent(evt, client) {
         const a = (Math.PI * 2 * i) / 16 + Math.random() * 0.2;
         const r0 = 55 + Math.random() * 25;
         const inward = 300 + Math.random() * 80;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + Math.cos(a) * r0,
           y: evt.y + Math.sin(a) * r0,
           vx: -Math.cos(a) * inward,
@@ -1076,7 +1101,7 @@ export function applySimEvent(evt, client) {
       for (let i = 0; i < 12; i++) {
         const a = Math.random() * Math.PI * 2;
         const speed = 30 + Math.random() * 50;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x,
           y: evt.y,
           vx: Math.cos(a) * speed,
@@ -1105,7 +1130,7 @@ export function applySimEvent(evt, client) {
       for (let i = 0; i < 14; i++) {
         const t = i / 14;
         const py = evt.y - 140 + t * 140;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + (Math.random() - 0.5) * 14,
           y: py,
           vx: (Math.random() - 0.5) * 30,
@@ -1124,7 +1149,7 @@ export function applySimEvent(evt, client) {
         const a = (Math.PI * 2 * i) / 10;
         const r0 = 22;
         const tangent = 40;
-        client.particles.push({
+        client.safeParticlePush(particles, {
           x: evt.x + Math.cos(a) * r0,
           y: evt.y + Math.sin(a) * r0,
           vx: -Math.sin(a) * tangent,
@@ -1214,7 +1239,7 @@ export function applySimEvent(evt, client) {
         for (let i = 0; i < 6; i++) {
           const a = (Math.PI * 2 * i) / 6 + Math.random() * 0.4;
           const speed = 90 + Math.random() * 110;
-          client.particles.push({
+          client.safeParticlePush(particles, {
             x, y,
             vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
             life: 0.3, maxLife: 0.3,
@@ -1225,7 +1250,7 @@ export function applySimEvent(evt, client) {
       } else if (statusType === 'burn') {
         // Smoke dissipation — 4 dark particles drifting up + fading.
         for (let i = 0; i < 4; i++) {
-          client.particles.push({
+          client.safeParticlePush(particles, {
             x: x + (Math.random() - 0.5) * 8,
             y: y + (Math.random() - 0.5) * 4,
             vx: (Math.random() - 0.5) * 25,
@@ -1241,7 +1266,7 @@ export function applySimEvent(evt, client) {
         for (let i = 0; i < 8; i++) {
           const a = (Math.PI * 2 * i) / 8;
           const speed = 60;
-          client.particles.push({
+          client.safeParticlePush(particles, {
             x, y,
             vx: Math.cos(a) * speed, vy: Math.sin(a) * speed,
             life: 0.28, maxLife: 0.28,
