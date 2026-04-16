@@ -961,14 +961,21 @@ export function drawWeaponAuras(ctx, players, time, viewport) {
 // from common swarm gems on the ground.
 //
 // Tier sources:
-//  - SP: derived from gem.xp (sim has the raw value)
-//  - MP: server ships gem.tier directly (snapshot omits xp)
-const GEM_TIER_SCALE = [1, 1.5, 2.2];
-const GEM_TIER_COLOR = ['#3498db', '#9b59b6', '#f1c40f'];
+//  - SP: gem.tier set at spawn time from the enemy that dropped it
+//    (spawnGem in sim/gems.js). Fallback: xp threshold for any gem
+//    that pre-dates the tiered spawn (migration safety).
+//  - MP: server ships gem.tier directly in the snapshot.
+//
+// 4 tiers per PR #114 — common / elite+spawner / brute / boss. Each
+// step up the scale AND the color saturation so late-game crowds
+// still read at a glance.
+const GEM_TIER_SCALE = [1, 1.5, 2.0, 2.8];
+const GEM_TIER_COLOR = ['#3498db', '#2ecc71', '#f39c12', '#9b59b6'];
 function gemTier(gem) {
   if (gem.tier !== undefined) return gem.tier;
-  if (gem.xp >= 80) return 2;
-  if (gem.xp >= 30) return 1;
+  if (gem.xp >= 500) return 3;
+  if (gem.xp >= 200) return 2;
+  if (gem.xp >= 80) return 1;
   return 0;
 }
 export function drawGem(ctx, gem, drawSprite, fallbackRadius = 6) {

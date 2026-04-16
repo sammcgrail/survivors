@@ -88,7 +88,7 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
   };
   if (prestige) applyUnlocks(p, prestige.unlocks);
   // Headstart prestige bumps level; scale xp threshold to match.
-  for (let i = 1; i < p.level; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.30);
+  for (let i = 1; i < p.level; i++) p.xpToLevel = Math.floor(p.xpToLevel * 1.22);
   return p;
 }
 
@@ -305,8 +305,10 @@ function gameSnapshot() {
     // ground. xp itself stays off the snapshot.
     gems: game.gems.map(gem => {
       const o = { x: r1(gem.x), y: r1(gem.y) };
-      if (gem.xp >= 80) o.tier = 2;
-      else if (gem.xp >= 30) o.tier = 1;
+      // Tier is now set at spawn time from the enemy that dropped the
+      // gem (spawnGem in sim/gems.js). Pass through when present; skip
+      // for common (tier 0) to save bytes.
+      if (gem.tier) o.tier = gem.tier;
       return o;
     }),
     projectiles: game.projectiles.map(pr => ({
