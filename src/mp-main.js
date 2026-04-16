@@ -8,6 +8,7 @@ import { WEAPON_ICONS } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { bindResize } from './shared/viewport.js';
+import { bindTouchJoystick } from './shared/joystick.js';
 import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
@@ -1347,74 +1348,10 @@ canvas.addEventListener('click', () => {
   }
 });
 
-// --- mobile invisible touch joystick ---
-const joyZone = document.getElementById('joystick-zone');
-const touchHint = document.getElementById('touch-hint');
-let joyTouchId = null;
-let joyOrigin = null;
-let hintShown = false;
-const JOY_DEAD = 15;
-
-joyZone.addEventListener('touchstart', e => {
-  if (joyTouchId !== null) return;
-  const t = e.changedTouches[0];
-  joyTouchId = t.identifier;
-  joyOrigin = { x: t.clientX, y: t.clientY };
-  if (!hintShown && touchHint) {
-    hintShown = true;
-    touchHint.style.opacity = '0';
-    setTimeout(() => { touchHint.style.display = 'none'; }, 1000);
-  }
-  e.preventDefault();
-}, { passive: false });
-
-joyZone.addEventListener('touchmove', e => {
-  for (const t of e.changedTouches) {
-    if (t.identifier !== joyTouchId) continue;
-    const dx = t.clientX - joyOrigin.x;
-    const dy = t.clientY - joyOrigin.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    const nx = dist > 0 ? dx / dist : 0;
-    const ny = dist > 0 ? dy / dist : 0;
-    if (dist > JOY_DEAD) {
-      // Threshold 0.3 matches SP (src/main.js:1043–46). MP was at 0.4,
-      // causing diagonal inputs to register later on mobile.
-      keys.left = nx < -0.3;
-      keys.right = nx > 0.3;
-      keys.up = ny < -0.3;
-      keys.down = ny > 0.3;
-    } else {
-      keys.left = keys.right = keys.up = keys.down = false;
-    }
-  }
-  e.preventDefault();
-}, { passive: false });
-
-function joyEnd(e) {
-  for (const t of e.changedTouches) {
-    if (t.identifier !== joyTouchId) continue;
-    joyTouchId = null;
-    joyOrigin = null;
-    keys.left = keys.right = keys.up = keys.down = false;
-  }
-}
-joyZone.addEventListener('touchend', joyEnd, { passive: false });
-joyZone.addEventListener('touchcancel', joyEnd, { passive: false });
-
-document.addEventListener('touchmove', e => {
-  if (e.target === canvas || e.target === joyZone || joyZone.contains(e.target)) {
-    e.preventDefault();
-  }
-}, { passive: false });
-
-let lastTap = 0;
-document.addEventListener('touchend', e => {
-  const now = Date.now();
-  if (now - lastTap < 300) e.preventDefault();
-  lastTap = now;
-}, { passive: false });
-
-document.addEventListener('contextmenu', e => e.preventDefault());
+// Mobile invisible touch joystick + page-level touch defaults — shared
+// with SP via shared/joystick.js. MP omits the analogMove param so
+// only boolean keys ride out (server reads keyboard inputs only).
+bindTouchJoystick({ canvas, keys });
 
 // Focus name input on load
 window.addEventListener('load', () => {
