@@ -19,6 +19,7 @@
 // array for SP's visual trail — documented at the call site.
 
 import { SP, SPRITE_SIZE } from './sprites.js';
+import { drawBar } from './hudBar.js';
 
 // Bind a drawSprite() to a specific canvas + sheet. SP and MP each
 // build one at module load. Returns false if the sheet hasn't loaded
@@ -73,10 +74,7 @@ export function drawSkinAura(ctx, x, y, radius, skin, time, alpha = 1) {
 // HP bar, top-left at (x - w/2, yTop). Color flips red below 30%.
 // Caller passes height + bg (defaults are the common 4×#222 player bar).
 export function drawHpBar(ctx, x, yTop, w, hpFrac, height = 4, bg = '#222') {
-  ctx.fillStyle = bg;
-  ctx.fillRect(x - w / 2, yTop, w, height);
-  ctx.fillStyle = hpFrac > 0.3 ? '#2ecc71' : '#e74c3c';
-  ctx.fillRect(x - w / 2, yTop, w * Math.max(0, hpFrac), height);
+  drawBar(ctx, x, yTop, w, height, hpFrac, { bg });
 }
 
 // Decorative-only floating text — fade alpha with remaining life.
