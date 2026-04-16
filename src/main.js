@@ -21,7 +21,8 @@ import { escapeHTML } from './shared/htmlEscape.js';
 import { MAPS, resolveMapObstacles } from './shared/maps.js';
 import { pushOutOfObstacles } from './shared/sim/collision.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
-import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
+import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
+import { drawBackground } from './shared/backgroundRenderer.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
@@ -832,30 +833,8 @@ function render() {
     ctx.translate(-cx, -cy);
   }
 
-  // --- background: pre-baked Wang-sampled tileset (when loaded), neon
-  //     abstract render for code-only maps, or fallback dark grid. The
-  //     bg canvas is at native tile resolution; nearest-neighbor scale
-  //     keeps the pixel art crisp. ---
-  if (g.bgCanvas) {
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(g.bgCanvas, 0, 0, g.bgCanvas.width, g.bgCanvas.height,
-                  0, 0, g.arena.w, g.arena.h);
-    ctx.imageSmoothingEnabled = true;
-  } else if (MAPS[g.mapId]?.abstractRender === 'neon') {
-    drawNeonBackground(ctx, cx, cy, W, H, g.arena);
-  } else {
-    const gridSize = 60;
-    const startX = Math.floor(cx / gridSize) * gridSize;
-    const startY = Math.floor(cy / gridSize) * gridSize;
-    ctx.strokeStyle = '#12121a';
-    ctx.lineWidth = 1;
-    for (let x = startX; x < cx + W + gridSize; x += gridSize) {
-      ctx.beginPath(); ctx.moveTo(x, cy); ctx.lineTo(x, cy + H); ctx.stroke();
-    }
-    for (let y = startY; y < cy + H + gridSize; y += gridSize) {
-      ctx.beginPath(); ctx.moveTo(cx, y); ctx.lineTo(cx + W, y); ctx.stroke();
-    }
-  }
+  // --- background: 3-tier fallback (tileset / neon / grid) ---
+  drawBackground(ctx, g.bgCanvas, g.mapId, g.arena, cx, cy, W, H);
 
   // --- world border ---
   ctx.strokeStyle = '#333';
