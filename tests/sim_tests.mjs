@@ -19,6 +19,7 @@ import { computeDeathHighlights } from '../src/shared/deathHighlights.js';
 import { computeWeaponHistogram } from '../src/shared/weaponPickHistogram.js';
 import { updateWeapons, updateAuras, updateMeteorEffects } from '../src/shared/sim/weapons_runtime.js';
 import { spawnGem } from '../src/shared/sim/gems.js';
+import { markSeen, getBestiaryEntries, _resetCache } from '../src/shared/bestiary.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
 } from '../src/shared/constants.js';
@@ -1586,6 +1587,37 @@ suite('Nearest-enemy determinism — fireChain + fireVoidAnchor', () => {
     // Nearest enemy is at array index 1 (x+50).
     assert(hit1Idx === 1,
       `void_anchor: expected nearest enemy (idx 1) to be first hit, got idx ${hit1Idx}`);
+  });
+});
+
+// ── Bestiary metadata ──────────────────────────────────────────
+
+suite('Bestiary metadata — timesEncountered + lastSeenWave', () => {
+  test('markSeen tracks timesEncountered and lastSeenWave, deduped by wave', () => {
+    _resetCache();
+    markSeen('boss', 20);
+    const boss1 = getBestiaryEntries().find(e => e.name === 'boss');
+    assert(boss1.firstWave === 20, `firstWave should be 20, got ${boss1.firstWave}`);
+    assert(boss1.timesEncountered === 1, `timesEncountered should be 1, got ${boss1.timesEncountered}`);
+    assert(boss1.lastSeenWave === 20, `lastSeenWave should be 20, got ${boss1.lastSeenWave}`);
+    // Same wave again — must not increment
+    markSeen('boss', 20);
+    const boss2 = getBestiaryEntries().find(e => e.name === 'boss');
+    assert(boss2.timesEncountered === 1, 'same-wave repeat must not increment timesEncountered');
+    // New wave — should increment and update lastSeenWave; firstWave stays
+    markSeen('boss', 21);
+    const boss3 = getBestiaryEntries().find(e => e.name === 'boss');
+    assert(boss3.timesEncountered === 2, `timesEncountered after wave 21 should be 2, got ${boss3.timesEncountered}`);
+    assert(boss3.lastSeenWave === 21, `lastSeenWave should be 21, got ${boss3.lastSeenWave}`);
+    assert(boss3.firstWave === 20, 'firstWave must not change on subsequent encounters');
+  });
+
+  test('getBestiaryEntries returns zero/null encounter metadata for unseen enemies', () => {
+    _resetCache();
+    const ghost = getBestiaryEntries().find(e => e.name === 'ghost');
+    assert(ghost.firstWave === null, 'unseen firstWave should be null');
+    assert(ghost.timesEncountered === 0, 'unseen timesEncountered should be 0');
+    assert(ghost.lastSeenWave === null, 'unseen lastSeenWave should be null');
   });
 });
 

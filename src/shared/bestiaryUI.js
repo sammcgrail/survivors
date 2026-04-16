@@ -22,10 +22,14 @@ export function showBestiary() {
         <div class="beast-desc">Keep playing to unlock.</div>
       </div>`;
     }
+    const encounterLine = e.timesEncountered > 0
+      ? `<div class="beast-encounters">Encountered ${e.timesEncountered} time${e.timesEncountered === 1 ? '' : 's'}${e.lastSeenWave !== null ? ` · Last seen wave ${e.lastSeenWave}` : ''}</div>`
+      : '';
     return `<div class="beast-card">
       <div class="beast-swatch" style="background:${e.color}; color:${e.color};"></div>
       <div class="beast-name">${escapeHTML(e.info.display)}</div>
       <div class="beast-wave">first seen: wave ${e.firstWave}</div>
+      ${encounterLine}
       <div class="beast-stats">hp ${e.baseStats.hp} · spd ${e.baseStats.speed} · dmg ${e.baseStats.damage}</div>
       <div class="beast-desc">${escapeHTML(e.info.desc)}</div>
     </div>`;
