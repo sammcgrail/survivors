@@ -5,6 +5,7 @@
 // ============================================================
 
 import { WEAPON_ICONS } from './shared/weapons.js';
+import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
@@ -583,7 +584,11 @@ function showLevelUpChoices(choices) {
       badge.textContent = '✦ EVOLUTION';
       div.prepend(badge);
     }
-    const statText = c.stats || '';
+    // Weapon preview (role chip + evo source icons) — shared with SP.
+    // Server serializes only base fields (id/name/desc/icon/stats/
+    // requiresEvo); preview builds client-side from powerup id.
+    const preview = decorateWeaponCard(div, c);
+    const statText = (preview && preview.stats) || c.stats || '';
     if (statText) {
       const statsEl = document.createElement('div');
       statsEl.className = 'choice-stats';

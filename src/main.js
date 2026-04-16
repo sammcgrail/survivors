@@ -8,6 +8,7 @@ import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
+import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -482,10 +483,6 @@ const spEventClient = {
 };
 
 // --- level up UI ---
-// Returns the `stats` string from the catalog entry, or '' if absent.
-function formatUpgradeStat(choice) {
-  return choice.stats || '';
-}
 
 function showLevelUp(g) {
   sfx('levelup');
@@ -533,7 +530,8 @@ function showLevelUp(g) {
       badge.textContent = '✦ EVOLUTION';
       div.prepend(badge);
     }
-    const statText = formatUpgradeStat(choice);
+    const preview = decorateWeaponCard(div, choice);
+    const statText = (preview && preview.stats) || choice.stats || '';
     if (statText) {
       const statsEl = document.createElement('div');
       statsEl.className = 'choice-stats';

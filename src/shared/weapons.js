@@ -144,3 +144,77 @@ export function createWeapon(type) {
     default: return null;
   }
 }
+
+// Level-up card preview data — role tag + evolution source pair.
+// Kept here next to createWeapon() so new weapons have one obvious
+// place to slot their meta. Role taxonomy is deliberately small so
+// players parse the tag at a glance:
+//   PROJECTILE — fires a travelling thing
+//   AURA       — damages around player continuously
+//   CAST       — summons an effect at a target or position
+//   DASH       — player-movement sweep
+//   SHIELD     — passive push + damage around player
+export const WEAPON_ROLE = {
+  spit:            'PROJECTILE',
+  breath:          'AURA',
+  charge:          'DASH',
+  orbit:           'AURA',
+  chain:           'CAST',
+  meteor:          'CAST',
+  shield:          'SHIELD',
+  lightning_field: 'AURA',
+  dragon_storm:    'PROJECTILE',
+  thunder_god:     'CAST',
+  meteor_orbit:    'AURA',
+  fortress:        'DASH',
+  inferno_wheel:   'AURA',
+  void_anchor:     'CAST',
+  tesla_aegis:     'SHIELD',
+};
+
+// Evolution source pair — two base weapon types that fuse into the
+// evolution. Level-up cards render the source icons (not names) per
+// seb's steer: faster to parse and mirrors the HUD icon grammar.
+export const WEAPON_EVO_SOURCES = {
+  dragon_storm:  ['spit', 'breath'],
+  thunder_god:   ['chain', 'lightning_field'],
+  meteor_orbit:  ['orbit', 'meteor'],
+  fortress:      ['shield', 'charge'],
+  inferno_wheel: ['breath', 'orbit'],
+  void_anchor:   ['meteor', 'chain'],
+  tesla_aegis:   ['chain', 'shield'],
+};
+
+// Strip the prefix and return a weapon type the createWeapon() factory
+// understands, or null for non-weapon powerups (stat buffs etc).
+export function powerupWeaponType(id) {
+  if (id.startsWith('weapon_')) return id.slice(7);
+  if (id.startsWith('evo_'))    return id.slice(4);
+  return null;
+}
+
+// Compact preview for the level-up card: role chip, headline stats line,
+// evo source icons when applicable. Pure derivation from createWeapon()
+// so stat tuning flows through automatically.
+export function getWeaponPreview(type) {
+  const w = createWeapon(type);
+  if (!w) return null;
+  const role = WEAPON_ROLE[type] || 'AURA';
+  const parts = [];
+  // Damage field naming varies per weapon — pick the most representative
+  // field for the card's one-line stat summary.
+  const dmg = w.damage || w.baseDamage || w.bladeDamage || w.shieldDamage || w.chainDamage;
+  if (dmg) parts.push(`${Math.round(dmg)} dmg`);
+  // Cooldown: 99999 sentinels mean "always-on"; report as "passive".
+  if (w.cooldown && w.cooldown < 1000) parts.push(`${w.cooldown.toFixed(1)}s cd`);
+  else if (w.pulseCooldown) parts.push(`${w.pulseCooldown}s pulse`);
+  else if (w.cooldown >= 1000) parts.push('passive');
+  // Reach field — whichever the weapon reports first.
+  const reach = w.range || w.radius || w.blastRadius || w.shieldRadius || w.fieldRadius || w.pullRadius;
+  if (reach) parts.push(`${Math.round(reach)}u reach`);
+  return {
+    role,
+    stats: parts.join(' · '),
+    evoSources: WEAPON_EVO_SOURCES[type] || null,
+  };
+}

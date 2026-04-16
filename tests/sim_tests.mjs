@@ -6,7 +6,7 @@
 
 import { tickSim } from '../src/shared/sim/tick.js';
 import { createRng } from '../src/shared/sim/rng.js';
-import { createWeapon } from '../src/shared/weapons.js';
+import { createWeapon, getWeaponPreview, powerupWeaponType } from '../src/shared/weapons.js';
 import { ENEMY_TYPES, WAVE_POOLS, SPECIAL_WAVES, enemyType, scaleEnemy } from '../src/shared/enemyTypes.js';
 import { calculateScales, applyUnlocks, sanitizePrestige, UNLOCKS } from '../src/shared/prestige.js';
 import { fireEnemyProjectile, enemyShootingAi, updateEnemyProjectiles } from '../src/shared/sim/enemyProjectiles.js';
@@ -1185,6 +1185,56 @@ suite('Lobby Anti-Repeat', () => {
     // pool.length > wantCount is false → no exclusion branch runs
     const pool = lobbyPool(['arena', 'forest', 'ruins'], 'arena', 3);
     assert(pool.length === 3, 'should return 3 options regardless');
+  });
+});
+
+suite('Level-up Card Weapon Preview', () => {
+  test('powerupWeaponType strips prefixes correctly', () => {
+    assert(powerupWeaponType('weapon_spit') === 'spit', 'weapon_* strip');
+    assert(powerupWeaponType('evo_dragon_storm') === 'dragon_storm', 'evo_* strip');
+    assert(powerupWeaponType('speed') === null, 'stat buff returns null');
+  });
+
+  test('base weapon preview includes role + dmg + cd + reach', () => {
+    const p = getWeaponPreview('spit');
+    assert(p.role === 'PROJECTILE', `role: ${p.role}`);
+    assert(p.stats.includes('20 dmg'), `stats: ${p.stats}`);
+    assert(p.stats.includes('0.8s cd'), `stats: ${p.stats}`);
+    assert(p.stats.includes('300u reach'), `stats: ${p.stats}`);
+    assert(p.evoSources === null, 'no evo sources on base weapon');
+  });
+
+  test('shield cooldown:99999 reports "passive" not a huge number', () => {
+    const p = getWeaponPreview('shield');
+    assert(p.stats.includes('passive'), `shield should be passive: ${p.stats}`);
+    assert(!p.stats.includes('99999'), 'never expose sentinel to players');
+  });
+
+  test('tesla_aegis pulse cadence shows instead of passive sentinel', () => {
+    // cooldown is 99999 but pulseCooldown is 0.5 — the pulse is the real
+    // tempo, so players should see that number not "passive".
+    const p = getWeaponPreview('tesla_aegis');
+    assert(p.stats.includes('pulse'), `should expose pulse cadence: ${p.stats}`);
+    assert(!p.stats.includes('99999'), 'never expose sentinel to players');
+  });
+
+  test('evolution preview exposes source pair', () => {
+    const p = getWeaponPreview('tesla_aegis');
+    assert(p.role === 'SHIELD', `tesla_aegis role: ${p.role}`);
+    assert(Array.isArray(p.evoSources) && p.evoSources.length === 2, 'evo sources pair');
+    assert(p.evoSources.includes('chain') && p.evoSources.includes('shield'),
+      `chain+shield pair: ${p.evoSources}`);
+  });
+
+  test('every registered evolution has a preview and source pair', () => {
+    const evos = ['dragon_storm', 'thunder_god', 'meteor_orbit', 'fortress',
+                  'inferno_wheel', 'void_anchor', 'tesla_aegis'];
+    for (const e of evos) {
+      const p = getWeaponPreview(e);
+      assert(p !== null, `${e} has preview`);
+      assert(p.evoSources, `${e} has source pair`);
+      assert(p.role, `${e} has role`);
+    }
   });
 });
 
