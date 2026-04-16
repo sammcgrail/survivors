@@ -20,6 +20,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/obstacleSprites.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
+import { getAmbient } from './shared/mapAmbient.js';
 import { synthesizeView } from './shared/view.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
@@ -821,6 +822,12 @@ function render() {
     if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
     drawObstacle(ctx, obs);
   }
+  // Per-map ambient VFX — fireflies, torch flicker, dust motes,
+  // whatever fits the map. Runs before world render so the ambient
+  // layer sits under enemies + projectiles. Null for maps without
+  // a configured ambient (no-op cost).
+  const ambient = getAmbient(g.mapId);
+  if (ambient) ambient.tick(g.particles, { cx, cy, W, H }, performance.now());
   _phase('bg');
 
   const p = g.player;

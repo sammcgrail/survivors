@@ -14,6 +14,7 @@ import { loadObstacleSprites, drawObstacle, drawNeonBackground } from './shared/
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
+import { getAmbient } from './shared/mapAmbient.js';
 import { applySimEvent } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
@@ -979,6 +980,9 @@ function render(dt) {
     if (obs.x + obs.w < cx || obs.x > cx + W || obs.y + obs.h < cy || obs.y > cy + H) continue;
     drawObstacle(ctx, obs);
   }
+  // Per-map ambient VFX (same as SP) — runs under world layer.
+  const ambient = getAmbient(state.mapId);
+  if (ambient) ambient.tick(particles, { cx, cy, W, H }, performance.now());
 
   renderWorld(ctx, state, drawSprite, particles,
               { cx, cy, W, H },
