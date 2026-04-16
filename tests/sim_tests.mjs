@@ -941,6 +941,43 @@ suite('Full Sim Integration', () => {
     assert(killEvents > 0, 'should have killed enemies (gem source)');
   });
 
+  test('overkill flag fires on 3x+ dmg vs threat tier (pass-2 r2)', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const elite = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'elite'), 5, rng);
+    elite.hp = 100;
+    g.enemies.push(elite);
+    damageEnemy(g, elite, 400, 0);
+    const killEvt = g.events.find(e => e.type === 'enemyKilled');
+    assert(killEvt && killEvt.overkill === true,
+      `expected overkill=true on 4x threat-tier kill, got ${JSON.stringify(killEvt)}`);
+  });
+
+  test('overkill flag NOT set for small trash one-shots (pass-2 r2)', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const blob = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'blob'), 1, rng);
+    blob.hp = 10;
+    g.enemies.push(blob);
+    damageEnemy(g, blob, 40, 0);
+    const killEvt = g.events.find(e => e.type === 'enemyKilled');
+    assert(killEvt, 'enemy should be killed');
+    assert(killEvt.overkill === undefined,
+      `expected no overkill flag for trash one-shot, got ${killEvt.overkill}`);
+  });
+
+  test('overkill flag fires on 50+ dmg even for trash (pass-2 r2)', () => {
+    const g = makeGame();
+    const rng = createRng(1);
+    const blob = scaleEnemy(ENEMY_TYPES.find(t => t.name === 'blob'), 1, rng);
+    blob.hp = 15;
+    g.enemies.push(blob);
+    damageEnemy(g, blob, 60, 0);
+    const killEvt = g.events.find(e => e.type === 'enemyKilled');
+    assert(killEvt && killEvt.overkill === true,
+      `expected overkill=true for 60-dmg blob one-shot, got ${JSON.stringify(killEvt)}`);
+  });
+
   test('gem tiers + multipliers by enemy type (PR #114)', () => {
     const g = makeGame();
     spawnGem(g, 0, 0, 10, 'blob');

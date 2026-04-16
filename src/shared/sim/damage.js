@@ -7,6 +7,13 @@ import { EVT, emit } from './events.js';
 import { consumableDrop, spawnConsumable } from './consumables.js';
 import { ENEMY_TYPES, scaleEnemy } from '../enemyTypes.js';
 
+// Tier set for the overkill gate below — punch-frame feedback only
+// fires on enemies heavy enough to be worth the screen flash, so one-
+// shotting trash (blob, swarm, fast) doesn't spam the effect.
+const IS_THREAT_TIER = {
+  elite: true, brute: true, spawner: true, boss: true, healer: true,
+};
+
 // Heart drop chance per enemy type, gated on wave 6+. Tougher enemies
 // drop more often; bosses always drop.
 function heartDropChance(name) {
@@ -61,6 +68,13 @@ function applyExplodeOnDeath(g, e) {
 // already-dying calls.
 export function damageEnemy(g, e, dmg, killerId) {
   if (e.dying) return false;
+  // Overkill metric: compare the dealt damage against the enemy's
+  // remaining HP BEFORE the hit. A 3x-or-more overkill flags the kill
+  // for extra client VFX (punch-frame + burst bump). Only meaningful
+  // when this call also kills the enemy; flag is passed into
+  // ENEMY_KILLED below. Read pre-hit so a 1-HP enemy with a 100-dmg
+  // meteor overkills at 100x, not 1x.
+  const preHitHp = e.hp;
   e.hp -= dmg;
   e.hitFlash = 1;
   // dmg < 5 hits never trigger client visuals (text/sfx/crit gated
@@ -110,6 +124,15 @@ export function damageEnemy(g, e, dmg, killerId) {
       color: e.color, name: e.name, radius: e.radius,
       vx: e.vx, vy: e.vy,
       killer: killerId,
+      // Overkill flag — only set when:
+      //   (a) the killing blow dealt 3x+ the pre-hit hp, AND
+      //   (b) absolute floor of 50 dmg OR enemy is a threat tier
+      //       (elite / brute / spawner / boss / healer)
+      // The (b) gate keeps spit one-shotting a 10-hp blob from
+      // punch-framing every kill in early game. Lets the client add
+      // a punch-frame flash + bumped burst count when it matters.
+      ...(dmg >= preHitHp * 3 && (dmg >= 50 || IS_THREAT_TIER[e.name])
+          ? { overkill: true } : {}),
     });
     e.dying = 0.2; // 200ms death animation
     g.kills++;
