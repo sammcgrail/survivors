@@ -101,19 +101,20 @@ function fireCharge(g, w, p) {
 
 function fireChain(g, w, p) {
   if (g.enemies.length === 0) return;
-  const sorted = g.enemies.slice().sort((a, b) => {
-    const da = (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
-    const db = (b.x - p.x) ** 2 + (b.y - p.y) ** 2;
-    return da - db;
-  });
-  const inRange = sorted.filter(e => Math.hypot(e.x - p.x, e.y - p.y) < w.range);
-  if (inRange.length === 0) return;
+  // O(N) nearest-in-range pass — replaces O(N log N) slice+sort+filter.
+  const range2 = w.range * w.range;
+  let first = null, firstDist2 = range2;
+  for (const e of g.enemies) {
+    const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+    if (d2 < firstDist2) { first = e; firstDist2 = d2; }
+  }
+  if (!first) return;
   // w.type instead of 'chain' so thunder_god's chain burst reads as a
   // thunder_god muzzle flash, not a base-chain one. Evolution bloom
   // in simEventHandler needs the evolved name to apply its tier style.
   emit(g, EVT.WEAPON_FIRE, { weapon: w.type, x: p.x, y: p.y, pid: p.id });
-  const targets = [inRange[0]];
-  const hit = new Set([inRange[0]]);
+  const targets = [first];
+  const hit = new Set([first]);
   const chains = w.chains + (p.projectileBonus || 0);
   for (let c = 0; c < chains && targets.length > 0; c++) {
     const last = targets[targets.length - 1];
@@ -570,9 +571,13 @@ function fireTeslaAegisPulse(g, w, p) {
 function fireVoidAnchor(g, w, p) {
   emit(g, EVT.WEAPON_FIRE, { weapon: 'void_anchor', x: p.x, y: p.y, pid: p.id });
   const pullR = w.pullRadius * (p.sizeMulti || 1);
-  const nearest = g.enemies
-    .filter(e => Math.hypot(e.x - p.x, e.y - p.y) < pullR)
-    .sort((a, b) => Math.hypot(a.x - p.x, a.y - p.y) - Math.hypot(b.x - p.x, b.y - p.y))[0];
+  // O(N) nearest-in-range pass — replaces filter+sort+[0].
+  const pullR2 = pullR * pullR;
+  let nearest = null, nearestDist2 = pullR2;
+  for (const e of g.enemies) {
+    const d2 = (e.x - p.x) ** 2 + (e.y - p.y) ** 2;
+    if (d2 < nearestDist2) { nearest = e; nearestDist2 = d2; }
+  }
   if (nearest) damageEnemy(g, nearest, w.baseDamage * p.damageMulti, p.id);
   if (!g.pendingPulls) g.pendingPulls = [];
   g.pendingPulls.push({

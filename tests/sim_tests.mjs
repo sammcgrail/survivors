@@ -1238,6 +1238,83 @@ suite('Level-up Card Weapon Preview', () => {
   });
 });
 
+// ── Nearest-enemy determinism (O(N) fireChain + fireVoidAnchor) ────
+//
+// Verifies that the O(N) pass picks the same first target on repeated
+// calls with identical input state, and that the selected target is
+// the nearest one. chainEffects.points[1] records the first hit position.
+suite('Nearest-enemy determinism — fireChain + fireVoidAnchor', () => {
+  // Minimal enemy shape sufficient for damageEnemy + target selection.
+  function makeEnemy(x, y, overrides = {}) {
+    return {
+      x, y, hp: 30, maxHp: 30, damage: 5, radius: 12,
+      color: '#f00', name: 'swarm', speed: 60,
+      hitFlash: 0, statusResist: 0, dying: undefined,
+      ...overrides,
+    };
+  }
+
+  // Returns a game with enemies at known positions and the weapon
+  // timer already expired so it fires on the first tickSim call.
+  // chainRange is set to 1 so chain-hops don't reach any other enemies,
+  // isolating the first-target selection from hop behavior.
+  function makeGameForWeapon(type, extraW = {}) {
+    const p = makePlayer({ x: WORLD_W / 2, y: WORLD_H / 2 });
+    const w = createWeapon(type);
+    Object.assign(w, { chainRange: 1 }, extraW); // prevent chain-hops from muddying the test
+    w.timer = 0; // fire immediately
+    p.weapons = [w];
+    const g = makeGame({ player: p });
+    // Three enemies at distances 50, 100, 200 from player.
+    // Nearest (x+50) is the expected first target.
+    g.enemies = [
+      makeEnemy(p.x + 200, p.y),   // furthest
+      makeEnemy(p.x + 50,  p.y),   // nearest ← expected first target
+      makeEnemy(p.x + 100, p.y),   // middle
+    ];
+    return g;
+  }
+
+  test('fireChain selects same nearest-in-range enemy on two identical ticks', () => {
+    const g1 = makeGameForWeapon('chain');
+    const g2 = makeGameForWeapon('chain');
+
+    tickSim(g1, 1 / 60);
+    tickSim(g2, 1 / 60);
+
+    // chainEffects.points[0] = player pos, points[1] = first target pos.
+    assert(g1.chainEffects.length > 0, 'chain: effect emitted run 1');
+    assert(g2.chainEffects.length > 0, 'chain: effect emitted run 2');
+    const target1X = g1.chainEffects[0].points[1].x;
+    const target2X = g2.chainEffects[0].points[1].x;
+    assert(target1X === target2X, `chain: same target both runs (${target1X} vs ${target2X})`);
+    // Verify correctness: nearest enemy is at p.x + 50.
+    assertClose(target1X, WORLD_W / 2 + 50, 0.5, 'chain: nearest enemy (x+50) selected first');
+  });
+
+  test('fireVoidAnchor selects same nearest-in-range enemy on two identical ticks', () => {
+    const g1 = makeGameForWeapon('void_anchor', { pullRadius: 500 });
+    const g2 = makeGameForWeapon('void_anchor', { pullRadius: 500 });
+
+    // Capture HP snapshots indexed by array position before the tick.
+    const hp1Before = g1.enemies.map(e => e.hp);
+    const hp2Before = g2.enemies.map(e => e.hp);
+
+    tickSim(g1, 1 / 60);
+    tickSim(g2, 1 / 60);
+
+    // findIndex by position in array — baseDamage only hits the nearest.
+    const hit1Idx = g1.enemies.findIndex((e, i) => e.hp < hp1Before[i]);
+    const hit2Idx = g2.enemies.findIndex((e, i) => e.hp < hp2Before[i]);
+    assert(hit1Idx !== -1, 'void_anchor: at least one enemy hit in run 1');
+    assert(hit1Idx === hit2Idx,
+      `void_anchor: same first target index both runs (${hit1Idx} vs ${hit2Idx})`);
+    // Nearest enemy is at array index 1 (x+50).
+    assert(hit1Idx === 1,
+      `void_anchor: expected nearest enemy (idx 1) to be first hit, got idx ${hit1Idx}`);
+  });
+});
+
 // ── Summary ─────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`Tests: ${totalPassed} passed, ${totalFailed} failed`);
