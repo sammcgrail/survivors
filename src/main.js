@@ -462,7 +462,18 @@ const spEventClient = {
   onPlayerDeath(evt) {
     if (!game) return;
     game.deathFeed.push({ text: `${game.playerName} killed by ${evt.by}`, time: game.time });
-    showDeathScreen(game);
+    // VFX pass 3 item 1 — 2s death transition before the DOM flip.
+    // render() picks up g.deathTransition and desaturates + slow-zooms
+    // the camera toward the corpse. gameLoop calls showDeathScreen when
+    // the timer completes. Guard against double-fire races.
+    if (!game.deathTransition) {
+      game.deathTransition = {
+        t: 0, duration: 2.0,
+        deathX: evt.x ?? game.player.x,
+        deathY: evt.y ?? game.player.y,
+        by: evt.by,
+      };
+    }
   },
   onWaveSurvived(evt) {
     if (!game) return;
@@ -492,7 +503,18 @@ function showLevelUp(g) {
 
   const container = document.getElementById('level-choices');
   container.innerHTML = '';
-  document.getElementById('level-up').style.display = 'flex';
+  const overlay = document.getElementById('level-up');
+  overlay.style.display = 'flex';
+  // VFX pass 3 item 3 — replay the title anticipation animation on
+  // every show. CSS animations only fire on element creation, so
+  // force a reflow by toggling the animation property to re-trigger
+  // the scale-in pop each level-up.
+  const h2 = overlay.querySelector('h2');
+  if (h2) {
+    h2.style.animation = 'none';
+    void h2.offsetHeight; // reflow
+    h2.style.animation = '';
+  }
 
   // store choices globally for keyboard selection
   window._levelChoices = [];
@@ -767,6 +789,16 @@ function render() {
   if (PERF_ON) _phaseT = performance.now();
 
   ctx.save();
+  // VFX pass 3 item 1 — death transition state. Fades saturation down
+  // from 100% to 30% and zooms the camera 1.0× → 1.5× toward the
+  // corpse over 2 seconds. `ctx.filter` on supported browsers handles
+  // the grayscale cheaply; skipped if not supported (old browsers
+  // just get the zoom without the desaturation).
+  const dt = g.deathTransition;
+  const deathT = dt ? Math.min(dt.t / dt.duration, 1) : 0;
+  if (dt && 'filter' in ctx) {
+    ctx.filter = `saturate(${100 - deathT * 70}%)`;
+  }
   ctx.fillStyle = '#0a0a0f';
   ctx.fillRect(0, 0, W, H);
 
@@ -785,7 +817,17 @@ function render() {
   cx = Math.floor(cx);
   cy = Math.floor(cy);
 
-  ctx.translate(-cx, -cy);
+  // Death transition zoom — scale the world 1.0× → 1.5× centered on
+  // the corpse position. Applied before the camera translate so the
+  // zoom pivots on the death point, not the screen.
+  if (dt) {
+    const zoom = 1 + deathT * 0.5;
+    ctx.translate(W / 2, H / 2);
+    ctx.scale(zoom, zoom);
+    ctx.translate(-dt.deathX, -dt.deathY);
+  } else {
+    ctx.translate(-cx, -cy);
+  }
 
   // --- background: pre-baked Wang-sampled tileset (when loaded), neon
   //     abstract render for code-only maps, or fallback dark grid. The
@@ -1100,6 +1142,18 @@ function gameLoop(ts) {
   } else {
     update(dt);
     render();
+  }
+  // VFX pass 3 item 1 — advance death transition outside the sim's
+  // update(). Death freezes sim state (update() early-returns when
+  // !player.alive), but the transition timer needs to keep ticking
+  // in real time to reach the 2s showDeathScreen handoff.
+  if (game && game.deathTransition) {
+    const dt2 = game.deathTransition;
+    dt2.t += dt;
+    if (dt2.t >= dt2.duration && !dt2.fired) {
+      dt2.fired = true;
+      showDeathScreen(game);
+    }
   }
   requestAnimationFrame(gameLoop);
 }
