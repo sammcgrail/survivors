@@ -5,6 +5,7 @@
 // ============================================================
 
 import { WEAPON_ICONS } from './shared/weapons.js';
+import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
@@ -1153,7 +1154,7 @@ function render(dt) {
 
     const isMe = pl.id === myId;
     if (pl.x < cx - 60 || pl.x > cx + W + 60 || pl.y < cy - 60 || pl.y > cy + H + 60) continue;
-    const playerRadius = 14;
+    const playerRadius = PLAYER_RADIUS;
     const skin = pl.activeSkin;
     const glowColor = skin === 'skin_gold' ? '#f39c12'
                     : skin === 'skin_shadow' ? '#9b59b6'
@@ -1381,10 +1382,12 @@ joyZone.addEventListener('touchmove', e => {
     const nx = dist > 0 ? dx / dist : 0;
     const ny = dist > 0 ? dy / dist : 0;
     if (dist > JOY_DEAD) {
-      keys.left = nx < -0.4;
-      keys.right = nx > 0.4;
-      keys.up = ny < -0.4;
-      keys.down = ny > 0.4;
+      // Threshold 0.3 matches SP (src/main.js:1043–46). MP was at 0.4,
+      // causing diagonal inputs to register later on mobile.
+      keys.left = nx < -0.3;
+      keys.right = nx > 0.3;
+      keys.up = ny < -0.3;
+      keys.down = ny > 0.3;
     } else {
       keys.left = keys.right = keys.up = keys.down = false;
     }

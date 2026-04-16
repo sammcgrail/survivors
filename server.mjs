@@ -67,6 +67,13 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
     damageMulti: 1,
     attackSpeedMulti: 1,
     hpRegen: 0,
+    // calne fork #18 — these were missing, causing Barrage (projectileBonus),
+    // Amplify (sizeMulti), and Iron Skin (armor) to mutate `undefined` in MP
+    // and get swallowed by `|| 0` / `|| 1` guards downstream. SP sets all
+    // three explicitly in src/main.js:254–256.
+    projectileBonus: 0,
+    sizeMulti: 1,
+    armor: 0,
     magnetRange: XP_MAGNET_RANGE,
     xp: 0,
     xpToLevel: 45,
