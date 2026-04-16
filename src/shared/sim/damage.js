@@ -71,7 +71,7 @@ export function damageEnemy(g, e, dmg, killerId) {
     emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
   }
   if (e.hp <= 0) {
-    spawnGem(g, e.x, e.y, e.xp);
+    spawnGem(g, e.x, e.y, e.xp, e.name);
     if (g.wave >= 6 && g.rng.random() < heartDropChance(e.name)) {
       spawnHeart(g, e.x, e.y, 15);
     }

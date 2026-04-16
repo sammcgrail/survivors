@@ -15,6 +15,7 @@ import { EVT } from '../src/shared/sim/events.js';
 import { MAPS, resolveMapObstacles } from '../src/shared/maps.js';
 import { generateClusterScatter, generateCorridor } from '../src/shared/mapGen.js';
 import { damageEnemy } from '../src/shared/sim/damage.js';
+import { spawnGem } from '../src/shared/sim/gems.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
 } from '../src/shared/constants.js';
@@ -888,6 +889,39 @@ suite('Full Sim Integration', () => {
     // Gems may have been picked up already, but kills should have produced gems at some point
     const killEvents = countEvents(g, 'enemyKilled');
     assert(killEvents > 0, 'should have killed enemies (gem source)');
+  });
+
+  test('gem tiers + multipliers by enemy type (PR #114)', () => {
+    const g = makeGame();
+    spawnGem(g, 0, 0, 10, 'blob');
+    spawnGem(g, 0, 0, 80, 'elite');
+    spawnGem(g, 0, 0, 50, 'spawner');
+    spawnGem(g, 0, 0, 60, 'brute');
+    spawnGem(g, 0, 0, 500, 'boss');
+    const [b, e, s, br, bo] = g.gems;
+    assert(b.tier === 0 && b.xp === 10,     `blob: tier 0 / xp 10, got ${b.tier}/${b.xp}`);
+    assert(e.tier === 1 && e.xp === 240,    `elite: tier 1 / xp 80*3=240, got ${e.tier}/${e.xp}`);
+    assert(s.tier === 1 && s.xp === 150,    `spawner: tier 1 / xp 50*3=150, got ${s.tier}/${s.xp}`);
+    assert(br.tier === 2 && br.xp === 300,  `brute: tier 2 / xp 60*5=300, got ${br.tier}/${br.xp}`);
+    assert(bo.tier === 3 && bo.xp === 12500,`boss: tier 3 / xp 500*25=12500, got ${bo.tier}/${bo.xp}`);
+  });
+
+  test('xpToLevel flattens 1.22 per level (PR #114)', () => {
+    const g = makeGame();
+    g.player.xp = 0;
+    g.player.level = 1;
+    g.player.xpToLevel = 45;
+    // Drop one huge gem to cascade-level the player several times.
+    spawnGem(g, g.player.x, g.player.y, 10000);
+    tickN(g, 2);
+    // After enough levels, xpToLevel should be well under the old 1.30
+    // curve. At level 10: 45 * 1.22^9 ≈ 275, vs 1.30^9 ≈ 492.
+    assert(g.player.level >= 10, `expected level >= 10 from 10000xp cascade, got ${g.player.level}`);
+    const expectedAtL10 = 45;
+    let expected = 45;
+    for (let i = 1; i < g.player.level; i++) expected = Math.floor(expected * 1.22);
+    assert(g.player.xpToLevel === expected,
+      `expected xpToLevel ${expected} at L${g.player.level}, got ${g.player.xpToLevel}`);
   });
 
   test('heart drops appear after wave 6', () => {
