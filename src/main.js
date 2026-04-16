@@ -3,7 +3,7 @@
 // Bundled by scripts/build.cjs → bundle.js (loaded by v1a.html)
 // ============================================================
 
-import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED, MAX_PARTICLES } from './shared/constants.js';
+import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
@@ -25,7 +25,7 @@ import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlo
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
 import { synthesizeView } from './shared/view.js';
-import { applySimEvent, resetParticleOverflow } from './shared/simEventHandler.js';
+import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 import { saveRunEntry } from './shared/runHistory.js';
@@ -334,10 +334,9 @@ function initGame() {
 // --- spawn particles ---
 function spawnParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
-    if (game.particles.length >= MAX_PARTICLES) game.particles.shift();
     const angle = Math.random() * Math.PI * 2;
     const speed = 50 + Math.random() * 150;
-    game.particles.push({
+    safeParticlePush(game.particles, {
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
