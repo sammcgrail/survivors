@@ -1,5 +1,6 @@
 // Pure weapon definitions + icon map. Both SP and MP read from here.
 // Keep free of game-state mutations and DOM/canvas references.
+import { formatWeaponCooldown } from './weaponDisplay.js';
 
 export const WEAPON_ICONS = {
   spit: '🔮', breath: '🌀', charge: '🐂',
@@ -205,10 +206,9 @@ export function getWeaponPreview(type) {
   // field for the card's one-line stat summary.
   const dmg = w.damage || w.baseDamage || w.bladeDamage || w.shieldDamage || w.chainDamage;
   if (dmg) parts.push(`${Math.round(dmg)} dmg`);
-  // Cooldown: 99999 sentinels mean "always-on"; report as "passive".
-  if (w.cooldown && w.cooldown < 1000) parts.push(`${w.cooldown.toFixed(1)}s cd`);
-  else if (w.pulseCooldown) parts.push(`${w.pulseCooldown}s pulse`);
-  else if (w.cooldown >= 1000) parts.push('passive');
+  // Cooldown: sentinel 99999 → "passive"; always-on pulse weapons show pulse cadence.
+  const cdStr = formatWeaponCooldown(w);
+  if (cdStr) parts.push(cdStr);
   // Reach field — whichever the weapon reports first.
   const reach = w.range || w.radius || w.blastRadius || w.shieldRadius || w.fieldRadius || w.pullRadius;
   if (reach) parts.push(`${Math.round(reach)}u reach`);

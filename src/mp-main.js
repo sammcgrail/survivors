@@ -7,7 +7,7 @@
 import { WEAPON_ICONS } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
-import { PLAYER_RADIUS, MAX_PARTICLES } from './shared/constants.js';
+import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
@@ -18,9 +18,10 @@ import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
-import { applySimEvent, resetParticleOverflow } from './shared/simEventHandler.js';
+import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
+import { createBaseGameState } from './shared/gameState.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -359,14 +360,17 @@ let stateTime = 0;      // time we received currState
 let interpAlpha = 1;     // 0..1 blend between prev and curr
 const TICK_DT = 1 / 20;  // server sends at 20Hz
 
-// Client-side particles + floating text (decorative only).
-let particles = [];
-let floatingTexts = [];
-let screenShake = 0;
+// Client-side visual state — same zero-shape as SP (main.js). SP owns
+// these inside the game object; MP owns them at module scope since
+// there's no client-side game object (server drives all sim state).
+// Arrays are live references; scalars are copied to mutable lets.
+const _clientBase = createBaseGameState();
+let { particles, floatingTexts } = _clientBase;
+let screenShake = _clientBase.screenShake;
 // fork #19 — level-up white-wash flash, parity with SP (src/main.js).
 // Driven by applySimEvent → mpEventClient.flash(v). Decays each frame
 // in render() and paints a yellow full-screen overlay while >0.
-let levelFlash = 0;
+let levelFlash = _clientBase.levelFlash;
 // Per-player fire-trail throttle, shared helper owns the write — we
 // just own the Map so state survives between render frames.
 const trailState = new Map();
@@ -587,9 +591,9 @@ function showLevelUpChoices(choices) {
       div.prepend(badge);
     }
     // Weapon preview (role chip + evo source icons) — shared with SP.
-    // Server serializes only base fields (id/name/desc/icon/stats/
-    // requiresEvo); preview builds client-side from powerup id.
-    const preview = decorateWeaponCard(div, c);
+    // Pass local player's weapon loadout so isEvoReady can mark badges.
+    const myWeapons = currState?.players.find(p => p.id === myId)?.weapons ?? [];
+    const preview = decorateWeaponCard(div, c, myWeapons);
     const statText = (preview && preview.stats) || c.stats || '';
     if (statText) {
       const statsEl = document.createElement('div');
@@ -944,7 +948,7 @@ function spawnParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
     const angle = Math.random() * Math.PI * 2;
     const speed = 50 + Math.random() * 150;
-    particles.push({
+    safeParticlePush(particles, {
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,

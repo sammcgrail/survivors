@@ -3,7 +3,7 @@
 // Bundled by scripts/build.cjs → bundle.js (loaded by v1a.html)
 // ============================================================
 
-import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED, MAX_PARTICLES } from './shared/constants.js';
+import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { makeBgmPlayer } from './shared/bgm.js';
@@ -14,7 +14,8 @@ import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
-import { POWERUPS, getAvailableChoices } from './shared/sim/powerups.js';
+import { POWERUPS } from './shared/sim/powerups.js';
+import { buildLevelUpChoices } from './shared/levelUp.js';
 import { tickSim } from './shared/sim/tick.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { MAPS, resolveMapObstacles } from './shared/maps.js';
@@ -25,10 +26,11 @@ import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlo
 import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
 import { synthesizeView } from './shared/view.js';
-import { applySimEvent, resetParticleOverflow } from './shared/simEventHandler.js';
+import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen, getBestiaryEntries } from './shared/bestiary.js';
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 import { saveRunEntry } from './shared/runHistory.js';
+import { createBaseGameState } from './shared/gameState.js';
 
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
@@ -292,8 +294,7 @@ function initGame() {
     heartDrops: [],
     consumables: [],
     enemyProjectiles: [],
-    particles: [],
-    floatingTexts: [],
+    ...createBaseGameState(),
     time: 0,
     wave: 1,
     waveTimer: 0,
@@ -308,11 +309,6 @@ function initGame() {
     playerName: 'you',
     deathFeed: [], // { text, time } — fading event log
     camera: { x: p.x, y: p.y },
-    screenShake: 0,
-    // Event queue drained by client each frame. Sim modules push typed
-    // events here; client handles sfx/particles/HUD flashes from the
-    // queue. See src/shared/sim/events.js for the EVT enum.
-    events: [],
     rng,
     // Visual effect arrays — chain bolts and meteor warn/explode rings.
     // Eager-init here so sim modules don't need defensive `|| []` checks.
@@ -334,10 +330,9 @@ function initGame() {
 // --- spawn particles ---
 function spawnParticles(x, y, color, count) {
   for (let i = 0; i < count; i++) {
-    if (game.particles.length >= MAX_PARTICLES) game.particles.shift();
     const angle = Math.random() * Math.PI * 2;
     const speed = 50 + Math.random() * 150;
-    game.particles.push({
+    safeParticlePush(game.particles, {
       x, y,
       vx: Math.cos(angle) * speed,
       vy: Math.sin(angle) * speed,
@@ -502,15 +497,7 @@ function showLevelUp(g) {
   sfx('levelup');
   paused = true;
   const stacks = g.player.powerupStacks;
-  // pick 3 random valid options — Fisher-Yates shuffle (the
-  // sort(() => Math.random()-0.5) one-liner is biased, doesn't even
-  // produce a uniform distribution). Matches server.mjs:175.
-  const available = getAvailableChoices(stacks);
-  for (let i = available.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [available[i], available[j]] = [available[j], available[i]];
-  }
-  const choices = available.slice(0, 3);
+  const choices = buildLevelUpChoices(stacks);
 
   const container = document.getElementById('level-choices');
   container.innerHTML = '';
@@ -544,7 +531,7 @@ function showLevelUp(g) {
       badge.textContent = '✦ EVOLUTION';
       div.prepend(badge);
     }
-    const preview = decorateWeaponCard(div, choice);
+    const preview = decorateWeaponCard(div, choice, g.player.weapons);
     const statText = (preview && preview.stats) || choice.stats || '';
     if (statText) {
       const statsEl = document.createElement('div');
