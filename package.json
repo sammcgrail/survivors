@@ -14,7 +14,8 @@
     "test": "node tests/sim_tests.mjs",
     "mp-server": "node server.mjs",
     "mp-smoke": "node tests/server_smoke.mjs",
-    "regression": "node tests/regression.mjs"
+    "regression": "node tests/regression.mjs",
+    "bench": "node tests/perf_bench.mjs"
   },
   "repository": {
     "type": "git",
