@@ -6,10 +6,12 @@ export const WEAPON_ICONS = {
   spit: '🔮', breath: '🌀', charge: '🐂',
   orbit: '🗡️', chain: '⚡', meteor: '☄️',
   shield: '🛡️', lightning_field: '⚡',
+  ice_lance: '❄️',
   dragon_storm: '🐉',
   thunder_god: '⚡', meteor_orbit: '🔥', fortress: '🏰',
   inferno_wheel: '🔥', tesla_aegis: '🌩️',
   void_anchor: '🌑',
+  frost_cascade: '🌨️', nova_strike: '💠',
 };
 
 export function createWeapon(type) {
@@ -142,6 +144,45 @@ export function createWeapon(type) {
       impactRadius: 85,
       color: '#6c5ce7',
     };
+    // Ice Lance — precision PROJECTILE. High damage / long cooldown /
+    // long range / double pierce, applies slow on hit. Fills the "pick
+    // the right target, hit hard, slow it down" slot that's missing
+    // from the existing tree (everything else is DoT / chain / aura /
+    // cast). Low prereq (base weapon, no upgrades required) so it's
+    // accessible from the starter pool.
+    case 'ice_lance': return {
+      type: 'ice_lance', cooldown: 2.5, timer: 0, damage: 60, speed: 620,
+      range: 400, count: 1, pierce: 2, color: '#a8e6ff',
+      slowDuration: 1.5, slowMagnitude: 0.4,
+    };
+    // Frost Cascade — Ice Lance + Breath. Breath aura swaps burn for a
+    // deep slow (10% speed for 3s, read as "frozen" without needing a
+    // new hard-stun status type). Damage retained so breath still
+    // chips, but the CC-focus makes it a distinct playstyle from the
+    // dragon_storm (spit+breath) evo path.
+    case 'frost_cascade': return {
+      type: 'frost_cascade', cooldown: 0.5, timer: 0, damage: 10, radius: 110,
+      color: '#a8e6ff', pulsePhase: 0,
+      // "Freeze" is a deep-magnitude slow (90%) via the existing slow
+      // status path — reuses tesla/chain/void-anchor's plumbing and
+      // inherits boss statusResist halving for free. 3s duration keeps
+      // enemies locked even when the player kites out of aura range,
+      // which is what makes this evolution a defensive-positioning
+      // tool vs. inferno_wheel's (the other breath+orbit overlap's)
+      // offensive DoT identity.
+      freezeDuration: 3.0, freezeMagnitude: 0.1,
+    };
+    // Nova Strike — Ice Lance + Meteor. Meteor still drops damage AoE;
+    // on explode it also spawns `fragmentCount` short-life ice
+    // projectiles in a ring that apply slow-on-hit. Turns the random
+    // target of meteor into a usable area-denial by leaving slow cones
+    // radiating from the impact.
+    case 'nova_strike': return {
+      type: 'nova_strike', cooldown: 3.0, timer: 0, damage: 70, blastRadius: 75,
+      color: '#a8e6ff',
+      fragmentCount: 6, fragmentDamage: 20, fragmentSpeed: 260,
+      fragmentLife: 0.8, fragmentPierce: 1,
+    };
     default: return null;
   }
 }
@@ -164,6 +205,7 @@ export const WEAPON_ROLE = {
   meteor:          'CAST',
   shield:          'SHIELD',
   lightning_field: 'AURA',
+  ice_lance:       'PROJECTILE',
   dragon_storm:    'PROJECTILE',
   thunder_god:     'CAST',
   meteor_orbit:    'AURA',
@@ -171,6 +213,8 @@ export const WEAPON_ROLE = {
   inferno_wheel:   'AURA',
   void_anchor:     'CAST',
   tesla_aegis:     'SHIELD',
+  frost_cascade:   'AURA',
+  nova_strike:     'CAST',
 };
 
 // Evolution source pair — two base weapon types that fuse into the
@@ -184,6 +228,8 @@ export const WEAPON_EVO_SOURCES = {
   inferno_wheel: ['breath', 'orbit'],
   void_anchor:   ['meteor', 'chain'],
   tesla_aegis:   ['chain', 'shield'],
+  frost_cascade: ['ice_lance', 'breath'],
+  nova_strike:   ['ice_lance', 'meteor'],
 };
 
 // Strip the prefix and return a weapon type the createWeapon() factory

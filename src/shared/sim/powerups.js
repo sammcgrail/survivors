@@ -23,6 +23,7 @@ export const POWERUPS = [
   { id: 'weapon_meteor', name: 'Meteor', desc: 'Drops AoE on enemy clusters', icon: '☄️', max: 1, apply(g, p) { p.weapons.push(createWeapon('meteor')); } },
   { id: 'weapon_shield', name: 'Barrier', desc: 'Knockback shield — pushes and damages nearby enemies', icon: '🛡️', max: 1, apply(g, p) { p.weapons.push(createWeapon('shield')); } },
   { id: 'weapon_lightning_field', name: 'Lightning Field', desc: 'Passive zaps random nearby enemies', icon: '⚡', max: 1, apply(g, p) { p.weapons.push(createWeapon('lightning_field')); } },
+  { id: 'weapon_ice_lance', name: 'Ice Lance', desc: 'High-damage piercing projectile — slows on hit', icon: '❄️', max: 1, apply(g, p) { p.weapons.push(createWeapon('ice_lance')); } },
   // Balance pass 2026-04-15 (VoX): buffed most weapon upgrades, nerfed
   // barrier_up (shield was dominating — players were untouchable with
   // stacked barrier). Non-shield builds now scale harder per stack.
@@ -34,6 +35,7 @@ export const POWERUPS = [
   { id: 'meteor_up', name: 'Meteor+', desc: '+50% blast radius & damage', icon: '☄️+', max: 3, requires: 'weapon_meteor', stats: '+50% blast · +50% dmg', apply(g, p) { let w = p.weapons.find(w=>w.type==='meteor'); if(w){w.blastRadius*=1.5;w.damage*=1.5;} } },
   { id: 'shield_up', name: 'Barrier+', desc: '+15% radius & knockback', icon: '🛡️+', max: 3, requires: 'weapon_shield', stats: '+15% radius · +15% knockback', apply(g, p) { let w = p.weapons.find(w=>w.type==='shield'); if(w){w.radius*=1.15;w.knockback*=1.15;} } },
   { id: 'lightning_field_up', name: 'Field+', desc: '+2 zap targets & +25% radius', icon: '⚡+', max: 3, requires: 'weapon_lightning_field', stats: '+2 zaps · +25% radius', apply(g, p) { let w = p.weapons.find(w=>w.type==='lightning_field'); if(w){w.zapCount+=2;w.radius*=1.25;} } },
+  { id: 'ice_lance_up', name: 'Ice Lance+', desc: '+30% damage & +1 pierce', icon: '❄️+', max: 3, requires: 'weapon_ice_lance', stats: '+30% dmg · +1 pierce', apply(g, p) { let w = p.weapons.find(w=>w.type==='ice_lance'); if(w){w.damage*=1.3;w.pierce++;} } },
   // EVOLUTIONS: fuse two maxed base weapons into a combined form. Gated
   // by `requiresEvo` — getAvailableChoices hides the entry until both
   // source `_up` stacks hit 3. Each `apply` strips the sources and pushes
@@ -96,6 +98,26 @@ export const POWERUPS = [
       p.weapons = p.weapons.filter(w => w.type !== 'chain' && w.type !== 'shield');
       p.weapons.push(createWeapon('tesla_aegis'));
       emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'tesla_aegis', pid: p.id });
+    }
+  },
+  // Ice-lance-pair evolutions — these pick up the "under-represented
+  // base" halves from the 24h histogram (breath + meteor each had 1
+  // evolution pick across 24 runs) without touching the existing top-
+  // pick cluster (orbit / thunder_god / tesla_aegis / void_anchor).
+  { id: 'evo_frost_cascade', name: 'FROST CASCADE', desc: 'Ice Lance + Breath fuse into a freezing aura that chains crowd control', icon: '🌨️',
+    max: 1, requiresEvo: ['ice_lance_up', 'breath_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'ice_lance' && w.type !== 'breath');
+      p.weapons.push(createWeapon('frost_cascade'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'frost_cascade', pid: p.id });
+    }
+  },
+  { id: 'evo_nova_strike', name: 'NOVA STRIKE', desc: 'Ice Lance + Meteor fuse into a meteor that shatters into a ring of slowing ice fragments', icon: '💠',
+    max: 1, requiresEvo: ['ice_lance_up', 'meteor_up'],
+    apply(g, p) {
+      p.weapons = p.weapons.filter(w => w.type !== 'ice_lance' && w.type !== 'meteor');
+      p.weapons.push(createWeapon('nova_strike'));
+      emit(g, EVT.EVOLUTION, { x: p.x, y: p.y, name: 'nova_strike', pid: p.id });
     }
   },
 ];

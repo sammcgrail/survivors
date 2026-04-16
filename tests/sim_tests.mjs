@@ -17,6 +17,7 @@ import { generateClusterScatter, generateCorridor } from '../src/shared/mapGen.j
 import { damageEnemy } from '../src/shared/sim/damage.js';
 import { computeDeathHighlights } from '../src/shared/deathHighlights.js';
 import { computeWeaponHistogram } from '../src/shared/weaponPickHistogram.js';
+import { updateWeapons, updateAuras, updateMeteorEffects } from '../src/shared/sim/weapons_runtime.js';
 import { spawnGem } from '../src/shared/sim/gems.js';
 import {
   WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE,
@@ -1275,6 +1276,125 @@ suite('Death-screen Stat Tracking', () => {
     const p = { dmgByWeapon: { other: 42 }, overkills: 0, maxHit: 0, maxHitEnemy: null };
     const h = computeDeathHighlights(p);
     assert(h.mvp === null, `mvp should be null: ${JSON.stringify(h.mvp)}`);
+  });
+});
+
+suite('Ice Lance + Frost Cascade + Nova Strike', () => {
+  function makeGame() {
+    const rng = createRng(42);
+    const p = {
+      id: 1, x: 500, y: 500, radius: 14, hp: 100, maxHp: 100,
+      damageMulti: 1, sizeMulti: 1, projectileBonus: 0, attackSpeedMulti: 1,
+      speed: 200, alive: true, kills: 0,
+      dmgByWeapon: {}, overkills: 0, maxHit: 0, maxHitEnemy: null,
+      weapons: [],
+      facing: { x: 1, y: 0 }, iframes: 0,
+    };
+    const g = {
+      players: [p], enemies: [], projectiles: [], events: [], rng,
+      wave: 1, kills: 0,
+      gems: [], heartDrops: [], consumables: [],
+      meteorEffects: [], chainEffects: [], chargeTrails: [],
+      pendingPulls: [], enemyProjectiles: [],
+      arena: { w: 2000, h: 2000 },
+    };
+    return { g, p };
+  }
+
+  test('Ice Lance createWeapon has expected shape', () => {
+    const w = createWeapon('ice_lance');
+    assert(w.type === 'ice_lance', 'type');
+    assert(w.damage === 60, `damage: ${w.damage}`);
+    assert(w.pierce === 2, `pierce: ${w.pierce}`);
+    assert(w.cooldown === 2.5, `cooldown: ${w.cooldown}`);
+    assert(w.slowDuration === 1.5 && w.slowMagnitude === 0.4, 'slow params');
+  });
+
+  test('Ice Lance fires a projectile with slow statusOnHit', () => {
+    const { g, p } = makeGame();
+    p.weapons.push(createWeapon('ice_lance'));
+    g.enemies.push({
+      name: 'blob', x: 600, y: 500, hp: 30, maxHp: 30, radius: 10,
+      vx: 0, vy: 0, statusEffects: [], color: '#888', speed: 100,
+    });
+    // Fire weapon — advances timer through to fire.
+    updateWeapons(g, 2.6);
+    assert(g.projectiles.length === 1, `projectiles spawned: ${g.projectiles.length}`);
+    const proj = g.projectiles[0];
+    assert(proj.weaponType === 'ice_lance', `weaponType: ${proj.weaponType}`);
+    assert(proj.statusOnHit && proj.statusOnHit.type === 'slow',
+      `statusOnHit: ${JSON.stringify(proj.statusOnHit)}`);
+    assert(proj.statusOnHit.magnitude === 0.4, 'slow 40%');
+  });
+
+  test('Frost Cascade applies deep-slow to enemies in range', () => {
+    const { g, p } = makeGame();
+    p.weapons.push(createWeapon('frost_cascade'));
+    const e = {
+      name: 'blob', x: 540, y: 500, hp: 200, maxHp: 200, radius: 10,
+      vx: 0, vy: 0, statusEffects: [], color: '#888', speed: 100,
+    };
+    g.enemies.push(e);
+    updateAuras(g, 0.1);
+    const slow = e.statusEffects.find(s => s.type === 'slow');
+    assert(slow !== undefined, 'slow status applied');
+    assert(slow.magnitude === 0.1, `magnitude (expect 0.1): ${slow.magnitude}`);
+    assert(slow.remaining > 2, `remaining should be ~3s: ${slow.remaining}`);
+  });
+
+  test('Frost Cascade ignores enemies outside aura radius', () => {
+    const { g, p } = makeGame();
+    p.weapons.push(createWeapon('frost_cascade'));
+    const far = {
+      name: 'blob', x: 900, y: 500, hp: 200, maxHp: 200, radius: 10,
+      vx: 0, vy: 0, statusEffects: [], color: '#888', speed: 100,
+    };
+    g.enemies.push(far);
+    updateAuras(g, 0.1);
+    assert(far.statusEffects.length === 0, 'no status applied outside range');
+  });
+
+  test('Nova Strike on explode spawns ring of slow-on-hit fragments', () => {
+    const { g, p } = makeGame();
+    // Seed a nova_strike meteor effect directly (skip fire path to
+    // avoid needing a targetable enemy for the random-target picker).
+    const w = createWeapon('nova_strike');
+    g.meteorEffects.push({
+      x: 600, y: 500,
+      radius: w.blastRadius,
+      damage: w.damage,
+      life: 0.0001, phase: 'warn',
+      color: w.color, owner: p.id, weaponType: w.type,
+      novaFragments: {
+        count: w.fragmentCount, damage: w.fragmentDamage,
+        speed: w.fragmentSpeed, life: w.fragmentLife, pierce: w.fragmentPierce,
+      },
+    });
+    // Advance past warn → explode.
+    updateMeteorEffects(g, 0.01);
+    assert(g.projectiles.length === w.fragmentCount,
+      `fragments spawned (expect ${w.fragmentCount}): ${g.projectiles.length}`);
+    // Every fragment should carry slow statusOnHit at 40%.
+    for (const pr of g.projectiles) {
+      assert(pr.statusOnHit && pr.statusOnHit.type === 'slow', 'slow on hit');
+      assert(pr.statusOnHit.magnitude === 0.4, 'magnitude 40%');
+      assert(pr.color === w.color, 'color matches nova palette');
+    }
+    // Fragments should be distributed roughly evenly around the ring —
+    // sanity-check that not all velocities point the same way.
+    const angles = g.projectiles.map(pr => Math.atan2(pr.vy, pr.vx));
+    const unique = new Set(angles.map(a => a.toFixed(2)));
+    assert(unique.size === w.fragmentCount, `distinct directions: ${unique.size}`);
+  });
+
+  test('Regular meteor (no novaFragments) does not spawn fragments', () => {
+    const { g, p } = makeGame();
+    g.meteorEffects.push({
+      x: 600, y: 500, radius: 50, damage: 20,
+      life: 0.0001, phase: 'warn', color: '#f00', owner: p.id, weaponType: 'meteor',
+    });
+    updateMeteorEffects(g, 0.01);
+    assert(g.projectiles.length === 0, 'regular meteor spawns no fragments');
   });
 });
 

@@ -54,6 +54,7 @@ export function safeParticlePush(particles, p) {
 const MUZZLE_STYLES = {
   spit:          { bright: '#d6a0f5', trail: '#8e44ad' }, // base purple
   chain:         { bright: '#b7ebff', trail: '#0099cc' }, // base cyan
+  ice_lance:     { bright: '#e6f7ff', trail: '#a8e6ff' }, // base pale-ice
   dragon_storm:  { bright: '#ffd27f', trail: '#e67e22' }, // spit+breath  — amber/orange
   thunder_god:   { bright: '#e0fdff', trail: '#ffdd66' }, // chain+field  — cyan w/ gold core
   meteor_orbit:  { bright: '#fff2b0', trail: '#ff6b35' }, // orbit+meteor — white-flame blade
@@ -61,6 +62,8 @@ const MUZZLE_STYLES = {
   inferno_wheel: { bright: '#ffce66', trail: '#ff4500' }, // breath+orbit — blazing amber
   void_anchor:   { bright: '#c8b6ff', trail: '#6c5ce7' }, // meteor+chain — dark violet gravity
   tesla_aegis:   { bright: '#d4f1ff', trail: '#0099cc' }, // chain+shield — electric white-blue
+  frost_cascade: { bright: '#e6f7ff', trail: '#88b8d4' }, // ice+breath   — frosted white
+  nova_strike:   { bright: '#b8e8ff', trail: '#6096b4' }, // ice+meteor   — crystalline blue
 };
 
 // Evolved weapons get an upgraded cast bloom: more bright particles, a
@@ -70,6 +73,7 @@ const MUZZLE_STYLES = {
 const EVOLVED_WEAPONS = {
   dragon_storm: true, thunder_god: true, meteor_orbit: true,
   fortress: true, inferno_wheel: true, void_anchor: true, tesla_aegis: true,
+  frost_cascade: true, nova_strike: true,
 };
 
 function spawnParticleBurst(particles, x, y, color, count) {
@@ -691,6 +695,12 @@ export function applySimEvent(evt, client) {
       else if (evt.weapon === 'chain')        sfx('chain');
       else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
       else if (evt.weapon === 'thunder_god')  sfx('chain');
+      // ice_lance + nova_strike reuse spit's crisp click — we don't
+      // have a dedicated ice sfx yet, and spit's pitch reads fine for
+      // a precision shot. Frost Cascade is an aura (no fire-cadence
+      // sfx; it leans on the existing aura hum).
+      else if (evt.weapon === 'ice_lance')    sfx('spit');
+      else if (evt.weapon === 'nova_strike')  sfx('meteor');
       // Muzzle/cast flash — short bloom at the fire origin so every shot
       // has a kinetic starting frame. Base weapons get 5 bright + 2 trail.
       // Evolved weapons get a tier bump: 7 bright + 3 trail + an outward
