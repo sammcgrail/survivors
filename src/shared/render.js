@@ -357,7 +357,13 @@ function drawStatusTint(ctx, e, particles) {
 // sprite with shadow glow, colored-circle fallback. If `particles` is
 // passed, drops occasional embers behind each projectile so the trail
 // reads through the sprite at high speed.
+//
+// Two-pass shadow batching: all trails (no shadow) first, then all glow
+// bodies in a single shadowBlur=14 / shadowBlur=0 bracket. Eliminates
+// 2×N ctx shadow state changes (one enable + one disable per projectile)
+// and replaces them with 2 total regardless of projectile count.
 export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy, W, H) {
+  // Pass 1 — trails + particle embers (no shadow state changes).
   for (const proj of projectiles) {
     if (proj.x < cx - 30 || proj.x > cx + W + 30 || proj.y < cy - 30 || proj.y > cy + H + 30) continue;
     const speed = Math.sqrt(proj.vx * proj.vx + proj.vy * proj.vy);
@@ -379,23 +385,6 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
         }
       }
     }
-    ctx.shadowColor = proj.color;
-    ctx.shadowBlur = 14;
-    if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
-      ctx.fillStyle = proj.color;
-      ctx.beginPath();
-      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
-      ctx.fill();
-    }
-    ctx.shadowBlur = 0;
-    // Bright inner core on top of the sprite — small near-white dot
-    // that punches through at wave density when the body color gets
-    // lost in the swarm. One extra arc/fill per projectile, no new
-    // state, no new shadow passes.
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.beginPath();
-    ctx.arc(proj.x, proj.y, proj.radius * 0.45, 0, Math.PI * 2);
-    ctx.fill();
     // Renderer-as-writer carve-out: we mutate the passed-in particles
     // array. The alternative (sim events for ember spawn) would ship
     // cosmetic noise across the wire for every MP client, which isn't
@@ -411,6 +400,31 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
       });
     }
   }
+  // Pass 2 — main glow bodies, batched by shadow color.
+  // shadowBlur is set once per color group instead of once per projectile.
+  ctx.shadowBlur = 14;
+  let lastColor = null;
+  for (const proj of projectiles) {
+    if (proj.x < cx - 30 || proj.x > cx + W + 30 || proj.y < cy - 30 || proj.y > cy + H + 30) continue;
+    if (proj.color !== lastColor) {
+      ctx.shadowColor = proj.color;
+      lastColor = proj.color;
+    }
+    if (!drawSprite('spit', proj.x, proj.y, 0.7)) {
+      ctx.fillStyle = proj.color;
+      ctx.beginPath();
+      ctx.arc(proj.x, proj.y, proj.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    // Bright inner core on top of the sprite — small near-white dot
+    // that punches through at wave density when the body color gets
+    // lost in the swarm. No new shadow passes needed (shared blur state).
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, proj.radius * 0.45, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
 }
 
 // Enemy projectiles — hostile orbs with a menacing red/purple glow
@@ -419,7 +433,11 @@ export function drawProjectiles(ctx, projectiles, drawSprite, particles, cx, cy,
 //
 // `p.homing` (boss phase 3) gets an extra pulsing tracking ring so
 // players can tell "this one curves" without watching it for a beat.
+//
+// Same two-pass shadow batching as drawProjectiles — shadowBlur=12 is
+// set once before the body pass and cleared once after.
 export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H, time) {
+  // Pass 1 — trails + homing rings + spark particles (no shadow).
   for (const p of projectiles) {
     if (p.x < cx - 30 || p.x > cx + W + 30 || p.y < cy - 30 || p.y > cy + H + 30) continue;
     const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
@@ -448,19 +466,6 @@ export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H, 
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
-    // Main body — outer glow + bright core
-    ctx.shadowColor = p.color;
-    ctx.shadowBlur = 12;
-    ctx.fillStyle = p.color;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
-    ctx.fill();
-    // White-hot core
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, p.radius * 0.4, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.shadowBlur = 0;
     // Spark particles
     if (particles && Math.random() < 0.3) {
       particles.push({
@@ -474,6 +479,26 @@ export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H, 
       });
     }
   }
+  // Pass 2 — main glow bodies batched under one shadowBlur bracket.
+  ctx.shadowBlur = 12;
+  let lastColor = null;
+  for (const p of projectiles) {
+    if (p.x < cx - 30 || p.x > cx + W + 30 || p.y < cy - 30 || p.y > cy + H + 30) continue;
+    if (p.color !== lastColor) {
+      ctx.shadowColor = p.color;
+      lastColor = p.color;
+    }
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+    ctx.fill();
+    // White-hot core
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.radius * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
 }
 
 // Chain-lightning effects — two passes per bolt (thick translucent
