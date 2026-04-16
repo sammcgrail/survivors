@@ -239,9 +239,11 @@ function tickShield(g, w, p, dt) {
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const edx = e.x - p.x, edy = e.y - p.y;
-    const dist = Math.hypot(edx, edy);
-    if (dist < effectiveRadius + e.radius && dist > 1) {
+    const dist2 = edx * edx + edy * edy;
+    const sum = effectiveRadius + e.radius;
+    if (dist2 < sum * sum && dist2 > 1) {
       hit = true;
+      const dist = Math.sqrt(dist2); // sqrt only for enemies in range
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
@@ -289,8 +291,8 @@ function tickBreathAura(g, w, p, dt) {
   for (let j = g.enemies.length - 1; j >= 0; j--) {
     const e = g.enemies[j];
     const edx = p.x - e.x, edy = p.y - e.y;
-    const dist = Math.hypot(edx, edy);
-    if (dist < effectiveRadius + e.radius) {
+    const sum = effectiveRadius + e.radius;
+    if (edx * edx + edy * edy < sum * sum) {
       damageEnemy(g, e, w.damage * p.damageMulti * dt, p.id);
     }
   }
@@ -400,9 +402,11 @@ function tickFortressShield(g, w, p, dt) {
   let hit = false;
   for (const e of g.enemies) {
     const edx = e.x - p.x, edy = e.y - p.y;
-    const dist = Math.hypot(edx, edy);
-    if (dist < effectiveRadius + e.radius && dist > 1) {
+    const dist2 = edx * edx + edy * edy;
+    const sum = effectiveRadius + e.radius;
+    if (dist2 < sum * sum && dist2 > 1) {
       hit = true;
+      const dist = Math.sqrt(dist2); // sqrt only for enemies in range
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
@@ -426,10 +430,12 @@ function fortressShockwave(g, w, p) {
   const effectiveShockR = w.shockwaveRadius * (p.sizeMulti || 1);
   for (const e of g.enemies) {
     const dx = e.x - p.x, dy = e.y - p.y;
-    const dist = Math.hypot(dx, dy);
-    if (dist < effectiveShockR + e.radius) {
+    const dist2 = dx * dx + dy * dy;
+    const sum = effectiveShockR + e.radius;
+    if (dist2 < sum * sum) {
       damageEnemy(g, e, w.shockwaveDamage * p.damageMulti, p.id);
-      if (dist > 1) {
+      if (dist2 > 1) {
+        const dist = Math.sqrt(dist2); // sqrt only for enemies in range
         const push = 200;
         e.x += (dx / dist) * push * 0.05;
         e.y += (dy / dist) * push * 0.05;
@@ -486,9 +492,11 @@ function tickTeslaAegis(g, w, p, dt) {
   let hit = false;
   for (const e of g.enemies) {
     const edx = e.x - p.x, edy = e.y - p.y;
-    const dist = Math.hypot(edx, edy);
-    if (dist < effectiveRadius + e.radius && dist > 1) {
+    const dist2 = edx * edx + edy * edy;
+    const sum = effectiveRadius + e.radius;
+    if (dist2 < sum * sum && dist2 > 1) {
       hit = true;
+      const dist = Math.sqrt(dist2); // sqrt only for enemies in range
       const nx = edx / dist, ny = edy / dist;
       e.x += nx * w.knockback * dt;
       e.y += ny * w.knockback * dt;
