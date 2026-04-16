@@ -141,9 +141,18 @@ export function obstacleAvoidance(x, y, vx, vy, obstacles, lookAhead) {
 export const HASH_CELL = 150;
 export const HASH_KEY_STRIDE = 100000;
 
+// Builds a spatial hash over `entities` (keyed by (x, y) → bucket of
+// entity refs). Also tags each entity with `_hidx = i` — a stable index
+// into the input array for the duration of the tick. Callers doing
+// symmetric pair-scans (e.g. enemy-vs-enemy repulsion) can use `_hidx`
+// to dedup pairs without an O(N²) indexOf. Asymmetric callers
+// (bullet→enemy, enemy→player) ignore the field. Next tick's hash
+// build overwrites, so no cleanup is needed.
 export function buildSpatialHash(entities) {
   const cells = new Map();
-  for (const e of entities) {
+  for (let i = 0; i < entities.length; i++) {
+    const e = entities[i];
+    e._hidx = i;
     const cx = Math.floor(e.x / HASH_CELL);
     const cy = Math.floor(e.y / HASH_CELL);
     const k = cx * HASH_KEY_STRIDE + cy;
