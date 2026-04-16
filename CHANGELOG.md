@@ -66,3 +66,19 @@
 - **Map variety polish / more procedural modes** (unclaimed)
 - **VFX + netcode + SP-MP parity** (tiny, per vox directive)
 - **Barn deliverables** (absent all session)
+
+## 2026-04-16
+
+### PRs #114–117 (session: seb lead, tiny / calne fork #15)
+
+- **#114** — XP falloff fix: gem tier system + flattened level curve. `GEM_MULTIPLIER` {boss:25, brute:5, elite:3, spawner:3}, `GEM_TIER` {boss:3, brute:2, elite:1, spawner:1}. Tier visuals: common blue, elite green, brute orange (not blue — avoids minimap gem-color clash), boss purple. xpToLevel cascade 1.30 → 1.22 in `src/main.js` + `server.mjs` + prestige path. 70 tests green. Resolves barnaldo's W35 falloff complaint (tiny)
+- **#115** — VFX pass 2 round 1: tiered death bursts (boss 2-stage implosion, brute chunky shards, elite violet soul-wisp, swarm quick puff), healer pulse ring telegraph. 72 tests green. Rebased onto #114 cleanly (tiny)
+- **#116** — VFX pass 2 round 2: overkill punch-frame (dual gate — 3× pre-hit HP AND [≥50 dmg OR threat-tier]) to stop spit-one-shotting blobs triggering it. Spit core brightness tier, chain lightning afterimage at density (~27 strokes/frame worst case, well under perf cap). 75 tests green (tiny)
+- **#117** — Map ambient pass: `src/shared/mapAmbient.js` dispatcher, per-map identity generators — arena warm embers · forest/wilderness fireflies · ruins/catacombs torch flicker + dust · neon glitch flecks · graveyard cold mist wisps. Budget ~30–90 particles/sec/map, steady-state cap ~80. Redirected from VFX pass 2 item #4 (was global dust motes) for 4× payoff (tiny, per seb steer)
+- **calne fork #15** — Boss phase 5 final form (25% → 10% HP gate): teleport bursts, minion rain, arena nova, resurrection mechanic with "RESURRECTED" banner. Cherry-picked from agent-entro/survivors fork into main (calne)
+
+### Deploy split gotcha (saved to memory)
+- `survivors.sebland.com` is **CF Pages** (CNAME → `survivors-sp.pages.dev`), needs `npx wrangler pages deploy --project-name=survivors-sp --branch=main --commit-dirty=true`
+- `mpsurvivors.sebland.com` is **Caddy** from `/srv/mpsurvivors` via box-web Docker — `docker compose build --no-cache web && up -d web`
+- Rebuilding box-web for SP deploys is a no-op. Wasted ~20min debugging stale bundle before DNS lookup caught the CNAME
+
