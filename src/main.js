@@ -10,6 +10,7 @@ import { makeBgmPlayer } from './shared/bgm.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
+import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -1298,6 +1299,55 @@ window.setSfxVol = setSfxVol;
 window.toggleVolPanel = toggleVolPanel;
 window.showBestiary = showBestiary;
 window.hideBestiary = hideBestiary;
+window.showWeaponHistogram = showWeaponHistogram;
+window.hideWeaponHistogram = hideWeaponHistogram;
+
+// --- Top-run weapon frequency (debug / balance view) ---
+// Hidden behind `?debug=stats` — not in the main UI because the data
+// is survivorship-biased (only /leaderboard top runs, not all picks).
+// Opens a modal that fetches recent leaderboard runs and aggregates
+// via the shared weaponPickHistogram helper. Rollup toggle collapses
+// evolutions into their source pair so a chain+field evolution run
+// doesn't drop chain/field off the histogram.
+let _wphRuns = null;
+async function showWeaponHistogram() {
+  const overlay = document.getElementById('weapon-histogram');
+  const body = document.getElementById('wph-body');
+  const toggle = document.getElementById('wph-rollup-toggle');
+  overlay.style.display = 'flex';
+  body.innerHTML = '<div class="wph-empty">loading…</div>';
+  const render = () => renderWeaponHistogram(body, _wphRuns || [], {
+    mode: toggle.checked ? 'rollup' : 'asRecorded',
+  });
+  // One-shot fetch — modal reopens don't re-hit the endpoint unless
+  // the data wasn't loaded last time.
+  if (!_wphRuns) {
+    try {
+      const r = await fetch(`${ANALYTICS_URL}/leaderboard?limit=200`);
+      const j = await r.json();
+      _wphRuns = Array.isArray(j.entries) ? j.entries : Array.isArray(j) ? j : [];
+    } catch {
+      _wphRuns = [];
+      body.innerHTML = '<div class="wph-empty">offline</div>';
+      return;
+    }
+  }
+  toggle.onchange = render;
+  render();
+}
+
+function hideWeaponHistogram() {
+  document.getElementById('weapon-histogram').style.display = 'none';
+}
+
+// Auto-open on `?debug=stats` so the view is one URL away for any
+// analyst / dev without cluttering the main menu.
+if (typeof window !== 'undefined') {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('debug') === 'stats') {
+    window.addEventListener('DOMContentLoaded', () => showWeaponHistogram());
+  }
+}
 
 // --- bestiary UI ---
 function showBestiary() {

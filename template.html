@@ -155,6 +155,23 @@ canvas { touch-action: none; }
 .modal-close:hover { color: #eee; }
 
 .bestiary-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+
+.wph-toggle { display: flex; align-items: center; gap: 6px; color: #999; font-size: 0.7rem; cursor: pointer; user-select: none; }
+.wph-toggle input { margin: 0; }
+.wph-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px dashed #2a2a3a; }
+.wph-title { color: #f1c40f; font-size: 0.9rem; font-weight: 700; }
+.wph-sub { color: #777; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em; }
+.wph-rows { display: flex; flex-direction: column; gap: 6px; }
+.wph-row { display: grid; grid-template-columns: 180px 1fr; align-items: center; gap: 10px; }
+.wph-label { display: flex; align-items: center; gap: 6px; font-size: 0.75rem; color: #aaa; }
+.wph-icon { font-size: 1rem; }
+.wph-name { flex: 1; }
+.wph-role { font-size: 8px; letter-spacing: 0.1em; color: #888; border: 1px solid #2a2a3a; background: #0f0f18; padding: 1px 5px; border-radius: 3px; text-transform: uppercase; }
+.wph-bar-track { position: relative; background: #0f0f18; border: 1px solid #2a2a3a; border-radius: 3px; height: 20px; overflow: hidden; }
+.wph-bar { background: linear-gradient(90deg, #8e44ad, #c39bd3); height: 100%; transition: width 0.3s ease-out; }
+.wph-picks { position: absolute; top: 50%; right: 8px; transform: translateY(-50%); font-size: 0.7rem; color: #eee; font-weight: 700; text-shadow: 0 0 4px rgba(0,0,0,0.8); }
+.wph-empty { color: #666; font-size: 0.8rem; text-align: center; padding: 20px; }
+.wph-foot { color: #555; font-size: 0.65rem; margin-top: 10px; font-style: italic; text-align: center; }
 .beast-card { background: #1a1a2e; border: 1px solid #333; border-radius: 6px; padding: 12px; text-align: center; transition: border-color 0.15s; }
 .beast-card.unseen { opacity: 0.5; border-style: dashed; }
 .beast-card .beast-swatch { width: 40px; height: 40px; border-radius: 50%; margin: 0 auto 8px; box-shadow: 0 0 16px currentColor; }
@@ -377,6 +394,22 @@ canvas { touch-action: none; }
       <button class="modal-close" onclick="hideBestiary()">×</button>
     </div>
     <div class="bestiary-grid" id="bestiary-grid"></div>
+  </div>
+</div>
+
+<div id="weapon-histogram" class="modal-overlay sp-only">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>📊 TOP-RUN WEAPON FREQUENCY</h2>
+      <label class="wph-toggle">
+        <input type="checkbox" id="wph-rollup-toggle">
+        <span>Rollup evolutions</span>
+      </label>
+      <button class="modal-close" onclick="hideWeaponHistogram()">×</button>
+    </div>
+    <div id="wph-body" class="wph-body">
+      <div class="wph-empty">loading...</div>
+    </div>
   </div>
 </div>
 
