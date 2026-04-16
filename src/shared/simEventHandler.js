@@ -19,15 +19,31 @@
 // callbacks are optional and only make sense for the player whose
 // pid matches the event.
 
-// Muzzle flash color pairs per weapon — {bright: first bloom, trail:
-// slow sparks}. Weapons not listed (breath/orbit/shield — aura types
-// with no discrete "shot") skip the muzzle flash entirely.
+// Muzzle/cast flash color pairs per weapon. Evolution entries pick hues
+// keyed off their source pair so the glow tells you *what* maxed, not
+// just that it did — e.g. tesla_aegis (chain + shield) reads as white-
+// blue electric, meteor_orbit (orbit + meteor) reads as red-flame blade.
+// Weapons not listed (breath/orbit/shield — aura types with no discrete
+// "shot") skip the muzzle flash entirely.
 const MUZZLE_STYLES = {
-  spit:         { bright: '#d6a0f5', trail: '#8e44ad' },
-  chain:        { bright: '#b7ebff', trail: '#0099cc' },
-  dragon_storm: { bright: '#ffd27f', trail: '#e67e22' },
-  thunder_god:  { bright: '#e0fdff', trail: '#00d2d3' },
-  void_anchor:  { bright: '#c8b6ff', trail: '#6c5ce7' },
+  spit:          { bright: '#d6a0f5', trail: '#8e44ad' }, // base purple
+  chain:         { bright: '#b7ebff', trail: '#0099cc' }, // base cyan
+  dragon_storm:  { bright: '#ffd27f', trail: '#e67e22' }, // spit+breath  — amber/orange
+  thunder_god:   { bright: '#e0fdff', trail: '#ffdd66' }, // chain+field  — cyan w/ gold core
+  meteor_orbit:  { bright: '#fff2b0', trail: '#ff6b35' }, // orbit+meteor — white-flame blade
+  fortress:      { bright: '#e8f4ff', trail: '#ff6363' }, // shield+charge — ice-blue w/ shock red
+  inferno_wheel: { bright: '#ffce66', trail: '#ff4500' }, // breath+orbit — blazing amber
+  void_anchor:   { bright: '#c8b6ff', trail: '#6c5ce7' }, // meteor+chain — dark violet gravity
+  tesla_aegis:   { bright: '#d4f1ff', trail: '#0099cc' }, // chain+shield — electric white-blue
+};
+
+// Evolved weapons get an upgraded cast bloom: more bright particles, a
+// longer trail, and an 8-particle outward halo ring so the fire frame
+// reads visibly "tier-max" vs the base weapons. Membership is cheap to
+// check — O(1) object lookup in the hot path.
+const EVOLVED_WEAPONS = {
+  dragon_storm: true, thunder_god: true, meteor_orbit: true,
+  fortress: true, inferno_wheel: true, void_anchor: true, tesla_aegis: true,
 };
 
 function spawnParticleBurst(particles, x, y, color, count) {
@@ -649,26 +665,45 @@ export function applySimEvent(evt, client) {
       else if (evt.weapon === 'chain')        sfx('chain');
       else if (evt.weapon === 'dragon_storm') sfx('dragonstorm');
       else if (evt.weapon === 'thunder_god')  sfx('chain');
-      // Muzzle flash — short bloom at the fire origin so every shot has
-      // a kinetic starting frame. Same bloom-then-fade shape as damage
-      // feedback (PR 1): 5 fast bright particles + 2 slow trail. Per
-      // weapon color so each weapon reads distinct at the muzzle.
+      // Muzzle/cast flash — short bloom at the fire origin so every shot
+      // has a kinetic starting frame. Base weapons get 5 bright + 2 trail.
+      // Evolved weapons get a tier bump: 7 bright + 3 trail + an outward
+      // 8-particle halo ring at fixed speed so level-1 kits visibly read
+      // different from max-tier ones at the cast frame.
       if (evt.x !== undefined && evt.y !== undefined) {
         const style = MUZZLE_STYLES[evt.weapon];
         if (style) {
-          for (let i = 0; i < 5; i++) {
+          const evolved = EVOLVED_WEAPONS[evt.weapon];
+          const brightCount = evolved ? 7 : 5;
+          const trailCount = evolved ? 3 : 2;
+          for (let i = 0; i < brightCount; i++) {
             pushFx(client.particles, evt.x, evt.y, style.bright, {
               speedMin: 120, speedMax: 220,
               lifeMin: 0.1, lifeMax: 0.18,
               radiusMin: 1.3, radiusMax: 2.4,
             });
           }
-          for (let i = 0; i < 2; i++) {
+          for (let i = 0; i < trailCount; i++) {
             pushFx(client.particles, evt.x, evt.y, style.trail, {
               speedMin: 40, speedMax: 80,
               lifeMin: 0.25, lifeMax: 0.45,
               radiusMin: 0.9, radiusMax: 1.5,
             });
+          }
+          if (evolved) {
+            // Halo ring — 8 bright motes pushed outward at equal angles
+            // and matched speed so they read as an expanding ring, not a
+            // random burst. Short life keeps it from lingering into the
+            // next fire.
+            for (let i = 0; i < 8; i++) {
+              const a = (i / 8) * Math.PI * 2;
+              pushFx(client.particles, evt.x, evt.y, style.bright, {
+                angle: a,
+                speedMin: 180, speedMax: 180,
+                lifeMin: 0.22, lifeMax: 0.22,
+                radiusMin: 1.2, radiusMax: 1.2,
+              });
+            }
           }
         }
       }

@@ -108,7 +108,10 @@ function fireChain(g, w, p) {
   });
   const inRange = sorted.filter(e => Math.hypot(e.x - p.x, e.y - p.y) < w.range);
   if (inRange.length === 0) return;
-  emit(g, EVT.WEAPON_FIRE, { weapon: 'chain', x: p.x, y: p.y, pid: p.id });
+  // w.type instead of 'chain' so thunder_god's chain burst reads as a
+  // thunder_god muzzle flash, not a base-chain one. Evolution bloom
+  // in simEventHandler needs the evolved name to apply its tier style.
+  emit(g, EVT.WEAPON_FIRE, { weapon: w.type, x: p.x, y: p.y, pid: p.id });
   const targets = [inRange[0]];
   const hit = new Set([inRange[0]]);
   const chains = w.chains + (p.projectileBonus || 0);
@@ -415,6 +418,10 @@ function tickFortressShield(g, w, p, dt) {
 }
 
 function fortressShockwave(g, w, p) {
+  // Muzzle/cast glow bloom at the dash endpoint — fires alongside the
+  // meteor explode ring below, so the client stacks the bloom on top of
+  // the expanding shockwave for a readable cast frame.
+  emit(g, EVT.WEAPON_FIRE, { weapon: 'fortress', x: p.x, y: p.y, pid: p.id });
   const effectiveShockR = w.shockwaveRadius * (p.sizeMulti || 1);
   for (const e of g.enemies) {
     const dx = e.x - p.x, dy = e.y - p.y;
@@ -523,6 +530,10 @@ function fireTeslaAegisPulse(g, w, p) {
       color: w.color, owner: p.id,
     });
     emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis_overcharge', pid: p.id });
+    // Muzzle/cast bloom on overcharge only — normal pulses fire every
+    // 0.5s so blooming on each would spam the particle budget. The
+    // overcharge (every 4th) is the climactic beat worth tiering.
+    emit(g, EVT.WEAPON_FIRE, { weapon: 'tesla_aegis', x: p.x, y: p.y, pid: p.id });
     return;
   }
 
