@@ -294,47 +294,67 @@ function enemyDeathBurst(particles, evt) {
       break;
 
     case 'brute': {
-      // Violent explosion — wide spread, intense, white-hot core.
-      for (let i = 0; i < 24; i++) {
+      // MEATY CHUNK SHARDS — chunky irregular debris with heavy biasY
+      // so it reads as solid matter falling out. Big radii, slower
+      // motion, long life. The white-hot core + lingering embers
+      // from the previous version stay to keep the violent punch.
+      // Layer 1 — 14 chunky shards. Big, slow-ish, gravity-pulled.
+      for (let i = 0; i < 14; i++) {
         pushFx(particles, x, y, color, {
-          speedMin: 130, speedMax: 320,
-          lifeMin: 0.25, lifeMax: 0.55,
-          radiusMin: 2, radiusMax: 4.5,
+          speedMin: 110, speedMax: 230,
+          lifeMin: 0.45, lifeMax: 0.85,
+          radiusMin: 3.5, radiusMax: 6,
+          biasY: 140,
         });
       }
-      // 8 white-hot core sparks
+      // Layer 2 — dark-meat gore chunks (even bigger, heavier).
+      for (let i = 0; i < 8; i++) {
+        pushFx(particles, x, y, '#7b1212', {
+          speedMin: 80, speedMax: 170,
+          lifeMin: 0.6, lifeMax: 1.0,
+          radiusMin: 4, radiusMax: 6.5,
+          biasY: 180,
+        });
+      }
+      // Layer 3 — white-hot core sparks (kept from prior version).
       for (let i = 0; i < 8; i++) {
         pushFx(particles, x, y, '#ffffff', {
-          speedMin: 200, speedMax: 350,
-          lifeMin: 0.15, lifeMax: 0.3,
+          speedMin: 220, speedMax: 360,
+          lifeMin: 0.12, lifeMax: 0.25,
           radiusMin: 1, radiusMax: 2,
-        });
-      }
-      // 6 dark red embers that linger
-      for (let i = 0; i < 6; i++) {
-        pushFx(particles, x, y, '#7b1212', {
-          speedMin: 40, speedMax: 100,
-          lifeMin: 0.5, lifeMax: 0.8,
-          radiusMin: 2, radiusMax: 3,
         });
       }
       break;
     }
 
     case 'elite': {
-      // Bright punctuation — body color + gold accents.
-      for (let i = 0; i < 18; i++) {
-        pushFx(particles, x, y, color, {
-          speedMin: 120, speedMax: 240,
-          lifeMin: 0.3, lifeMax: 0.55,
+      // VIOLET SOUL-WISP — elite ascending. Drop the burst-radial
+      // shape entirely; do slow upward-drifting violet wisps + a
+      // brief white-violet flash at the body.
+      // Layer 1 — 14 slow violet wisps rising with slight sway.
+      for (let i = 0; i < 14; i++) {
+        pushFx(particles, x, y, '#9b59b6', {
+          speedMin: 30, speedMax: 70,
+          lifeMin: 0.7, lifeMax: 1.1,
           radiusMin: 2, radiusMax: 3.5,
+          biasY: -110,
         });
       }
-      for (let i = 0; i < 10; i++) {
-        pushFx(particles, x, y, '#f1c40f', {
-          speedMin: 160, speedMax: 280,
-          lifeMin: 0.2, lifeMax: 0.4,
-          radiusMin: 1.2, radiusMax: 2.2,
+      // Layer 2 — lighter violet drift, mid-life.
+      for (let i = 0; i < 8; i++) {
+        pushFx(particles, x, y, '#d6a0f5', {
+          speedMin: 20, speedMax: 60,
+          lifeMin: 0.5, lifeMax: 0.9,
+          radiusMin: 1.6, radiusMax: 2.6,
+          biasY: -80,
+        });
+      }
+      // Layer 3 — brief white-violet flash at the body (fast, tiny).
+      for (let i = 0; i < 6; i++) {
+        pushFx(particles, x, y, '#ffffff', {
+          speedMin: 60, speedMax: 140,
+          lifeMin: 0.08, lifeMax: 0.15,
+          radiusMin: 1, radiusMax: 1.8,
         });
       }
       break;
@@ -356,24 +376,51 @@ function enemyDeathBurst(particles, evt) {
     }
 
     case 'boss': {
-      // Multi-layer finale.
-      // Layer 1 — bright outer body burst.
+      // 2-STAGE IMPLOSION.
+      // Stage 1 (collapse): 28 particles spawn on an outer ring at
+      // ~90u and move INWARD at high speed, arriving at center in
+      // ~0.2s. Reads as the boss collapsing on itself — same grammar
+      // as evolution stage 1 (PR #111), amped for scale.
+      for (let i = 0; i < 28; i++) {
+        const a = (Math.PI * 2 * i) / 28 + Math.random() * 0.15;
+        const r0 = 80 + Math.random() * 30;
+        const inward = 380 + Math.random() * 100;
+        particles.push({
+          x: x + Math.cos(a) * r0,
+          y: y + Math.sin(a) * r0,
+          vx: -Math.cos(a) * inward,
+          vy: -Math.sin(a) * inward,
+          life: 0.22, maxLife: 0.22,
+          radius: 2.2 + Math.random(),
+          color,
+        });
+      }
+      // Stage 2 (shockwave ring): 36 particles on a tighter center
+      // ring expanding OUTWARD at max speed. Staggered fast/slow so
+      // the ring reads as a coherent shockwave front rather than a
+      // generic radial burst.
       for (let i = 0; i < 36; i++) {
-        pushFx(particles, x, y, color, {
-          speedMin: 150, speedMax: 360,
-          lifeMin: 0.35, lifeMax: 0.7,
-          radiusMin: 2.5, radiusMax: 5,
+        const a = (Math.PI * 2 * i) / 36 + Math.random() * 0.08;
+        const shock = 260 + Math.random() * 180;
+        particles.push({
+          x, y,
+          vx: Math.cos(a) * shock,
+          vy: Math.sin(a) * shock,
+          life: 0.4, maxLife: 0.4,
+          radius: 2.4 + Math.random() * 1.8,
+          color: '#ffffff',
         });
       }
-      // Layer 2 — white-hot core sparks (fast, short-lived).
-      for (let i = 0; i < 18; i++) {
+      // Core flash — brief bright pop at collapse moment.
+      for (let i = 0; i < 10; i++) {
         pushFx(particles, x, y, '#ffffff', {
-          speedMin: 240, speedMax: 420,
-          lifeMin: 0.15, lifeMax: 0.3,
-          radiusMin: 1.2, radiusMax: 2.2,
+          speedMin: 30, speedMax: 90,
+          lifeMin: 0.1, lifeMax: 0.18,
+          radiusMin: 4, radiusMax: 6.5,
         });
       }
-      // Layer 3 — chunky dark debris that lingers and falls.
+      // Layer 4 — chunky dark debris that lingers and falls (kept
+      // from prior finale so the arena has aftermath to read).
       for (let i = 0; i < 14; i++) {
         pushFx(particles, x, y, '#5d1414', {
           speedMin: 60, speedMax: 180,
@@ -636,8 +683,42 @@ export function applySimEvent(evt, client) {
       break;
 
     case 'hiveBurst':
-      spawn(evt.x, evt.y, '#fdcb6e', 8);
-      sfx('hive_burst');
+      if (evt.source === 'healer') {
+        // Healer pulse — translucent green ring expanding out to the
+        // heal reach, plus a few inner motes. Priority-target cue:
+        // players need to SEE the heal radius so they can learn to
+        // kill healers first. `radius` comes from the sim (not
+        // hard-coded) so stacking sizeMulti would scale the visual.
+        const r = evt.radius || 140;
+        // Ring — 22 particles on a circle, life tied to ring's visible
+        // expansion window. Motion vector is 0 so the ring stays on
+        // the circle; particle fade handles the pulse feel.
+        for (let i = 0; i < 22; i++) {
+          const a = (Math.PI * 2 * i) / 22;
+          client.particles.push({
+            x: evt.x + Math.cos(a) * r,
+            y: evt.y + Math.sin(a) * r,
+            vx: Math.cos(a) * 80,
+            vy: Math.sin(a) * 80,
+            life: 0.45, maxLife: 0.45,
+            radius: 2 + Math.random(),
+            color: '#a7f3c4',
+          });
+        }
+        // Inner center glow — 4 motes rising slowly.
+        for (let i = 0; i < 4; i++) {
+          pushFx(client.particles, evt.x, evt.y, '#00b894', {
+            speedMin: 20, speedMax: 60,
+            lifeMin: 0.5, lifeMax: 0.8,
+            radiusMin: 1.8, radiusMax: 2.8,
+            biasY: -40,
+          });
+        }
+        sfx('heal');
+      } else {
+        spawn(evt.x, evt.y, '#fdcb6e', 8);
+        sfx('hive_burst');
+      }
       break;
 
     case 'enemyShoot':

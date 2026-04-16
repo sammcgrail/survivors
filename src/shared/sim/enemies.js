@@ -380,7 +380,10 @@ function updateHealerAi(g, e, dt) {
     other.hp = Math.min(other.maxHp, other.hp + e.healAmount);
     healed++;
   }
-  if (healed > 0) emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y });
+  // `source: 'healer'` lets the client render a visible heal ring
+  // instead of the generic spawner pop, with radius so the ring sizes
+  // to the actual heal reach. Players can read priority at a glance.
+  if (healed > 0) emit(g, EVT.HIVE_BURST, { x: e.x, y: e.y, source: 'healer', radius: e.healRadius });
 }
 
 // Boids steering: separation + alignment + cohesion vs same-type
