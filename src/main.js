@@ -543,7 +543,7 @@ function showLevelUp(g) {
       badge.textContent = '✦ EVOLUTION';
       div.prepend(badge);
     }
-    const preview = decorateWeaponCard(div, choice);
+    const preview = decorateWeaponCard(div, choice, g.player.weapons);
     const statText = (preview && preview.stats) || choice.stats || '';
     if (statText) {
       const statsEl = document.createElement('div');

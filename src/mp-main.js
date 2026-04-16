@@ -587,9 +587,9 @@ function showLevelUpChoices(choices) {
       div.prepend(badge);
     }
     // Weapon preview (role chip + evo source icons) — shared with SP.
-    // Server serializes only base fields (id/name/desc/icon/stats/
-    // requiresEvo); preview builds client-side from powerup id.
-    const preview = decorateWeaponCard(div, c);
+    // Pass local player's weapon loadout so isEvoReady can mark badges.
+    const myWeapons = currState?.players.find(p => p.id === myId)?.weapons ?? [];
+    const preview = decorateWeaponCard(div, c, myWeapons);
     const statText = (preview && preview.stats) || c.stats || '';
     if (statText) {
       const statsEl = document.createElement('div');
