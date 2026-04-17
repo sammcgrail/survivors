@@ -164,6 +164,7 @@ let game = null;
 let keys = { up: false, down: false, left: false, right: false };
 let analogMove = { x: 0, y: 0 }; // smooth analog input from touch
 let paused = false;
+let pendingLevelUps = 0;
 let selectedWeapon = 'spit'; // default starting weapon
 let selectedMapId = 'random';  // default: random pick each game
 
@@ -481,6 +482,10 @@ const spEventClient = {
 // --- level up UI ---
 
 function showLevelUp(g) {
+  if (paused) {
+    pendingLevelUps++;
+    return;
+  }
   sfx('levelup');
   paused = true;
   const stacks = g.player.powerupStacks;
@@ -533,6 +538,10 @@ function showLevelUp(g) {
       document.getElementById('level-up').style.display = 'none';
       paused = false;
       window._levelChoices = [];
+      if (pendingLevelUps > 0) {
+        pendingLevelUps--;
+        showLevelUp(g);
+      }
     };
     div.onclick = pick;
     window._levelChoices.push(pick);
