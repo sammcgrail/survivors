@@ -32,4 +32,38 @@ export const SP = {
   bomb:       [4, 3],
   shield:     [5, 3],
   magnet:     [6, 3],
+  // Row 4 — level-up card icons for the 9 base weapons (barn, Apr 18).
+  // Keys match the powerup ids in src/shared/sim/powerups.js so the
+  // card renderer can do drawSprite(choice.id, ...) with no mapping.
+  // Before this pass the level-up UI used emoji glyphs (🔮 🌀 🐂 …)
+  // which looked out-of-band vs the rest of the pixel-art game.
+  weapon_spit:            [0, 4],
+  weapon_breath:          [1, 4],
+  weapon_charge:          [2, 4],
+  weapon_orbit:           [3, 4],
+  weapon_chain:           [4, 4],
+  weapon_meteor:          [5, 4],
+  weapon_shield:          [6, 4],
+  weapon_lightning_field: [7, 4],
+  // Row 5 — ice_lance (last base) + 7 evolution icons. Cols 7-8 reserved
+  // for frost_cascade / nova_strike (ice_lance pair evos) whenever barn
+  // gets to them.
+  weapon_ice_lance:       [0, 5],
+  evo_dragon_storm:       [1, 5],
+  evo_thunder_god:        [2, 5],
+  evo_meteor_orbit:       [3, 5],
+  evo_fortress:           [4, 5],
+  evo_inferno_wheel:      [5, 5],
+  evo_void_anchor:        [6, 5],
+  evo_tesla_aegis:        [7, 5],
 };
+
+// Level-up card icon HTML — returns a sprite-backed <span> if `id`
+// matches a key in SP, else the fallback emoji glyph. Keeps emoji
+// parity on keys we haven't sprited yet (stat powerups, relics).
+// Sheet dimensions: 128×96, scaled 2x to 256×192 for display.
+export function powerupIconHTML(id, fallback) {
+  const sp = SP[id];
+  if (!sp) return fallback;
+  return `<span class="sprite-icon" style="background-position:${-sp[0] * 32}px ${-sp[1] * 32}px"></span>`;
+}

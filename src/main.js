@@ -11,6 +11,7 @@ import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
+import { powerupIconHTML } from './shared/sprites.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
 import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
@@ -461,7 +462,7 @@ function showLevelUp(g) {
     const div = document.createElement('div');
     div.className = 'choice' + (isEvo ? ' choice--evo' : '');
     div.innerHTML = `
-      <div class="name"><span style="color:#555;font-size:0.6rem">[${ci+1}]</span> ${choice.icon} ${choice.name}</div>
+      <div class="name"><span style="color:#555;font-size:0.6rem">[${ci+1}]</span> ${powerupIconHTML(choice.id, choice.icon)} ${choice.name}</div>
       <div class="desc">${choice.desc}</div>
     `;
     if (isEvo) {
