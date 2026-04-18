@@ -11,7 +11,7 @@ import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
-import { powerupIconHTML } from './shared/sprites.js';
+import { powerupIconHTML, relicIconHTML } from './shared/sprites.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
 import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
@@ -607,7 +607,7 @@ function showDeathScreen(g) {
     const relicHtml = ownedRelics.map(r => {
       const n = relics[r.id];
       const stackStr = n > 1 ? ` x${n}` : '';
-      return `<div class="loadout-item" style="color:#f1c40f"><span class="li-icon">${r.icon}</span>${r.name}${stackStr}</div>`;
+      return `<div class="loadout-item" style="color:#f1c40f"><span class="li-icon">${relicIconHTML(r.id, r.icon)}</span>${r.name}${stackStr}</div>`;
     }).join('');
     loadoutEl.innerHTML += `<div style="margin-top:6px;font-size:0.6rem;color:#b8860b;text-align:center;">Relics</div>${relicHtml}`;
   }
