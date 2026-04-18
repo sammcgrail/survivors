@@ -104,7 +104,7 @@ const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 // BGM volume — persisted per-slider via shared/volPanel. SFX volume
 // lives in shared/sfx.js (since the gain node is created there).
 let bgmVol = readPersistedBgmVol();
-const MENU_VOL_RATIO = 0.67; // menu music plays at 67% of bgm slider
+const MENU_VOL_RATIO = 0.92; // menu music plays at 92% of bgm slider — was 0.67 but menu was too quiet (default bgmVol 0.45 × 0.67 = 0.30, barely audible). Slight duck keeps it from overpowering selection-click sfx.
 
 let menuMusicStarted = false;
 let musicMuted = readPersistedMute();
