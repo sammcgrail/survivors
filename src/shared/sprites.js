@@ -45,9 +45,9 @@ export const SP = {
   weapon_meteor:          [5, 4],
   weapon_shield:          [6, 4],
   weapon_lightning_field: [7, 4],
-  // Row 5 — ice_lance (last base) + 7 evolution icons. Cols 7-8 reserved
-  // for frost_cascade / nova_strike (ice_lance pair evos) whenever barn
-  // gets to them.
+  // Row 5 — ice_lance (last base) + 9 evolution icons. frost_cascade
+  // and nova_strike (ice_lance pair evos) shipped with the tier 5.5
+  // drop (barn, Apr 18).
   weapon_ice_lance:       [0, 5],
   evo_dragon_storm:       [1, 5],
   evo_thunder_god:        [2, 5],
@@ -56,6 +56,8 @@ export const SP = {
   evo_inferno_wheel:      [5, 5],
   evo_void_anchor:        [6, 5],
   evo_tesla_aegis:        [7, 5],
+  evo_frost_cascade:      [8, 5],
+  evo_nova_strike:        [9, 5],
   // Row 6 — stat powerup icons for the 9 non-weapon powerups (barn,
   // Apr 18 tier 4). Keys are `powerup_${id}` so the `magnet` stat
   // powerup doesn't collide with the `magnet` consumable sprite on
@@ -65,7 +67,13 @@ export const SP = {
   powerup_damage:       [1, 6],
   powerup_hp_regen:     [2, 6],
   powerup_attack_speed: [3, 6],
-  powerup_magnet:       [4, 6],
+  // powerup_magnet intentionally omitted — barnaldo's call (Apr 18):
+  // the thin gold horseshoe read too weak next to the consumable
+  // drop. With this entry gone, powerupIconHTML('magnet', …) falls
+  // through to `magnet` at [6,3] (the red/blue consumable), which
+  // reads stronger on the level-up card. Cell (4,6) on the sheet is
+  // now a dead slot — left in barn's strip since rewriting the sheet
+  // to shift it out would ripple through every tier 4 entry.
   powerup_max_hp:       [5, 6],
   powerup_projectiles:  [6, 6],
   powerup_size:         [7, 6],
@@ -87,6 +95,22 @@ export const SP = {
   unlock_skin_gold:    [7, 7],
   unlock_skin_shadow:  [8, 7],
   unlock_trail_fire:   [9, 7],
+  // Row 8 — relic icons for the 10 boss/elite drops (barn, Apr 18
+  // tier 6). Keys match the ids in src/shared/relics.js, prefixed
+  // with `relic_` so shieldbreaker/lightning_rod don't collide with
+  // any future weapon/evo sprite. relicIconHTML() below mirrors the
+  // unlock/powerup helpers — checks the prefixed key first, falls
+  // back to the raw id, then the provided emoji glyph.
+  relic_glass_cannon:   [0, 8],
+  relic_vampire_fang:   [1, 8],
+  relic_lightning_rod:  [2, 8],
+  relic_phoenix_heart:  [3, 8],
+  relic_hoarder:        [4, 8],
+  relic_time_slip:      [5, 8],
+  relic_trickster:      [6, 8],
+  relic_shieldbreaker:  [7, 8],
+  relic_ember_orb:      [8, 8],
+  relic_iron_will:      [9, 8],
 };
 
 // Level-up card icon HTML — returns a sprite-backed <span> if `id`
@@ -94,7 +118,7 @@ export const SP = {
 // `powerup_${id}` prefixed key first (stat powerups like `magnet`
 // would collide with the consumable sprite otherwise), then falls
 // back to the raw id (weapon_/evo_ keys match directly).
-// Sheet dimensions: 160×128, scaled 2x to 320×256 for display.
+// Sheet dimensions: 160×144, scaled 2x to 320×288 for display.
 export function powerupIconHTML(id, fallback) {
   const sp = SP[`powerup_${id}`] || SP[id];
   if (!sp) return fallback;
@@ -108,6 +132,16 @@ export function powerupIconHTML(id, fallback) {
 // provided emoji glyph.
 export function unlockIconHTML(id, fallback) {
   const sp = SP[`unlock_${id}`] || SP[id];
+  if (!sp) return fallback;
+  return `<span class="sprite-icon" style="background-position:${-sp[0] * 32}px ${-sp[1] * 32}px"></span>`;
+}
+
+// Relic icon HTML — mirrors powerup/unlock helpers but keyed under
+// `relic_`. Falls back to the raw id as a safety net, then the
+// provided emoji glyph. Called from wherever relic cards/tooltips
+// get rendered (HUD stack list, level-up-adjacent relic popup).
+export function relicIconHTML(id, fallback) {
+  const sp = SP[`relic_${id}`] || SP[id];
   if (!sp) return fallback;
   return `<span class="sprite-icon" style="background-position:${-sp[0] * 32}px ${-sp[1] * 32}px"></span>`;
 }
