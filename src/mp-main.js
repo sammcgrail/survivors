@@ -21,7 +21,7 @@ import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
 import { drawBackground } from './shared/backgroundRenderer.js';
 import { MAPS } from './shared/maps.js';
 import { loadPrestige } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, spawnSkinVFX, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
 import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen } from './shared/bestiary.js';
@@ -1139,6 +1139,11 @@ function render(dt) {
     // watching the wearer. Keyed by player id so each wearer has its
     // own throttle bucket.
     if (pl.activeTrail === 'trail_fire') spawnFireTrail(pl, dt, particles, trailState);
+
+    // Prestige-skin ambient VFX (sparkle for gold, smoke for shadow).
+    // Same local-only particle channel as fire-trail; spawnSkinVFX is a
+    // no-op for skinless peers so unconditional call is cheap.
+    if (pl.activeSkin) spawnSkinVFX(pl, dt, particles, trailState, pl.activeSkin);
 
     // "YOU" indicator - arrow above self
     if (isMe) {
