@@ -13,7 +13,7 @@ import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
-import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
+import { clampSliderVol } from './shared/volPanel.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
@@ -24,7 +24,7 @@ import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainE
 import { getAmbient } from './shared/mapAmbient.js';
 import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen } from './shared/bestiary.js';
-import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
+// showBestiary + hideBestiary moved to shared/boot.js
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 import { createBaseGameState } from './shared/gameState.js';
 import { renderDeathFeed } from './shared/deathFeed.js';
@@ -287,7 +287,6 @@ const music = initMusic({ hasMenu: false });
 const { startBattleMusic: startMpMusic, toggleMute: toggleMpMute,
         setBgmVol } = music;
 function setSfxVol(v) {
-  // Slider is 0..100; shared module owns persistence + gain wiring.
   _setSfxVol(clampSliderVol(v));
 }
 
@@ -1343,7 +1342,5 @@ window.selectWeapon = weaponPicker.select;
 window.toggleMute = toggleMpMute;
 window.setBgmVol = setBgmVol;
 window.setSfxVol = setSfxVol;
-window.toggleVolPanel = toggleVolPanel;
-window.showBestiary = showBestiary;
-window.hideBestiary = hideBestiary;
+// toggleVolPanel, showBestiary, hideBestiary — wired by bootSharedServices().
 

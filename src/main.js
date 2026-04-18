@@ -14,7 +14,7 @@ import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { powerupIconHTML, relicIconHTML } from './shared/sprites.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
-import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
+import { clampSliderVol } from './shared/volPanel.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -34,7 +34,7 @@ import { getAmbient } from './shared/mapAmbient.js';
 import { synthesizeView } from './shared/view.js';
 import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen } from './shared/bestiary.js';
-import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
+// showBestiary + hideBestiary moved to shared/boot.js
 import { ACHIEVEMENTS, loadAchievements, grantAchievement } from './shared/achievements.js';
 import { saveRunEntry } from './shared/runHistory.js';
 import { createBaseGameState } from './shared/gameState.js';
@@ -96,10 +96,8 @@ function startMusic() {
 }
 function fadeOutMusic() { music.fadeOutBattleMusic(); }
 function setSfxVol(v) {
-  // Slider is 0..100; shared module owns persistence + gain wiring.
   _setSfxVol(clampSliderVol(v));
 }
-
 bindResize(canvas);
 
 // --- constants ---
@@ -1145,9 +1143,7 @@ window.toggleCosmeticEquip = toggleCosmeticEquip;
 window.toggleMute = toggleMuteMusic;
 window.setBgmVol = setBgmVol;
 window.setSfxVol = setSfxVol;
-window.toggleVolPanel = toggleVolPanel;
-window.showBestiary = showBestiary;
-window.hideBestiary = hideBestiary;
+// toggleVolPanel, showBestiary, hideBestiary — wired by bootSharedServices().
 window.showWeaponHistogram = showWeaponHistogram;
 window.hideWeaponHistogram = hideWeaponHistogram;
 
