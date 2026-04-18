@@ -15,8 +15,21 @@ export const SP = {
   spit:       [0, 1],
   spitTrail:  [1, 1],
   skull:      [5, 1],
-  // Row 2 (boss, brute, elite, spawner) are un-drawn placeholders —
-  // near-black background pixels, not real sprites. Omitted so
-  // drawSprite returns false and the colored-circle fallback renders.
-  // TODO: draw actual sprites for these enemy types.
+  // Row 2 — boss-tier enemies, now with real art (barn, Apr 18).
+  // Before this pass row 2 held near-black placeholders and drawSprite
+  // fell back to the colored-circle renderer.
+  boss:       [0, 2],
+  brute:      [1, 2],
+  elite:      [2, 2],
+  spawner:    [3, 2],
+  // Row 3 — variety-pass enemies + ground consumables (barn, Apr 18).
+  // Before this pass poisoner/splitter/bomber/healer rendered as colored
+  // circles; bomb/shield/magnet used emoji glyphs on a halo.
+  poisoner:   [0, 3],
+  splitter:   [1, 3],
+  bomber:     [2, 3],
+  healer:     [3, 3],
+  bomb:       [4, 3],
+  shield:     [5, 3],
+  magnet:     [6, 3],
 };

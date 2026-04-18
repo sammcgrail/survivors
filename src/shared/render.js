@@ -1083,8 +1083,11 @@ export function drawGem(ctx, gem, drawSprite, fallbackRadius = 6) {
   ctx.globalAlpha = 1;
 }
 
-// Consumable pickups — bomb/shield/magnet ground items. Drawn as
-// glowing circles with an icon, bob + late-life fade. Viewport-culled.
+// Consumable pickups — bomb/shield/magnet ground items. Drawn as a
+// glowing halo with a pixel-art icon on top (bomb/shield/magnet sprites
+// were added to the sheet Apr 18, barn). Emoji fallback retained in
+// case the sprite sheet hasn't loaded yet. Bob + late-life fade.
+// Viewport-culled.
 const CONSUMABLE_ICONS = { bomb: '💣', shield: '🛡', magnet: '🧲' };
 export function drawConsumables(ctx, consumables, drawSprite, cx, cy, W, H) {
   for (const c of consumables) {
@@ -1100,8 +1103,9 @@ export function drawConsumables(ctx, consumables, drawSprite, cx, cy, W, H) {
     ctx.beginPath();
     ctx.arc(c.x, c.y + bob, c.radius * 2.2 * pulseScale, 0, Math.PI * 2);
     ctx.fill();
-    // Inner circle
-    ctx.globalAlpha = fadeAlpha * 0.85;
+    // Inner circle (halo backplate — softer now that a real sprite
+    // sits on top). Drops to 50% alpha so the pixel art reads.
+    ctx.globalAlpha = fadeAlpha * 0.45;
     ctx.fillStyle = c.color;
     ctx.beginPath();
     ctx.arc(c.x, c.y + bob, c.radius * pulseScale, 0, Math.PI * 2);
@@ -1111,13 +1115,16 @@ export function drawConsumables(ctx, consumables, drawSprite, cx, cy, W, H) {
     ctx.lineWidth = 1.5;
     ctx.globalAlpha = fadeAlpha * 0.6;
     ctx.stroke();
-    // Icon fallback (emoji text)
+    // Icon — try the pixel sprite first, fall back to emoji glyph if
+    // the sheet isn't loaded or the sprite key is missing.
     ctx.globalAlpha = fadeAlpha;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `${Math.round(c.radius * 1.1)}px sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(CONSUMABLE_ICONS[c.type] || '?', c.x, c.y + bob);
+    if (!drawSprite(c.type, c.x, c.y + bob, 1.1 * pulseScale, fadeAlpha)) {
+      ctx.fillStyle = '#ffffff';
+      ctx.font = `${Math.round(c.radius * 1.1)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(CONSUMABLE_ICONS[c.type] || '?', c.x, c.y + bob);
+    }
     ctx.restore();
   }
 }

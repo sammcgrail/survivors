@@ -43,21 +43,21 @@ export const ENEMY_TYPES = [
   // on hit, split-on-death, explode-on-death, heal-nearby.
   // poisoner: sparser swarm-sized chaser that applies a long, strong
   // burn on contact. Rewards kiting hard — take one hit and you're
-  // ticking for 4s. No sprite yet, falls back to teal circle.
-  { name: 'poisoner', hp: 22, speed: 70, radius: 9,  color: '#16a085', damage: 4,  xp: 14, flock: F(110, 2.0, 0.4, 0.1, 1.5, 28), poisonOnHit: { dps: 6, duration: 4 } },
+  // ticking for 4s.
+  { name: 'poisoner', hp: 22, speed: 70, radius: 9,  color: '#16a085', damage: 4,  xp: 14, sprite: 'poisoner', flock: F(110, 2.0, 0.4, 0.1, 1.5, 28), poisonOnHit: { dps: 6, duration: 4 } },
   // splitter: medium enemy that bursts into 3 swarmlings on death.
   // turns a single frontline target into a swarm problem — rewards
   // AoE finishes, punishes single-target spit pierce.
-  { name: 'splitter', hp: 45, speed: 50, radius: 13, color: '#27ae60', damage: 10, xp: 22, flock: F(120, 1.8, 0.3, 0.1, 1.4, 40), splitOn: { name: 'swarm', count: 3, radius: 28 } },
+  { name: 'splitter', hp: 45, speed: 50, radius: 13, color: '#27ae60', damage: 10, xp: 22, sprite: 'splitter', flock: F(120, 1.8, 0.3, 0.1, 1.4, 40), splitOn: { name: 'swarm', count: 3, radius: 28 } },
   // bomber: tank-sized charger with a meteor-shaped death blast.
   // Players need to path AWAY from low-HP bombers instead of finishing
   // them at point-blank. Telegraph shake on low HP would be a v2.
-  { name: 'bomber',   hp: 65, speed: 55, radius: 15, color: '#e17055', damage: 14, xp: 32, flock: F(130, 2.2, 0.2, 0.1, 1.4, 45), explodeOn: { radius: 55, damage: 22 } },
+  { name: 'bomber',   hp: 65, speed: 55, radius: 15, color: '#e17055', damage: 14, xp: 32, sprite: 'bomber', flock: F(130, 2.2, 0.2, 0.1, 1.4, 45), explodeOn: { radius: 55, damage: 22 } },
   // healer: elite-tier support that restores HP to any enemy within
   // healRadius every healInterval. Priority target — a healer in a
   // pack turns a clearable fight into attrition. Starts healing only
   // after a short delay so it doesn't heal itself out of an opener.
-  { name: 'healer',   hp: 180, speed: 38, radius: 16, color: '#00b894', damage: 8, xp: 70, flock: F(120, 2.2, 0.3, 0.1, 1.1, 42), healInterval: 1.5, healAmount: 8, healRadius: 140, statusResist: 0.3 },
+  { name: 'healer',   hp: 180, speed: 38, radius: 16, color: '#00b894', damage: 8, xp: 70, sprite: 'healer', flock: F(120, 2.2, 0.3, 0.1, 1.1, 42), healInterval: 1.5, healAmount: 8, healRadius: 140, statusResist: 0.3 },
 ];
 
 // Wave composition tables — weights for each enemy type per wave bracket
