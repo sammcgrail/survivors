@@ -1238,6 +1238,21 @@ export function drawPlayerBody(ctx, p, drawSprite, time, opts = {}) {
       ctx.fillRect(p.x - 16, p.y - 16, 32, 32);
       ctx.restore();
     }
+    // skin_shadow: cursed flicker-eyes overlay. 4Hz sine-pulse in the
+    // additive layer so eyes glow violet against the dark-tinted sprite.
+    // Eye positions mapped from the player cell — pixel (7,4) and (9,4)
+    // on the 16px grid = world (p.x-2, p.y-8) + (p.x+2, p.y-8) at 2x
+    // scale. 2×2px rect each for that retro-cursed look.
+    if (skin === 'skin_shadow') {
+      const pulse = 0.55 + 0.45 * Math.sin(time * 25); // 0.1 .. 1.0
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalAlpha = effAlpha * pulse;
+      ctx.fillStyle = '#d459ff';
+      ctx.fillRect(p.x - 2, p.y - 8, 2, 2);
+      ctx.fillRect(p.x + 2, p.y - 8, 2, 2);
+      ctx.restore();
+    }
   }
   if (!drawn) {
     const prev = ctx.globalAlpha;
@@ -1487,6 +1502,54 @@ export function spawnFireTrail(p, dt, particles, trailState) {
     radius: 2 + Math.random() * 2,
     color: Math.random() > 0.4 ? '#f39c12' : '#e74c3c',
   });
+}
+
+// Prestige-skin ambient VFX. skin_gold → sparkle particles scattered
+// across the player bbox (classic shiny vibe); skin_shadow → dark
+// purple smoke bleeding downward off the silhouette (cursed vibe).
+// Mirrors spawnFireTrail: per-wearer state in trailState keyed under
+// `skin_${p.id}` so the fire-trail throttle bucket stays separate
+// when a player has both skin_gold + trail_fire equipped. No-op for
+// skinless players. Called from main.js + mp-main.js each tick.
+//
+// Volumes are intentionally low:
+//   gold:   ~3 particles/sec × 0.4s life = ~1.2 alive steady-state
+//   shadow: ~6 particles/sec × 0.3s life = ~1.8 alive steady-state
+// Well under the fire-trail budget so layering doesn't blow the cap.
+export function spawnSkinVFX(p, dt, particles, trailState, skin) {
+  if (skin !== 'skin_gold' && skin !== 'skin_shadow') return;
+  const key = `skin_${p.id}`;
+  let st = trailState.get(key);
+  if (!st) { st = { timer: 0 }; trailState.set(key, st); }
+  st.timer -= dt;
+  if (st.timer > 0) return;
+
+  if (skin === 'skin_gold') {
+    // Stationary sparkle fades in place. Offsets span the 32×32 bbox
+    // with a small interior bias so corner sparkles don't look detached.
+    st.timer = 0.25 + Math.random() * 0.15; // 250-400ms
+    particles.push({
+      x: p.x + (Math.random() - 0.5) * 26,
+      y: p.y + (Math.random() - 0.5) * 26,
+      vx: 0, vy: 0,
+      life: 0.4, maxLife: 0.4,
+      radius: 1 + Math.random(), // 1-2px
+      color: Math.random() > 0.5 ? '#ffffff' : '#fff59d',
+    });
+  } else {
+    // Shadow smoke drifts downward off the lower half of the sprite,
+    // fading quickly so the trail doesn't linger into next movement.
+    st.timer = 0.14 + Math.random() * 0.06; // 140-200ms
+    particles.push({
+      x: p.x + (Math.random() - 0.5) * 20,
+      y: p.y + 6 + Math.random() * 8,
+      vx: (Math.random() - 0.5) * 20,
+      vy: 25 + Math.random() * 30,
+      life: 0.3, maxLife: 0.3,
+      radius: 1.5 + Math.random() * 1.5,
+      color: Math.random() > 0.3 ? '#6c3483' : '#4a1a5e',
+    });
+  }
 }
 
 export function drawPendingPulls(ctx, pendingPulls) {

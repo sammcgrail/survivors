@@ -29,7 +29,7 @@ import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
 import { drawBackground } from './shared/backgroundRenderer.js';
 import { UNLOCKS, calculateScales, loadPrestige, savePrestige, applyPrestigeUnlocks, toggleCosmetic } from './shared/prestige.js';
-import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, renderWorld } from './shared/render.js';
+import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainEffects, drawMeteorEffects, drawPendingPulls, drawPlayerBody, drawFacingIndicator, drawChargeTrail, spawnFireTrail, spawnSkinVFX, renderWorld } from './shared/render.js';
 import { getAmbient } from './shared/mapAmbient.js';
 import { synthesizeView } from './shared/view.js';
 import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
@@ -320,6 +320,14 @@ function update(dt) {
 
   if (p.alive && g._activeTrail === 'trail_fire') {
     spawnFireTrail(p, dt, g.particles, g._trailState);
+  }
+
+  // Prestige-skin ambient VFX. No-op if no skin equipped; otherwise
+  // spawns sparkle (gold) or shadow-smoke (shadow) per-tick. Shares
+  // _trailState with spawnFireTrail — different key bucket so both can
+  // layer if a player has skin+trail equipped.
+  if (p.alive && g._activeSkin) {
+    spawnSkinVFX(p, dt, g.particles, g._trailState, g._activeSkin);
   }
 
   // --- update particles ---
