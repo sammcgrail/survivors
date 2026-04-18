@@ -14,7 +14,8 @@
 
 import { bindResize } from './viewport.js';
 import { initMusic } from './musicDirector.js';
-import { toggleVolPanel } from './volPanel.js';
+import { toggleVolPanel, clampSliderVol } from './volPanel.js';
+import { setSfxVol as _setSfxVol } from './sfx.js';
 import { makeDrawSprite } from './render.js';
 import { showBestiary, hideBestiary } from './bestiaryUI.js';
 
@@ -56,9 +57,10 @@ export function bootSharedServices({ isMP } = {}) {
   window.toggleVolPanel = toggleVolPanel;
   window.showBestiary = showBestiary;
   window.hideBestiary = hideBestiary;
-  // NOTE: setBgmVol, toggleMute, setSfxVol stay in main.js/mp-main.js
-  // because they bind to the music instance created there (not boot's).
-  // Unifying music to a single instance is step 3b.
+  // Music is now a singleton (step 3b) — these bind to the only instance.
+  window.toggleMute = () => music.toggleMute();
+  window.setBgmVol = (v) => music.setBgmVol(v);
+  window.setSfxVol = (v) => _setSfxVol(clampSliderVol(v));
 
   return { canvas, ctx, drawSprite, music };
 }

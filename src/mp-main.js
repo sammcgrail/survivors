@@ -10,10 +10,10 @@ import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
 import { PLAYER_RADIUS } from './shared/constants.js';
-import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
+import { sfx, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
-import { clampSliderVol } from './shared/volPanel.js';
+// clampSliderVol import removed — setSfxVol now lives in boot.js (step 3b)
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
@@ -282,13 +282,9 @@ spriteSheet.onload = () => { spritesReady = true; };
 
 const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
-// --- battle music (shared music director, battle only) ---
+// --- battle music (singleton — created by boot.js, retrieved here) ---
 const music = initMusic({ hasMenu: false });
-const { startBattleMusic: startMpMusic, toggleMute: toggleMpMute,
-        setBgmVol } = music;
-function setSfxVol(v) {
-  _setSfxVol(clampSliderVol(v));
-}
+const { startBattleMusic: startMpMusic } = music;
 
 bindResize(canvas);
 
@@ -1339,8 +1335,6 @@ window.addEventListener('load', () => {
 // to joinGame on first press, respawnGame after death.
 window.startGame = () => (renderStarted && iDied ? respawnGame() : joinGame());
 window.selectWeapon = weaponPicker.select;
-window.toggleMute = toggleMpMute;
-window.setBgmVol = setBgmVol;
-window.setSfxVol = setSfxVol;
-// toggleVolPanel, showBestiary, hideBestiary — wired by bootSharedServices().
+// toggleMute, setBgmVol, setSfxVol — wired by bootSharedServices() (step 3b).
+// toggleVolPanel, showBestiary, hideBestiary — also wired by bootSharedServices().
 

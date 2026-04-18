@@ -33,14 +33,21 @@ const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
 // (default bgmVol 0.45 * 0.67 = 0.30, barely audible).
 const MENU_VOL_RATIO = 0.92;
 
+// Singleton cache — initMusic() returns the same instance on repeated
+// calls so boot.js and main.js/mp-main.js can both call it without
+// creating duplicate BGM players (step 3b).
+let _instance = null;
+
 /**
  * Initialize the music director. Call once at module load.
+ * Returns the cached singleton on subsequent calls (opts ignored after first).
  *
  * @param {Object} opts
  * @param {boolean} opts.hasMenu  SP = true (menu + battle), MP = false (battle only).
  * @returns Music director API.
  */
 export function initMusic({ hasMenu = false } = {}) {
+  if (_instance) return _instance;
   let bgmVol = readPersistedBgmVol();
   let muted = readPersistedMute();
   let menuMusicStarted = false;
@@ -100,7 +107,7 @@ export function initMusic({ hasMenu = false } = {}) {
     toggleMute();
   }
 
-  return {
+  _instance = {
     startBattleMusic,
     fadeOutBattleMusic,
     startMenuMusic,
@@ -110,4 +117,5 @@ export function initMusic({ hasMenu = false } = {}) {
     setBgmVol,
     setMuted,
   };
+  return _instance;
 }
