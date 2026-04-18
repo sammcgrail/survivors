@@ -285,9 +285,8 @@ const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 // switch is now one source of truth.
 //
 // --- battle music (map-aware + mute toggle) ---
-// Wilderness now has its own dedicated track; catacombs still aliases ruins.
-// Parity with SP (main.js).
-const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg', wilderness: 'wilderness_theme.ogg', catacombs: 'ruins_theme.ogg' };
+// All 7 maps now have dedicated tracks. Parity with SP (main.js).
+const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg', wilderness: 'wilderness_theme.ogg', catacombs: 'catacombs_theme.ogg' };
 const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
 // SFX vol lives in the shared module now — only BGM stays local.
 let mpBgmVol = readPersistedBgmVol();

@@ -94,10 +94,11 @@ const MAP_TRACKS = {
   forest: 'forest_theme.ogg',
   graveyard: 'graveyard_theme.ogg',
   ruins: 'ruins_theme.ogg',
-  // Wilderness now has its own dedicated track (barn, Apr 18) — D dorian,
-  // pizz strings + french horn. Catacombs still aliases ruins.
+  // Wilderness + catacombs both have dedicated tracks now (barn, Apr 18).
+  // Wilderness: D dorian, pizz strings + french horn.
+  // Catacombs: G phrygian, contrabass drone + low horn + timpani.
   wilderness: 'wilderness_theme.ogg',
-  catacombs: 'ruins_theme.ogg',
+  catacombs: 'catacombs_theme.ogg',
 };
 const MENU_TRACK = 'menu_theme.ogg';
 const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
