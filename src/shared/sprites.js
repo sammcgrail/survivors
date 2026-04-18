@@ -65,7 +65,13 @@ export const SP = {
   powerup_damage:       [1, 6],
   powerup_hp_regen:     [2, 6],
   powerup_attack_speed: [3, 6],
-  powerup_magnet:       [4, 6],
+  // powerup_magnet intentionally omitted — barnaldo's call (Apr 18):
+  // the thin gold horseshoe read too weak next to the consumable
+  // drop. With this entry gone, powerupIconHTML('magnet', …) falls
+  // through to `magnet` at [6,3] (the red/blue consumable), which
+  // reads stronger on the level-up card. Cell (4,6) on the sheet is
+  // now a dead slot — left in barn's strip since rewriting the sheet
+  // to shift it out would ripple through every tier 4 entry.
   powerup_max_hp:       [5, 6],
   powerup_projectiles:  [6, 6],
   powerup_size:         [7, 6],
