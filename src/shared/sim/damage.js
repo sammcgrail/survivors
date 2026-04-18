@@ -7,6 +7,21 @@ import { EVT, emit } from './events.js';
 import { consumableDrop, spawnConsumable } from './consumables.js';
 import { spawnChest } from './chests.js';
 import { ENEMY_TYPES, scaleEnemy } from '../enemyTypes.js';
+import { applyStatus } from './enemies.js';
+
+// Phoenix Heart revive check — called whenever a player's HP drops to
+// 0 or below. If the player has a phoenixHeart charge, consumes it and
+// restores 50% max HP instead of dying. Returns true if the player was
+// revived (caller should skip the death path).
+export function checkPhoenixRevive(g, p) {
+  if (p.hp > 0) return false;
+  if (!p.phoenixHeart) return false;
+  p.phoenixHeart = false;
+  p.hp = Math.ceil(p.maxHp * 0.5);
+  p.iframes = 1.0; // brief mercy window after revive
+  emit(g, EVT.PHOENIX_REVIVE, { x: p.x, y: p.y, pid: p.id });
+  return true;
+}
 
 // Tier set for the overkill gate below — punch-frame feedback only
 // fires on enemies heavy enough to be worth the screen flash, so one-
@@ -72,6 +87,30 @@ function applyExplodeOnDeath(g, e) {
 // (consumables, death-effect AoE, status ticks — bucketed as 'other').
 export function damageEnemy(g, e, dmg, killerId, weaponType) {
   if (e.dying) return false;
+  // Relic damage modifiers — look up the attacking player once for all
+  // relic checks. `killerId == null` means unowned damage (status ticks,
+  // consumables) which skips player-specific relics.
+  let isCrit = false;
+  if (killerId != null) {
+    const owner = g.players.find(p => p.id === killerId);
+    if (owner) {
+      // Shieldbreaker — +15% per stack vs armored (boss/brute/elite)
+      if (owner.armoredDmgBonus && (e.name === 'boss' || e.name === 'brute' || e.name === 'elite')) {
+        dmg *= (1 + owner.armoredDmgBonus);
+      }
+      // Trickster — 10% per stack chance for 3x crit
+      if (owner.critChance && g.rng.random() < owner.critChance) {
+        dmg *= 3;
+        isCrit = true;
+      }
+      // Ember Orb — 5% per stack chance to apply burn (3 dps, 3s)
+      if (owner.emberChance && g.rng.random() < owner.emberChance) {
+        applyStatus(g, e, { type: 'burn', remaining: 3, magnitude: 3, tickRate: 1 });
+        emit(g, EVT.EMBER_BURN, { x: e.x, y: e.y });
+      }
+    }
+  }
+  dmg = Math.round(dmg);
   // Overkill metric: compare the dealt damage against the enemy's
   // remaining HP BEFORE the hit. A 3x-or-more overkill flags the kill
   // for extra client VFX (punch-frame + burst bump). Only meaningful
@@ -102,7 +141,10 @@ export function damageEnemy(g, e, dmg, killerId, weaponType) {
   // pressure from breath weapons fanning out across many enemies
   // every tick — was the dominant event volume in 8-player MP.
   if (dmg >= 5) {
-    emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg });
+    emit(g, EVT.ENEMY_HIT, { x: e.x, y: e.y, radius: e.radius, dmg, ...(isCrit ? { crit: true } : {}) });
+  }
+  if (isCrit) {
+    emit(g, EVT.CRIT_HIT, { x: e.x, y: e.y, dmg });
   }
   // Phase 5 resurrection — intercept the first kill in final form
   // and revive at 25% HP with a dramatic burst. Fires once:

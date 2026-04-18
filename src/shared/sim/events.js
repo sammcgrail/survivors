@@ -35,6 +35,9 @@ export const EVT = {
   STATUS_EXPIRED:      'statusExpired',
   CHEST_SPAWN:         'chestSpawn',
   RELIC_PICKUP:        'relicPickup',
+  PHOENIX_REVIVE:      'phoenixRevive',
+  CRIT_HIT:            'critHit',
+  EMBER_BURN:          'emberBurn',
 };
 
 // Spread payload first so a stray `type` field in the payload (e.g.

@@ -5,6 +5,7 @@
 import { EVT, emit } from './events.js';
 import { circleRectCollision } from './collision.js';
 import { PROJECTILE_BLOCKERS } from '../maps.js';
+import { checkPhoenixRevive } from './damage.js';
 
 // Spawn a single enemy projectile aimed at (tx, ty) from (ox, oy).
 export function fireEnemyProjectile(g, ox, oy, tx, ty, opts) {
@@ -224,7 +225,7 @@ export function updateEnemyProjectiles(g, dt) {
         pl.hp -= dmg;
         pl.iframes = 0.5;
         emit(g, EVT.PLAYER_HIT, { x: pl.x, y: pl.y, dmg, by: p.source, pid: pl.id });
-        if (pl.hp <= 0) {
+        if (pl.hp <= 0 && !checkPhoenixRevive(g, pl)) {
           pl.hp = 0;
           pl.alive = false;
           emit(g, EVT.PLAYER_DEATH, { x: pl.x, y: pl.y, by: p.source, pid: pl.id });

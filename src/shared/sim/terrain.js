@@ -10,6 +10,7 @@
 import { MAPS } from '../maps.js';
 import { isOnPatch } from '../mapTerrain.js';
 import { EVT, emit } from './events.js';
+import { checkPhoenixRevive } from './damage.js';
 
 export function updateTerrain(g, dt) {
   const effect = MAPS[g.mapId]?.terrainEffect;
@@ -26,7 +27,7 @@ export function updateTerrain(g, dt) {
     } else if (effect.type === 'damage') {
       p._terrainSlow = 1;
       p.hp -= effect.dps * dt;
-      if (p.hp <= 0) {
+      if (p.hp <= 0 && !checkPhoenixRevive(g, p)) {
         p.hp = 0;
         p.alive = false;
         emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: 'cursed_ground', pid: p.id });

@@ -7,7 +7,7 @@ import { WORLD_W, WORLD_H } from '../constants.js';
 import { EVT, emit } from './events.js';
 import { pushOutOfObstacles, obstacleAvoidance, buildSpatialHash, HASH_CELL, HASH_KEY_STRIDE } from './collision.js';
 import { enemyShootingAi } from './enemyProjectiles.js';
-import { damageEnemy } from './damage.js';
+import { damageEnemy, checkPhoenixRevive } from './damage.js';
 // Reusable zero vector for the no-obstacles path — saves an
 // allocation per enemy per tick on maps without obstacles.
 const ZERO_VEC = { x: 0, y: 0 };
@@ -253,7 +253,7 @@ function updateBossAi(g, e, dt, edx, edy, dist) {
           p.hp -= dmg;
           p.iframes = 0.5;
           emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: 'boss', pid: p.id });
-          if (p.hp <= 0) {
+          if (p.hp <= 0 && !checkPhoenixRevive(g, p)) {
             p.hp = 0;
             p.alive = false;
             emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: 'boss', pid: p.id });
