@@ -6,7 +6,7 @@
 // enemies.js, which itself imports the geometry helpers below. ESM live
 // bindings make this safe — both imports are only used inside function
 // bodies, never at module-init time.
-import { damageEnemy } from './damage.js';
+import { damageEnemy, checkPhoenixRevive } from './damage.js';
 import { applyStatus } from './enemies.js';
 import { EVT, emit } from './events.js';
 import { applyPoisonToPlayer } from './playerStatus.js';
@@ -188,7 +188,7 @@ function applyContactDamage(g, e, p) {
   p.iframes = 0.5;
   emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg, by: e.name, pid: p.id });
   if (e.poisonOnHit) applyPoisonToPlayer(p, e.poisonOnHit.dps, e.poisonOnHit.duration);
-  if (p.hp <= 0) {
+  if (p.hp <= 0 && !checkPhoenixRevive(g, p)) {
     p.hp = 0;
     p.alive = false;
     emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: e.name, pid: p.id });

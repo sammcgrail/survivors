@@ -1766,6 +1766,195 @@ suite('Wave Milestones', () => {
   });
 });
 
+// ═══════════════════════════════════════════════════════════════
+// Relic Wiring — Phoenix Heart, Trickster, Shieldbreaker, Ember Orb
+// ═══════════════════════════════════════════════════════════════
+import { checkPhoenixRevive } from '../src/shared/sim/damage.js';
+import { checkEnemyPlayerCollisions, buildSpatialHash } from '../src/shared/sim/collision.js';
+
+suite('Phoenix Heart (auto-revive)', () => {
+  test('revives player at 50% HP when lethal hit lands', () => {
+    const g = makeGame();
+    g.player.phoenixHeart = true;
+    g.player.hp = 5;
+    g.player.maxHp = 100;
+    // Simulate lethal damage
+    g.player.hp -= 20;
+    const revived = checkPhoenixRevive(g, g.player);
+    assert(revived === true, 'should return true for revive');
+    assert(g.player.hp === 50, `hp should be 50% of max (50), got ${g.player.hp}`);
+    assert(g.player.phoenixHeart === false, 'phoenixHeart should be consumed');
+    assert(g.player.alive !== false, 'player should still be alive');
+    const evt = g.events.find(e => e.type === 'phoenixRevive');
+    assert(evt, 'should emit phoenixRevive event');
+  });
+
+  test('does not revive when no phoenixHeart flag', () => {
+    const g = makeGame();
+    g.player.hp = -5;
+    const revived = checkPhoenixRevive(g, g.player);
+    assert(revived === false, 'should not revive without relic');
+  });
+
+  test('does not fire when hp > 0', () => {
+    const g = makeGame();
+    g.player.phoenixHeart = true;
+    g.player.hp = 10;
+    const revived = checkPhoenixRevive(g, g.player);
+    assert(revived === false, 'should not revive at positive hp');
+    assert(g.player.phoenixHeart === true, 'phoenixHeart should not be consumed');
+  });
+
+  test('consumed — only works once', () => {
+    const g = makeGame();
+    g.player.phoenixHeart = true;
+    g.player.maxHp = 100;
+    // First lethal hit
+    g.player.hp = -5;
+    checkPhoenixRevive(g, g.player);
+    assert(g.player.phoenixHeart === false, 'consumed after first use');
+    // Second lethal hit
+    g.player.hp = -5;
+    const revived = checkPhoenixRevive(g, g.player);
+    assert(revived === false, 'should not revive a second time');
+  });
+
+  test('integrated: enemy contact triggers revive instead of death', () => {
+    const g = makeGame();
+    g.player.phoenixHeart = true;
+    g.player.hp = 1;
+    g.player.maxHp = 100;
+    const enemy = { x: g.player.x, y: g.player.y, hp: 100, maxHp: 100, name: 'brute', damage: 30, radius: 20 };
+    g.enemies.push(enemy);
+    // Place enemy on top of player and run collision
+    const enemyHash = buildSpatialHash(g.enemies);
+    checkEnemyPlayerCollisions(g, enemyHash);
+    assert(g.player.alive === true, 'player should survive via phoenix heart');
+    assert(g.player.hp === 50, `hp should be 50, got ${g.player.hp}`);
+    assert(!g.events.find(e => e.type === 'playerDeath'), 'should NOT emit playerDeath');
+    assert(g.events.find(e => e.type === 'phoenixRevive'), 'should emit phoenixRevive');
+  });
+});
+
+suite('Trickster (crit damage)', () => {
+  test('3x damage on crit roll', () => {
+    // Use a seed that produces a low first rng value (< 0.10)
+    const g = makeGame({ seed: 1 });
+    g.player.critChance = 1.0; // force crit
+    const enemy = { x: 100, y: 100, hp: 1000, maxHp: 1000, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 10, 0, 'spit');
+    // With critChance = 1.0, damage should be 10 * 3 = 30 rounded
+    assert(enemy.hp === 970, `hp should be 970 (1000 - 30), got ${enemy.hp}`);
+    const critEvt = g.events.find(e => e.type === 'critHit');
+    assert(critEvt, 'should emit critHit event');
+  });
+
+  test('no crit when critChance is 0', () => {
+    const g = makeGame();
+    const enemy = { x: 100, y: 100, hp: 1000, maxHp: 1000, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 10, 0, 'spit');
+    assert(enemy.hp === 990, `hp should be 990 (no crit), got ${enemy.hp}`);
+    const critEvt = g.events.find(e => e.type === 'critHit');
+    assert(!critEvt, 'should NOT emit critHit without relic');
+  });
+
+  test('crit skipped for unowned damage (killerId null)', () => {
+    const g = makeGame();
+    g.player.critChance = 1.0;
+    const enemy = { x: 100, y: 100, hp: 1000, maxHp: 1000, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 10, null, null);
+    assert(enemy.hp === 990, `unowned damage should not crit, got hp ${enemy.hp}`);
+  });
+});
+
+suite('Shieldbreaker (+dmg vs armored)', () => {
+  test('+15% damage vs boss', () => {
+    const g = makeGame();
+    g.player.armoredDmgBonus = 0.15;
+    const enemy = { x: 100, y: 100, hp: 1000, maxHp: 1000, name: 'boss', damage: 50, color: '#c00', radius: 40, xp: 500, speed: 35, phase: 1, baseSpeed: 35 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 100, 0, 'spit');
+    // 100 * 1.15 = 115, rounded = 115
+    assert(enemy.hp === 885, `boss hp should be 885 (1000 - 115), got ${enemy.hp}`);
+  });
+
+  test('+15% damage vs brute', () => {
+    const g = makeGame();
+    g.player.armoredDmgBonus = 0.15;
+    const enemy = { x: 100, y: 100, hp: 500, maxHp: 500, name: 'brute', damage: 30, color: '#e74c3c', radius: 24, xp: 60, speed: 22 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 100, 0, 'spit');
+    assert(enemy.hp === 385, `brute hp should be 385 (500 - 115), got ${enemy.hp}`);
+  });
+
+  test('+15% damage vs elite', () => {
+    const g = makeGame();
+    g.player.armoredDmgBonus = 0.15;
+    const enemy = { x: 100, y: 100, hp: 500, maxHp: 500, name: 'elite', damage: 25, color: '#6c5ce7', radius: 20, xp: 80, speed: 45 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 100, 0, 'spit');
+    assert(enemy.hp === 385, `elite hp should be 385, got ${enemy.hp}`);
+  });
+
+  test('no bonus vs non-armored (blob)', () => {
+    const g = makeGame();
+    g.player.armoredDmgBonus = 0.15;
+    const enemy = { x: 100, y: 100, hp: 500, maxHp: 500, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 100, 0, 'spit');
+    assert(enemy.hp === 400, `blob hp should be 400 (no bonus), got ${enemy.hp}`);
+  });
+
+  test('stacks additively (2 stacks = +30%)', () => {
+    const g = makeGame();
+    g.player.armoredDmgBonus = 0.30;
+    const enemy = { x: 100, y: 100, hp: 1000, maxHp: 1000, name: 'boss', damage: 50, color: '#c00', radius: 40, xp: 500, speed: 35, phase: 1, baseSpeed: 35 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 100, 0, 'spit');
+    // 100 * 1.30 = 130
+    assert(enemy.hp === 870, `2-stack boss hp should be 870, got ${enemy.hp}`);
+  });
+});
+
+suite('Ember Orb (burn on hit)', () => {
+  test('applies burn status to enemy on proc', () => {
+    const g = makeGame();
+    g.player.emberChance = 1.0; // force proc
+    const enemy = { x: 100, y: 100, hp: 500, maxHp: 500, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 10, 0, 'spit');
+    assert(enemy.statusEffects, 'enemy should have statusEffects');
+    const burn = enemy.statusEffects.find(s => s.type === 'burn');
+    assert(burn, 'should have a burn status');
+    assert(burn.magnitude === 3, `burn dps should be 3, got ${burn.magnitude}`);
+    assert(burn.remaining === 3, `burn duration should be 3, got ${burn.remaining}`);
+    const evt = g.events.find(e => e.type === 'emberBurn');
+    assert(evt, 'should emit emberBurn event');
+  });
+
+  test('no burn when emberChance is 0', () => {
+    const g = makeGame();
+    const enemy = { x: 100, y: 100, hp: 500, maxHp: 500, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 10, 0, 'spit');
+    const burn = enemy.statusEffects?.find(s => s.type === 'burn');
+    assert(!burn, 'should not burn without relic');
+  });
+
+  test('burn skipped for unowned damage', () => {
+    const g = makeGame();
+    g.player.emberChance = 1.0;
+    const enemy = { x: 100, y: 100, hp: 500, maxHp: 500, name: 'blob', damage: 5, color: '#0f0', radius: 10, xp: 10, speed: 50 };
+    g.enemies.push(enemy);
+    damageEnemy(g, enemy, 10, null, null);
+    const burn = enemy.statusEffects?.find(s => s.type === 'burn');
+    assert(!burn, 'unowned damage should not proc ember');
+  });
+});
+
 // ── Summary ─────────────────────────────────────────────────────
 console.log(`\n${'═'.repeat(50)}`);
 console.log(`Tests: ${totalPassed} passed, ${totalFailed} failed`);

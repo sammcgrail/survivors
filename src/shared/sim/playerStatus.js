@@ -7,6 +7,7 @@
 // armor (half effect, since poison ticks twice as often as a bigger
 // hit would). Emits PLAYER_HIT so floating text shows + sfx fires.
 import { EVT, emit } from './events.js';
+import { checkPhoenixRevive } from './damage.js';
 
 export function applyPoisonToPlayer(p, dps, duration) {
   // Refresh-on-reapply: longer of existing/new duration. dps takes the
@@ -27,7 +28,7 @@ export function updatePlayerStatus(g, dt) {
       const tick = Math.max(1, (p.poisonDps || 0) * 0.5 - (p.armor || 0) * 0.5);
       p.hp -= tick;
       emit(g, EVT.PLAYER_HIT, { x: p.x, y: p.y, dmg: tick, by: 'poison', pid: p.id });
-      if (p.hp <= 0) {
+      if (p.hp <= 0 && !checkPhoenixRevive(g, p)) {
         p.hp = 0;
         p.alive = false;
         emit(g, EVT.PLAYER_DEATH, { x: p.x, y: p.y, by: 'poison', pid: p.id });
