@@ -696,8 +696,16 @@ function fireVoidAnchor(g, w, p) {
   emit(g, EVT.METEOR_WARN, { x: p.x, y: p.y, radius: impactR });
 }
 
+// Minimum distance from the pull center — enemies stop being pulled
+// closer than this. Without it, the void well dog-piles the caster:
+// all pulled enemies end up at pull.x/pull.y (which is the player's
+// location at fire time) and apply stacked contact damage = instakill.
+// 48 px ≈ player radius (16) + enemy radius (~12) + small buffer.
+const PULL_INNER_RADIUS = 48;
+
 export function updatePendingPulls(g, dt) {
   if (!g.pendingPulls || g.pendingPulls.length === 0) return;
+  const innerR2 = PULL_INNER_RADIUS * PULL_INNER_RADIUS;
   for (let i = g.pendingPulls.length - 1; i >= 0; i--) {
     const pull = g.pendingPulls[i];
     pull.elapsed += dt;
@@ -705,8 +713,10 @@ export function updatePendingPulls(g, dt) {
     for (const e of g.enemies) {
       const dx = pull.x - e.x;
       const dy = pull.y - e.y;
-      if (dx * dx + dy * dy > r2) continue;
-      const d = Math.sqrt(dx * dx + dy * dy) || 1;
+      const d2 = dx * dx + dy * dy;
+      if (d2 > r2) continue;
+      if (d2 < innerR2) continue;  // exclusion ring around caster
+      const d = Math.sqrt(d2) || 1;
       const force = pull.strength * dt;
       e.x += (dx / d) * force;
       e.y += (dy / d) * force;

@@ -845,8 +845,11 @@ function render() {
   // whatever fits the map. Runs before world render so the ambient
   // layer sits under enemies + projectiles. Null for maps without
   // a configured ambient (no-op cost).
+  // Gated on !paused so the level-up menu doesn't accumulate ambient
+  // particles — fixed buildup that caused a huge draw burst on menu
+  // close (arena was worst; warm embers spawn at 35%/frame).
   const ambient = getAmbient(g.mapId);
-  if (ambient) ambient.tick(g.particles, { cx, cy, W, H }, performance.now());
+  if (ambient && !paused) ambient.tick(g.particles, { cx, cy, W, H }, performance.now());
   _phase('bg');
 
   const p = g.player;
@@ -942,7 +945,10 @@ function render() {
   if (g.levelFlash > 0) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0); // reset transform for full-screen overlay
-    ctx.globalAlpha = g.levelFlash / 0.15 * 0.3; // fade from 0.3 to 0
+    // Clamp alpha to 0.5 max. Bugfix: boss-phase callers pushed flash(0.6+)
+    // which uncapped multiplied past 1.0, producing near-solid yellow
+    // "flashbang" frames around wave 43+ where overkill + phase events stack.
+    ctx.globalAlpha = Math.min(0.5, g.levelFlash / 0.15 * 0.3);
     ctx.fillStyle = '#f1c40f';
     ctx.fillRect(0, 0, W, H);
     ctx.restore();

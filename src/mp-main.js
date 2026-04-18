@@ -27,6 +27,7 @@ import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 import { createBaseGameState } from './shared/gameState.js';
 import { renderDeathFeed } from './shared/deathFeed.js';
+import { createWeaponPicker } from './shared/weaponPicker.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -326,7 +327,10 @@ bindResize(canvas);
 let ws = null;
 let myId = null;
 let myName = '';
-let selectedWeapon = 'spit';
+// Weapon picker state + keyboard hotkeys shared with SP via
+// `shared/weaponPicker.js`. MP omits `onSelect` — audio unlock is
+// handled via the PLAY button flow, not weapon selection.
+const weaponPicker = createWeaponPicker({ initial: 'spit' });
 let connected = false;
 let arena = { w: 3000, h: 3000 };
 let mapId = null;
@@ -420,13 +424,6 @@ let spectateId = null;
 // Input
 let keys = { up: false, down: false, left: false, right: false };
 let lastSentKeys = null;
-
-function selectWeapon(type) {
-  selectedWeapon = type;
-  document.querySelectorAll('.weapon-card').forEach(c => {
-    c.classList.toggle('selected', c.dataset.weapon === type);
-  });
-}
 
 // ============================================================
 // WEBSOCKET
@@ -635,7 +632,7 @@ function joinGame() {
   document.getElementById('death-screen').style.display = 'none';
 
   const sendJoin = () => ws.send(JSON.stringify({
-    type: 'join', name: myName, weapon: selectedWeapon, prestige: prestigePayload(),
+    type: 'join', name: myName, weapon: weaponPicker.get(), prestige: prestigePayload(),
   }));
 
   if (connected) { sendJoin(); }
@@ -668,7 +665,7 @@ function respawnGame() {
   const hud = document.getElementById('spectate-hud');
   if (hud) hud.style.display = 'none';
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'respawn', weapon: selectedWeapon, prestige: prestigePayload() }));
+    ws.send(JSON.stringify({ type: 'respawn', weapon: weaponPicker.get(), prestige: prestigePayload() }));
   }
   iDied = false;
 }
@@ -1260,7 +1257,9 @@ function render(dt) {
   if (levelFlash > 0) {
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.globalAlpha = levelFlash / 0.15 * 0.3;
+    // Cap alpha — mirrors src/main.js fix: prevents near-solid yellow
+    // "flashbang" when boss-phase + overkill events stack at high waves.
+    ctx.globalAlpha = Math.min(0.5, levelFlash / 0.15 * 0.3);
     ctx.fillStyle = '#f1c40f';
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
@@ -1323,16 +1322,12 @@ document.addEventListener('keydown', e => {
   const startVisible = startScreen.style.display !== 'none' && startScreen.offsetParent !== null;
   const deathVisible = deathScreen.style.display === 'flex';
   if (startVisible) {
-    if (e.key === '1') selectWeapon('spit');
-    else if (e.key === '2') selectWeapon('breath');
-    else if (e.key === '3') selectWeapon('charge');
-    else if (e.key === 'Enter' || e.key === ' ') { joinGame(); e.preventDefault(); }
+    if (weaponPicker.tryKey(e)) return;
+    if (e.key === 'Enter' || e.key === ' ') { joinGame(); e.preventDefault(); }
   }
   if (deathVisible) {
-    if (e.key === '1') selectWeapon('spit');
-    else if (e.key === '2') selectWeapon('breath');
-    else if (e.key === '3') selectWeapon('charge');
-    else if (e.key === 'Enter' || e.key === ' ') { respawnGame(); e.preventDefault(); }
+    if (weaponPicker.tryKey(e)) return;
+    if (e.key === 'Enter' || e.key === ' ') { respawnGame(); e.preventDefault(); }
   }
 });
 
@@ -1362,7 +1357,7 @@ window.addEventListener('load', () => {
 // Both PLAY and RETRY use `onclick="startGame()"` in template.html — alias
 // to joinGame on first press, respawnGame after death.
 window.startGame = () => (renderStarted && iDied ? respawnGame() : joinGame());
-window.selectWeapon = selectWeapon;
+window.selectWeapon = weaponPicker.select;
 window.toggleMute = toggleMpMute;
 window.setBgmVol = setBgmVol;
 window.setSfxVol = setSfxVol;
