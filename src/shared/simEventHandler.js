@@ -1239,6 +1239,58 @@ export function applySimEvent(evt, client) {
       break;
     }
 
+    case 'chestSpawn': {
+      // Chest spawn fanfare — golden beam + ring, similar to consumable
+      // spawn but with a distinct treasure-box vibe.
+      sfx('powerup');
+      for (let i = 0; i < 12; i++) {
+        const angle = (Math.PI * 2 * i) / 12;
+        pushFx(client.particles, evt.x, evt.y, '#f1c40f', {
+          angle,
+          speedMin: 100, speedMax: 160,
+          lifeMin: 0.35, lifeMax: 0.5,
+          radiusMin: 1.8, radiusMax: 2.8,
+        });
+      }
+      for (let i = 0; i < 8; i++) {
+        pushFx(client.particles, evt.x, evt.y, '#fff', {
+          speedMin: 30, speedMax: 80,
+          lifeMin: 0.4, lifeMax: 0.7,
+          radiusMin: 1.5, radiusMax: 2.5,
+          biasY: -100,
+        });
+      }
+      break;
+    }
+
+    case 'relicPickup': {
+      if (isMe) sfx('powerup');
+      // Relic name floats up
+      client.floatingTexts.push({
+        x: evt.x, y: evt.y,
+        text: (evt.relic_icon || '') + ' ' + (evt.relic_name || 'RELIC'),
+        color: '#f1c40f',
+        life: 1.5, maxLife: 1.5, vy: -45,
+      });
+      // Golden inward spiral pickup burst
+      for (let i = 0; i < 10; i++) {
+        const a = (Math.PI * 2 * i) / 10 + Math.random() * 0.25;
+        const r0 = 20 + Math.random() * 8;
+        const inward = 160 + Math.random() * 50;
+        safeParticlePush(client.particles, {
+          x: evt.x + Math.cos(a) * r0,
+          y: evt.y + Math.sin(a) * r0,
+          vx: -Math.cos(a) * inward,
+          vy: -Math.sin(a) * inward,
+          life: 0.2, maxLife: 0.2,
+          radius: 1.6 + Math.random() * 0.6,
+          color: '#f1c40f',
+        });
+      }
+      if (isMe) shake(0.15);
+      break;
+    }
+
     case 'statusExpired': {
       // Status wears off — one-time expiry VFX that closes the loop so
       // players register "that enemy just stopped being frozen" even

@@ -5,6 +5,7 @@
 import { spawnGem } from './gems.js';
 import { EVT, emit } from './events.js';
 import { consumableDrop, spawnConsumable } from './consumables.js';
+import { spawnChest } from './chests.js';
 import { ENEMY_TYPES, scaleEnemy } from '../enemyTypes.js';
 
 // Tier set for the overkill gate below — punch-frame feedback only
@@ -126,6 +127,12 @@ export function damageEnemy(g, e, dmg, killerId, weaponType) {
       const cType = consumableDrop(e.name, g.rng);
       if (cType) spawnConsumable(g, e.x, e.y, cType);
     }
+    // Relic chest drops — boss always, elite 10% chance.
+    if (e.name === 'boss') {
+      spawnChest(g, e.x, e.y);
+    } else if (e.name === 'elite' && g.rng.random() < 0.10) {
+      spawnChest(g, e.x, e.y);
+    }
     // Death mechanics — splitter spawns swarm minions at the kill
     // site, bomber drops a meteor explosion. Runs before ENEMY_KILLED
     // emits so the new enemies/effects land in the same tick's
@@ -159,6 +166,10 @@ export function damageEnemy(g, e, dmg, killerId, weaponType) {
     for (const p of g.players) if (p.id === killerId) {
       p.kills++;
       if (isOverkill) p.overkills = (p.overkills || 0) + 1;
+      // Vampire Fang relic — heal on kill.
+      if (p.vampireHeal && p.hp < p.maxHp) {
+        p.hp = Math.min(p.maxHp, p.hp + p.vampireHeal);
+      }
       break;
     }
     return true;

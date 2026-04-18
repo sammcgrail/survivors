@@ -16,6 +16,7 @@ import { buildSpatialHash, checkBulletEnemyCollisions, checkEnemyPlayerCollision
 import { updateGems } from './gems.js';
 import { updateHearts } from './hearts.js';
 import { updateConsumables } from './consumables.js';
+import { updateChests } from './chests.js';
 import { updateEnemyProjectiles } from './enemyProjectiles.js';
 import { updateTerrain } from './terrain.js';
 import { updatePlayerStatus } from './playerStatus.js';
@@ -37,6 +38,7 @@ export function tickSim(g, dt) {
   updateGems(g, dt);
   updateHearts(g, dt);
   updateConsumables(g, dt);
+  updateChests(g, dt);
   updateChainEffects(g, dt);
   updateMeteorEffects(g, dt);
   updateChargeTrails(g, dt);

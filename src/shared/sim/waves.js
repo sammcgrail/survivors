@@ -5,6 +5,7 @@
 import { SPECIAL_WAVES } from '../enemyTypes.js';
 import { spawnEnemy } from './enemies.js';
 import { EVT, emit } from './events.js';
+import { spawnChest, isWaveMilestone } from './chests.js';
 
 export function updateWaves(g, dt) {
   if (g.waveTimer >= g.waveDuration) {
@@ -13,6 +14,11 @@ export function updateWaves(g, dt) {
     // Emit a typed event; clients localize the deathfeed line so MP
     // doesn't say "mp survived wave N" (g.playerName is SP-only).
     emit(g, EVT.WAVE_SURVIVED, { wave: g.wave - 1, time: g.time });
+    // Relic chest at wave milestones — spawns near the first alive player.
+    if (isWaveMilestone(g.wave - 1)) {
+      const p = g.players.find(pl => pl.alive);
+      if (p) spawnChest(g, p.x + g.rng.range(-60, 60), p.y + g.rng.range(-60, 60));
+    }
     g.spawnRate = Math.max(0.3, 2.0 * Math.pow(0.90, g.wave - 1));
     g.waveMsg = `WAVE ${g.wave}`;
     g.waveMsgTimer = 2.0;

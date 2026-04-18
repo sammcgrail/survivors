@@ -28,6 +28,7 @@ import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 import { createBaseGameState } from './shared/gameState.js';
 import { renderDeathFeed } from './shared/deathFeed.js';
+import { RELICS } from './shared/relics.js';
 import { createWeaponPicker } from './shared/weaponPicker.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
@@ -1249,6 +1250,15 @@ function render(dt) {
       document.getElementById('hud-level').textContent = `Lv ${me.level}`;
       const xpFill = document.getElementById('xp-fill');
       if (xpFill) xpFill.style.width = `${Math.min(100, (me.xp / me.xpToLevel) * 100)}%`;
+      // Relic HUD
+      const relicEl = document.getElementById('hud-relics');
+      if (relicEl && me.relics) {
+        const relicStr = RELICS
+          .filter(r => (me.relics[r.id] || 0) > 0)
+          .map(r => me.relics[r.id] > 1 ? `${r.icon}x${me.relics[r.id]}` : r.icon)
+          .join(' ');
+        if (relicEl.textContent !== relicStr) relicEl.textContent = relicStr;
+      }
     }
   }
 

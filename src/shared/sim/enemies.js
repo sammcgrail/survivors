@@ -458,6 +458,11 @@ function updateEnemyTick(g, dt, hash) {
       if (speedMod === 0) e.stunTimer = Math.max(e.stunTimer || 0, dt + 0.001);
     }
 
+    // Global enemy speed multiplier from Time Slip relic.
+    if (g.enemySpeedMulti !== undefined && g.enemySpeedMulti < 1) {
+      speedMod *= g.enemySpeedMulti;
+    }
+
     // Stunned enemies freeze in place but still take damage. Thunder god
     // overcharge is the current source; freeze status extends this gate.
     if (e.stunTimer > 0) {

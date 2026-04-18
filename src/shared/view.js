@@ -68,6 +68,7 @@ export function synthesizeView(g) {
     gems: g.gems,
     heartDrops: g.heartDrops,
     consumables: g.consumables,
+    chests: g.chests,
     chargeTrails: g.chargeTrails,
     enemyProjectiles: g.enemyProjectiles,
     chainEffects: g.chainEffects,

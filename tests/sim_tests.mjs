@@ -61,9 +61,12 @@ function makePlayer(overrides = {}) {
     radius: PLAYER_RADIUS, speed: PLAYER_SPEED,
     damageMulti: 1, attackSpeedMulti: 1, hpRegen: 0,
     magnetRange: XP_MAGNET_RANGE,
+    projectileBonus: 0, sizeMulti: 1, armor: 0,
+    magnetBoost: 0,
     xp: 0, xpToLevel: 45, level: 1, kills: 0, score: 0,
     weapons: [createWeapon('spit')],
     alive: true, iframes: 0, facing: { x: 1, y: 0 },
+    relics: {},
     ...overrides,
   };
 }
@@ -73,7 +76,7 @@ function makeGame(overrides = {}) {
   return {
     player,
     players: [player],
-    enemies: [], projectiles: [], gems: [], heartDrops: [], consumables: [], enemyProjectiles: [],
+    enemies: [], projectiles: [], gems: [], heartDrops: [], consumables: [], chests: [], enemyProjectiles: [],
     particles: [], floatingTexts: [], deathFeed: [],
     chainEffects: [], meteorEffects: [],
     time: 0, wave: 1, waveTimer: 0, waveDuration: 20,
@@ -1197,14 +1200,14 @@ suite('Death-screen Stat Tracking', () => {
     const rng = createRng(1);
     const p = {
       id: 1, hp: 100, maxHp: 100, damageMulti: 1, radius: 14, x: 0, y: 0,
-      alive: true, kills: 0,
+      alive: true, kills: 0, relics: {},
       dmgByWeapon: {}, overkills: 0, maxHit: 0, maxHitEnemy: null,
     };
     const g = {
       players: [p], enemies: [], kills: 0, events: [], rng, wave: 1,
       // damage.js's on-kill path touches gems + consumables + drops,
       // so the harness must init every sink it pushes to.
-      gems: [], heartDrops: [], consumables: [], meteorEffects: [],
+      gems: [], heartDrops: [], consumables: [], chests: [], meteorEffects: [],
     };
     return { g, p };
   }
@@ -1645,6 +1648,121 @@ suite('Bestiary metadata — timesEncountered + lastSeenWave', () => {
     assert(ghost.firstWave === null, 'unseen firstWave should be null');
     assert(ghost.timesEncountered === 0, 'unseen timesEncountered should be 0');
     assert(ghost.lastSeenWave === null, 'unseen lastSeenWave should be null');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Relic System
+// ═══════════════════════════════════════════════════════════════
+import { RELICS, pickRelic } from '../src/shared/relics.js';
+import { spawnChest, updateChests, isWaveMilestone } from '../src/shared/sim/chests.js';
+
+suite('Relic Catalog', () => {
+  test('has exactly 10 relics', () => {
+    assert(RELICS.length === 10, `expected 10 relics, got ${RELICS.length}`);
+  });
+
+  test('all relics have required fields', () => {
+    for (const r of RELICS) {
+      assert(r.id, `relic missing id`);
+      assert(r.name, `relic ${r.id} missing name`);
+      assert(r.icon, `relic ${r.id} missing icon`);
+      assert(r.desc, `relic ${r.id} missing desc`);
+      assert(typeof r.apply === 'function', `relic ${r.id} missing apply`);
+      assert(typeof r.max_stacks === 'number' && r.max_stacks > 0, `relic ${r.id} invalid max_stacks`);
+    }
+  });
+
+  test('all relic ids are unique', () => {
+    const ids = RELICS.map(r => r.id);
+    const unique = new Set(ids);
+    assert(unique.size === ids.length, 'duplicate relic ids found');
+  });
+});
+
+suite('Chest Spawn on Boss Kill', () => {
+  test('boss kill spawns a chest', () => {
+    const g = makeGame();
+    g.player.relics = {};
+    // Create a boss-type enemy and kill it
+    const boss = { x: 100, y: 100, hp: 10, maxHp: 100, name: 'boss', damage: 10, color: '#c0392b', radius: 30, xp: 50, speed: 30 };
+    g.enemies.push(boss);
+    g.wave = 5; // wave 4+ for consumables
+    damageEnemy(g, boss, 1000, 0, 'spit');
+    assert(g.chests.length >= 1, `expected at least 1 chest, got ${g.chests.length}`);
+  });
+
+  test('chest has valid relic_id', () => {
+    const g = makeGame();
+    g.player.relics = {};
+    const boss = { x: 100, y: 100, hp: 10, maxHp: 100, name: 'boss', damage: 10, color: '#c0392b', radius: 30, xp: 50, speed: 30 };
+    g.enemies.push(boss);
+    g.wave = 5;
+    damageEnemy(g, boss, 1000, 0, 'spit');
+    const chest = g.chests[g.chests.length - 1];
+    const relic = RELICS.find(r => r.id === chest.relic_id);
+    assert(relic, `chest relic_id ${chest.relic_id} not found in catalog`);
+  });
+});
+
+suite('Chest Pickup Applies Relic', () => {
+  test('walking into chest applies the relic', () => {
+    const g = makeGame();
+    g.player.relics = {};
+    // Manually spawn a chest right on top of the player
+    g.chests.push({ x: g.player.x, y: g.player.y, radius: 14, relic_id: 'iron_will', bobPhase: 0 });
+    const armorBefore = g.player.armor || 0;
+    updateChests(g, 1/60);
+    assert(g.chests.length === 0, 'chest should be consumed');
+    assert(g.player.relics['iron_will'] === 1, 'relic stack should be 1');
+    assert(g.player.armor === armorBefore + 2, `armor should increase by 2, got ${g.player.armor}`);
+    // Should have emitted RELIC_PICKUP event
+    const pickup = g.events.find(e => e.type === 'relicPickup');
+    assert(pickup, 'should emit relicPickup event');
+    assert(pickup.relic_id === 'iron_will', 'event should have correct relic_id');
+  });
+});
+
+suite('Relic Max Stacks', () => {
+  test('max_stacks respected by pickRelic', () => {
+    const rng = createRng(42);
+    // Phoenix Heart has max_stacks 1 — max it out
+    const relics = { phoenix_heart: 1 };
+    // pickRelic should never return phoenix_heart
+    for (let i = 0; i < 50; i++) {
+      const r = pickRelic(relics, rng);
+      if (r) assert(r.id !== 'phoenix_heart', 'should not pick maxed relic');
+    }
+  });
+
+  test('max_stacks respected on chest pickup', () => {
+    const g = makeGame();
+    g.player.relics = { iron_will: 3 }; // already at max (3)
+    g.player.armor = 6;
+    g.chests.push({ x: g.player.x, y: g.player.y, radius: 14, relic_id: 'iron_will', bobPhase: 0 });
+    updateChests(g, 1/60);
+    // Chest is consumed but relic should NOT stack past max
+    assert(g.player.relics['iron_will'] === 3, 'should not exceed max_stacks');
+    assert(g.player.armor === 6, 'armor should not increase past max');
+  });
+
+  test('pickRelic returns null when all maxed', () => {
+    const rng = createRng(42);
+    const relics = {};
+    for (const r of RELICS) relics[r.id] = r.max_stacks;
+    const pick = pickRelic(relics, rng);
+    assert(pick === null, 'should return null when all maxed');
+  });
+});
+
+suite('Wave Milestones', () => {
+  test('milestone waves are correct', () => {
+    const expected = [10, 15, 20, 25, 30, 35, 40, 45, 50];
+    for (const w of expected) {
+      assert(isWaveMilestone(w), `wave ${w} should be a milestone`);
+    }
+    assert(!isWaveMilestone(1), 'wave 1 should not be a milestone');
+    assert(!isWaveMilestone(12), 'wave 12 should not be a milestone');
   });
 });
 

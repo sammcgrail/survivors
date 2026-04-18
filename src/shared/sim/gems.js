@@ -66,8 +66,9 @@ export function updateGems(g, dt) {
         pulled = true;
       }
       if (dist < p.radius + gem.radius) {
-        p.xp += gem.xp;
-        emit(g, EVT.GEM_PICKUP, { x: gem.x, y: gem.y, xp: gem.xp, pid: p.id });
+        const xpGain = Math.floor(gem.xp * (p.xpMulti || 1));
+        p.xp += xpGain;
+        emit(g, EVT.GEM_PICKUP, { x: gem.x, y: gem.y, xp: xpGain, pid: p.id });
         g.gems.splice(i, 1);
         // Level-up cascade — one gem may unlock multiple levels at low xp.
         while (p.xp >= p.xpToLevel) {

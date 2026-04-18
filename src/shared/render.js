@@ -1122,6 +1122,43 @@ export function drawConsumables(ctx, consumables, drawSprite, cx, cy, W, H) {
   }
 }
 
+// Relic chests — glowing golden box with a pulsing highlight. Walk-over
+// auto-pickup like consumables. Viewport-culled (20px margin).
+export function drawChests(ctx, chests, cx, cy, W, H, time) {
+  for (const ch of chests) {
+    if (ch.x < cx - 20 || ch.x > cx + W + 20 || ch.y < cy - 20 || ch.y > cy + H + 20) continue;
+    const bob = Math.sin(ch.bobPhase) * 3;
+    const pulse = 1 + Math.sin((time || 0) * 4 + ch.x * 0.03) * 0.12;
+    const r = (ch.radius || 14) * pulse;
+    const cx0 = ch.x, cy0 = ch.y + bob;
+    ctx.save();
+    // Outer glow
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#f1c40f';
+    ctx.beginPath();
+    ctx.arc(cx0, cy0, r * 2, 0, Math.PI * 2);
+    ctx.fill();
+    // Box body
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = '#d4a017';
+    ctx.fillRect(cx0 - r, cy0 - r * 0.7, r * 2, r * 1.4);
+    // Lid highlight
+    ctx.fillStyle = '#f1c40f';
+    ctx.fillRect(cx0 - r, cy0 - r * 0.7, r * 2, r * 0.4);
+    // Border
+    ctx.strokeStyle = '#b8860b';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(cx0 - r, cy0 - r * 0.7, r * 2, r * 1.4);
+    // Center clasp
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = 0.8;
+    ctx.beginPath();
+    ctx.arc(cx0, cy0, r * 0.2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
 // Heart pickups — sprite with bob + late-life fade, triangle-rounded
 // heart-shape fallback. Viewport-culled (20px margin).
 export function drawHeartDrops(ctx, heartDrops, drawSprite, cx, cy, W, H) {
@@ -1287,6 +1324,7 @@ export function renderWorld(ctx, view, drawSprite, particles, viewport, opts = {
   }
   drawHeartDrops(ctx, view.heartDrops || [], drawSprite, cx, cy, W, H);
   drawConsumables(ctx, view.consumables || [], drawSprite, cx, cy, W, H);
+  drawChests(ctx, view.chests || [], cx, cy, W, H, view.time || 0);
   if (mark) mark('gems');
   drawChargeTrailWake(ctx, view.chargeTrails || [], particles, view.time || 0, viewport);
   drawWeaponAuras(ctx, view.players, view.time || 0, viewport);

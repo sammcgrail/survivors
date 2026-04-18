@@ -97,6 +97,7 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
     // its `_up` upgrades unlock immediately. pendingChoice holds an
     // outstanding level-up the player hasn't responded to yet.
     powerupStacks: { ['weapon_' + weaponType]: 1 },
+    relics: {},
     pendingChoice: null,
     // Cosmetics broadcast in state so peers can render skins/trail.
     activeSkin: prestige ? prestige.activeSkin : null,
@@ -120,6 +121,7 @@ function initGame() {
     gems: [],
     heartDrops: [],
     consumables: [],
+    chests: [],
     enemyProjectiles: [],
     chainEffects: [],
     meteorEffects: [],
@@ -303,6 +305,8 @@ function gameSnapshot() {
       ...(!p.alive && p.overkills ? { overkills: p.overkills } : {}),
       ...(!p.alive && p.maxHit ? { maxHit: r1(p.maxHit) } : {}),
       ...(!p.alive && p.maxHitEnemy ? { maxHitEnemy: p.maxHitEnemy } : {}),
+      // Relic stacks — only ship when non-empty to save bytes.
+      ...(p.relics && Object.keys(p.relics).length ? { relics: p.relics } : {}),
     })),
     enemies: game.enemies.map(e => ({
       name: e.name,
@@ -365,6 +369,10 @@ function gameSnapshot() {
       x: r1(c.x), y: r1(c.y), type: c.type, radius: c.radius,
       color: c.color, bobPhase: r2(c.bobPhase),
     })),
+    chests: (game.chests || []).map(ch => ({
+      x: r1(ch.x), y: r1(ch.y), radius: ch.radius,
+      relic_id: ch.relic_id, bobPhase: r2(ch.bobPhase),
+    })),
     enemyProjectiles: (game.enemyProjectiles || []).map(ep => {
       const o = {
         x: r1(ep.x), y: r1(ep.y),
@@ -410,6 +418,9 @@ function gameSnapshot() {
       if (e.ty !== undefined) o.ty = r1(e.ty);
       if (e.duration !== undefined) o.duration = r2(e.duration);
       if (e.phase !== undefined) o.phase = e.phase;
+      if (e.relic_id !== undefined) o.relic_id = e.relic_id;
+      if (e.relic_name !== undefined) o.relic_name = e.relic_name;
+      if (e.relic_icon !== undefined) o.relic_icon = e.relic_icon;
       return o;
     }),
     waveMsg:        game.waveMsgTimer        > 0 ? game.waveMsg        : null,
@@ -483,6 +494,7 @@ function startGame(selectedMapId) {
     gems: [],
     heartDrops: [],
     consumables: [],
+    chests: [],
     enemyProjectiles: [],
     chainEffects: [],
     meteorEffects: [],

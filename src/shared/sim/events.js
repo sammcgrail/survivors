@@ -33,6 +33,8 @@ export const EVT = {
   BOSS_AOE_EXPLODE:    'bossAoeExplode',
   STATUS_APPLIED:      'statusApplied',
   STATUS_EXPIRED:      'statusExpired',
+  CHEST_SPAWN:         'chestSpawn',
+  RELIC_PICKUP:        'relicPickup',
 };
 
 // Spread payload first so a stray `type` field in the payload (e.g.
