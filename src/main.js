@@ -4,7 +4,7 @@
 // ============================================================
 
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
-import { sfx, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
+import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
@@ -14,7 +14,7 @@ import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { powerupIconHTML } from './shared/sprites.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
-// clampSliderVol + toggleVolPanel moved to shared/boot.js
+import { clampSliderVol } from './shared/volPanel.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -88,12 +88,16 @@ window.addEventListener('beforeunload', () => {
 
 // --- music system (shared music director, menu + battle) ---
 const music = initMusic({ hasMenu: true });
-const { startMenuMusic, fadeOutMenuMusic, fadeInMenuMusic } = music;
+const { startMenuMusic, fadeOutMenuMusic, fadeInMenuMusic,
+        toggleMute: toggleMuteMusic, setBgmVol } = music;
 function startMusic() {
   const mapId = (game && game.mapId) || selectedMapId || 'arena';
   music.startBattleMusic(mapId);
 }
 function fadeOutMusic() { music.fadeOutBattleMusic(); }
+function setSfxVol(v) {
+  _setSfxVol(clampSliderVol(v));
+}
 bindResize(canvas);
 
 // --- constants ---
@@ -1136,8 +1140,10 @@ window.showPrestigeShop = showPrestigeShop;
 window.hidePrestigeShop = hidePrestigeShop;
 window.purchaseUnlock = purchaseUnlock;
 window.toggleCosmeticEquip = toggleCosmeticEquip;
-// toggleMute, setBgmVol, setSfxVol, toggleVolPanel, showBestiary,
-// hideBestiary — wired by bootSharedServices() in shared/boot.js.
+window.toggleMute = toggleMuteMusic;
+window.setBgmVol = setBgmVol;
+window.setSfxVol = setSfxVol;
+// toggleVolPanel, showBestiary, hideBestiary — wired by bootSharedServices().
 window.showWeaponHistogram = showWeaponHistogram;
 window.hideWeaponHistogram = hideWeaponHistogram;
 

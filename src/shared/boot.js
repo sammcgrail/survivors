@@ -14,8 +14,7 @@
 
 import { bindResize } from './viewport.js';
 import { initMusic } from './musicDirector.js';
-import { clampSliderVol, toggleVolPanel } from './volPanel.js';
-import { setSfxVol as _setSfxVol } from './sfx.js';
+import { toggleVolPanel } from './volPanel.js';
 import { makeDrawSprite } from './render.js';
 import { showBestiary, hideBestiary } from './bestiaryUI.js';
 
@@ -53,16 +52,13 @@ export function bootSharedServices({ isMP } = {}) {
   // --- music director ---
   const music = initMusic({ hasMenu: !isMP });
 
-  // --- expose vol/mute controls for HTML onclick ---
+  // --- shared HTML onclick bindings (mode-independent) ---
   window.toggleVolPanel = toggleVolPanel;
-  window.setBgmVol = music.setBgmVol;
-  window.toggleMute = music.toggleMute;
-  // Slider delivers 0..100; shared sfx module expects 0..1.
-  window.setSfxVol = (v) => _setSfxVol(clampSliderVol(v));
-
-  // --- bestiary modal ---
   window.showBestiary = showBestiary;
   window.hideBestiary = hideBestiary;
+  // NOTE: setBgmVol, toggleMute, setSfxVol stay in main.js/mp-main.js
+  // because they bind to the music instance created there (not boot's).
+  // Unifying music to a single instance is step 3b.
 
   return { canvas, ctx, drawSprite, music };
 }
