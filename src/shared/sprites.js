@@ -70,6 +70,23 @@ export const SP = {
   powerup_projectiles:  [6, 6],
   powerup_size:         [7, 6],
   powerup_armor:        [8, 6],
+  // Row 7 — prestige-shop unlock icons for the 10 meta-progression
+  // cards (barn, Apr 18 tier 5). Keys match the UNLOCKS ids in
+  // src/shared/prestige.js. Cosmetics (skin_gold/skin_shadow/
+  // trail_fire) get their own entries here; the in-game player
+  // sprite swap + fx overlay live in the player renderer.
+  // Before this pass the prestige shop cards used emoji glyphs
+  // (🧡 🦅 👁️ 🛡️ 🔥 ❤️ ⭐ 👑 🌑 🔥).
+  unlock_tough_scales: [0, 7],
+  unlock_swift_wings:  [1, 7],
+  unlock_keen_eyes:    [2, 7],
+  unlock_thick_hide:   [3, 7],
+  unlock_fury:         [4, 7],
+  unlock_extra_heart:  [5, 7],
+  unlock_headstart:    [6, 7],
+  unlock_skin_gold:    [7, 7],
+  unlock_skin_shadow:  [8, 7],
+  unlock_trail_fire:   [9, 7],
 };
 
 // Level-up card icon HTML — returns a sprite-backed <span> if `id`
@@ -77,9 +94,20 @@ export const SP = {
 // `powerup_${id}` prefixed key first (stat powerups like `magnet`
 // would collide with the consumable sprite otherwise), then falls
 // back to the raw id (weapon_/evo_ keys match directly).
-// Sheet dimensions: 144×112, scaled 2x to 288×224 for display.
+// Sheet dimensions: 160×128, scaled 2x to 320×256 for display.
 export function powerupIconHTML(id, fallback) {
   const sp = SP[`powerup_${id}`] || SP[id];
+  if (!sp) return fallback;
+  return `<span class="sprite-icon" style="background-position:${-sp[0] * 32}px ${-sp[1] * 32}px"></span>`;
+}
+
+// Prestige-shop unlock card icon HTML — mirrors powerupIconHTML but
+// keyed under the `unlock_` prefix so skin_gold/skin_shadow/trail_fire
+// don't collide with any future `gold`/`shadow`/`fire` consumable or
+// weapon sprite. Falls back to the raw id as a safety net, then the
+// provided emoji glyph.
+export function unlockIconHTML(id, fallback) {
+  const sp = SP[`unlock_${id}`] || SP[id];
   if (!sp) return fallback;
   return `<span class="sprite-icon" style="background-position:${-sp[0] * 32}px ${-sp[1] * 32}px"></span>`;
 }
