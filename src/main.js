@@ -244,6 +244,7 @@ function initGame() {
     attackSpeedMulti: 1,
     hpRegen: 0,
     magnetRange: XP_MAGNET_RANGE,
+    magnetBoost: 0,  // consumable magnet pulse timer (sec); >0 → infinite pickup range + 4x pull speed
     projectileBonus: 0,
     sizeMulti: 1,
     armor: 0,

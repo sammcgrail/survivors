@@ -34,7 +34,17 @@ export function spawnGem(g, x, y, xp, enemyName) {
 // Magnet pull + pickup + level-up trigger. Mutates g.gems and the
 // nearest alive player. LEVEL_UP payload includes pid so the client can
 // route the upgrade modal to the right player in MP.
+//
+// magnetBoost: per-player timer (seconds) set by the magnet consumable.
+// While > 0, the player pulls every gem on the map at 4x speed — the
+// VS-style "screen sweep" effect where everything streams toward you
+// in ~1 second. Decays once per tick (below, outside the gem loop).
 export function updateGems(g, dt) {
+  // Decay magnetBoost timers once per tick (before gem loop).
+  for (const p of g.players) {
+    if (p.magnetBoost > 0) p.magnetBoost = Math.max(0, p.magnetBoost - dt);
+  }
+
   for (let i = g.gems.length - 1; i >= 0; i--) {
     const gem = g.gems[i];
     let pulled = false;
@@ -43,8 +53,14 @@ export function updateGems(g, dt) {
       const gdx = p.x - gem.x;
       const gdy = p.y - gem.y;
       const dist = Math.sqrt(gdx * gdx + gdy * gdy);
-      if (dist < p.magnetRange && !pulled) {
-        const pull = XP_MAGNET_SPEED * dt;
+      const boosting = p.magnetBoost > 0;
+      const range = boosting ? Infinity : p.magnetRange;
+      if (dist < range && !pulled) {
+        // Boost mode pulls 4x faster so distant gems arrive within
+        // the ~1s window. 3000-unit maps → ≤3000/(400*4) = ~1.88s
+        // worst case, but clumps near the player arrive first so the
+        // effect reads as instant-sweep.
+        const pull = XP_MAGNET_SPEED * (boosting ? 4 : 1) * dt;
         gem.x += (gdx / dist) * Math.min(pull, dist);
         gem.y += (gdy / dist) * Math.min(pull, dist);
         pulled = true;

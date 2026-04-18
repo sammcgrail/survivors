@@ -67,13 +67,13 @@ function applyEffect(g, c, p) {
       p.iframes = Math.max(p.iframes, 3.0);
       break;
     case 'magnet': {
-      // Instantly pull all gems to the player's position. We set
-      // each gem's coords to right on top of the player — the gem
-      // update loop will pick them up on the next tick.
-      for (const gem of g.gems) {
-        gem.x = p.x + (g.rng.random() - 0.5) * 4;
-        gem.y = p.y + (g.rng.random() - 0.5) * 4;
-      }
+      // Vampire-Survivors-style magnet pulse: instead of teleporting
+      // gems on top of the player (loses the satisfying inward-stream
+      // animation), set a 1.0s "magnetBoost" window. While active the
+      // gem update treats pickup range as infinite AND bumps pull
+      // speed, so every gem on the map streams toward the player and
+      // arrives within the window. Reads much more like a magnet pull.
+      p.magnetBoost = 1.0;
       break;
     }
   }

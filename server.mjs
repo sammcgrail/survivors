@@ -75,6 +75,7 @@ function makePlayer(pid, name, weaponType, rng, spawn, prestige) {
     sizeMulti: 1,
     armor: 0,
     magnetRange: XP_MAGNET_RANGE,
+    magnetBoost: 0,
     xp: 0,
     xpToLevel: 45,
     level: 1,
