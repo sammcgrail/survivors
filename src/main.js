@@ -4,9 +4,10 @@
 // ============================================================
 
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
-import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
+import { sfx, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
+import { bootSharedServices } from './shared/boot.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
@@ -14,7 +15,7 @@ import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { powerupIconHTML, relicIconHTML } from './shared/sprites.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
-import { clampSliderVol } from './shared/volPanel.js';
+// clampSliderVol import removed — setSfxVol now lives in boot.js (step 3b)
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
@@ -86,18 +87,17 @@ window.addEventListener('beforeunload', () => {
   track({ type: 'session_end', duration_ms: Date.now() - sessionStart });
 });
 
-// --- music system (shared music director, menu + battle) ---
+// --- shared bootstrap (wires toggleVolPanel, bestiary, mute, bgm, sfx) ---
+bootSharedServices({ isMP: false });
+
+// --- music system (singleton — created by bootSharedServices, retrieved here) ---
 const music = initMusic({ hasMenu: true });
-const { startMenuMusic, fadeOutMenuMusic, fadeInMenuMusic,
-        toggleMute: toggleMuteMusic, setBgmVol } = music;
+const { startMenuMusic, fadeOutMenuMusic, fadeInMenuMusic } = music;
 function startMusic() {
   const mapId = (game && game.mapId) || selectedMapId || 'arena';
   music.startBattleMusic(mapId);
 }
 function fadeOutMusic() { music.fadeOutBattleMusic(); }
-function setSfxVol(v) {
-  _setSfxVol(clampSliderVol(v));
-}
 bindResize(canvas);
 
 // --- constants ---
@@ -1148,10 +1148,8 @@ window.showPrestigeShop = showPrestigeShop;
 window.hidePrestigeShop = hidePrestigeShop;
 window.purchaseUnlock = purchaseUnlock;
 window.toggleCosmeticEquip = toggleCosmeticEquip;
-window.toggleMute = toggleMuteMusic;
-window.setBgmVol = setBgmVol;
-window.setSfxVol = setSfxVol;
-// toggleVolPanel, showBestiary, hideBestiary — wired by bootSharedServices().
+// toggleMute, setBgmVol, setSfxVol — wired by bootSharedServices() (step 3b).
+// toggleVolPanel, showBestiary, hideBestiary — also wired by bootSharedServices().
 window.showWeaponHistogram = showWeaponHistogram;
 window.hideWeaponHistogram = hideWeaponHistogram;
 
