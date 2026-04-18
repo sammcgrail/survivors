@@ -14,8 +14,10 @@
 
 import { bindResize } from './viewport.js';
 import { initMusic } from './musicDirector.js';
-import { toggleVolPanel } from './volPanel.js';
+import { clampSliderVol, toggleVolPanel } from './volPanel.js';
+import { setSfxVol as _setSfxVol } from './sfx.js';
 import { makeDrawSprite } from './render.js';
+import { showBestiary, hideBestiary } from './bestiaryUI.js';
 
 let _isMP = false;
 
@@ -51,8 +53,16 @@ export function bootSharedServices({ isMP } = {}) {
   // --- music director ---
   const music = initMusic({ hasMenu: !isMP });
 
-  // --- expose vol panel toggle for HTML onclick ---
+  // --- expose vol/mute controls for HTML onclick ---
   window.toggleVolPanel = toggleVolPanel;
+  window.setBgmVol = music.setBgmVol;
+  window.toggleMute = music.toggleMute;
+  // Slider delivers 0..100; shared sfx module expects 0..1.
+  window.setSfxVol = (v) => _setSfxVol(clampSliderVol(v));
+
+  // --- bestiary modal ---
+  window.showBestiary = showBestiary;
+  window.hideBestiary = hideBestiary;
 
   return { canvas, ctx, drawSprite, music };
 }

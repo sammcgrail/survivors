@@ -10,10 +10,10 @@ import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
 import { PLAYER_RADIUS } from './shared/constants.js';
-import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
+import { sfx, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
-import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
+// clampSliderVol + toggleVolPanel moved to shared/boot.js
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
@@ -24,7 +24,7 @@ import { makeDrawSprite, drawHpBar, drawParticles, drawFloatingTexts, drawChainE
 import { getAmbient } from './shared/mapAmbient.js';
 import { applySimEvent, resetParticleOverflow, safeParticlePush } from './shared/simEventHandler.js';
 import { markSeen } from './shared/bestiary.js';
-import { showBestiary, hideBestiary } from './shared/bestiaryUI.js';
+// showBestiary + hideBestiary moved to shared/boot.js
 import { loadAchievements, ACHIEVEMENTS } from './shared/achievements.js';
 import { createBaseGameState } from './shared/gameState.js';
 import { renderDeathFeed } from './shared/deathFeed.js';
@@ -284,12 +284,7 @@ const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
 // --- battle music (shared music director, battle only) ---
 const music = initMusic({ hasMenu: false });
-const { startBattleMusic: startMpMusic, toggleMute: toggleMpMute,
-        setBgmVol } = music;
-function setSfxVol(v) {
-  // Slider is 0..100; shared module owns persistence + gain wiring.
-  _setSfxVol(clampSliderVol(v));
-}
+const { startBattleMusic: startMpMusic } = music;
 
 bindResize(canvas);
 
@@ -1340,10 +1335,6 @@ window.addEventListener('load', () => {
 // to joinGame on first press, respawnGame after death.
 window.startGame = () => (renderStarted && iDied ? respawnGame() : joinGame());
 window.selectWeapon = weaponPicker.select;
-window.toggleMute = toggleMpMute;
-window.setBgmVol = setBgmVol;
-window.setSfxVol = setSfxVol;
-window.toggleVolPanel = toggleVolPanel;
-window.showBestiary = showBestiary;
-window.hideBestiary = hideBestiary;
+// toggleMute, setBgmVol, setSfxVol, toggleVolPanel, showBestiary,
+// hideBestiary — wired by bootSharedServices() in shared/boot.js.
 
