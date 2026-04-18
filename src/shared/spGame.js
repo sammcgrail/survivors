@@ -45,6 +45,7 @@ import { saveRunEntry } from './runHistory.js';
 import { createBaseGameState } from './gameState.js';
 import { renderDeathFeed } from './deathFeed.js';
 
+export function bootSPGame() {
 const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
@@ -1198,12 +1199,5 @@ if (typeof window !== 'undefined') {
   }
 }
 
-// Returning an object lets the bootstrap caller hold a handle for
-// future programmatic teardown / hot-reload, even though there's no
-// caller using it yet.
-export function bootSPGame() {
-  // All SP init runs at module-level above (side effects on import).
-  // This function exists so main.js has an explicit call site and
-  // future steps can move side effects inside it.
-  return {};
-}
+return {};
+} // end bootSPGame
