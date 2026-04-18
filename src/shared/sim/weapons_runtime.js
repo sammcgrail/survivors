@@ -6,6 +6,20 @@ import { EVT, emit } from './events.js';
 import { damageEnemy } from './damage.js';
 import { applyStatus } from './enemies.js';
 
+// Cap on concurrent chainEffects. lightning_field + thunder_god can
+// fire `zapCount + projectileBonus` bolts per sim tick; at high stacks
+// that's 8-12 per tick, and each bolt lives 0.28s ≈ 17 frames — so the
+// array grew unbounded and the render's additive shadowBlur turned the
+// canvas into a yellow flashbang (McWenker report, Apr 18). Dropping
+// the oldest effect on overflow preserves the "latest zap visible"
+// signal while killing the screen-fill. 16 alive at once is still lots
+// of visible bolts without saturation.
+const MAX_CHAIN_EFFECTS = 16;
+function pushChainEffect(g, effect) {
+  g.chainEffects.push(effect);
+  while (g.chainEffects.length > MAX_CHAIN_EFFECTS) g.chainEffects.shift();
+}
+
 // Random-N enemies inside a circular range, drawn via Fisher-Yates so
 // the choice tracks g.rng deterministically. Used by lightning_field +
 // thunder_god's field tick.
@@ -194,7 +208,7 @@ function fireChain(g, w, p) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id, w.type);
     applyStatus(g, t, { type: 'slow', remaining: 2.0, magnitude: 0.4, tickRate: 0 });
   }
-  g.chainEffects.push({ points: chainPoints, life: 0.32, maxLife: 0.32, color: w.color });
+  pushChainEffect(g, { points: chainPoints, life: 0.32, maxLife: 0.32, color: w.color });
 }
 
 function fireMeteor(g, w, p) {
@@ -329,7 +343,7 @@ function tickLightningField(g, w, p) {
   for (const t of targets) {
     damageEnemy(g, t, w.damage * p.damageMulti, p.id, w.type);
     applyStatus(g, t, { type: 'slow', remaining: 1.5, magnitude: 0.4, tickRate: 0 });
-    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
+    pushChainEffect(g, { points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'lightning_field', pid: p.id });
 }
@@ -442,7 +456,7 @@ function tickThunderField(g, w, p) {
   const targets = randomEnemiesInRange(g, p.x, p.y, effectiveFieldR2, tgZapCount);
   for (const t of targets) {
     damageEnemy(g, t, w.fieldDamage * p.damageMulti, p.id, w.type);
-    g.chainEffects.push({ points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
+    pushChainEffect(g, { points: [{ x: p.x, y: p.y }, { x: t.x, y: t.y }], life: 0.28, maxLife: 0.28, color: w.color });
   }
   if (targets.length > 0) emit(g, EVT.CHAIN_ZAP, { weapon: 'thunder_god', pid: p.id });
 }
@@ -658,7 +672,7 @@ function fireTeslaAegisPulse(g, w, p) {
     nextRange = w.chainRange * 0.6;
   }
   if (points.length > 1) {
-    g.chainEffects.push({ points, life: 0.32, maxLife: 0.32, color: w.color });
+    pushChainEffect(g, { points, life: 0.32, maxLife: 0.32, color: w.color });
     emit(g, EVT.CHAIN_ZAP, { weapon: 'tesla_aegis', pid: p.id });
   }
 }

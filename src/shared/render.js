@@ -503,6 +503,14 @@ export function drawEnemyProjectiles(ctx, projectiles, particles, cx, cy, W, H, 
 // outer glow + thin bright inner core), two jagged midpoints per
 // segment so the bolts read as proper electric arcs. Used for chain
 // weapon, lightning_field, thunder_god, fortress shockwave reuse.
+//
+// Flashbang fix (Apr 18, McWenker report): outer shadowBlur dropped
+// 14 → 5 and outer alpha 0.45 → 0.22; inner core shadowBlur 6 → 0.
+// Prior values additively bloomed when lightning_field / thunder_god
+// fired 10+ bolts per sim tick at high zapCount — the canvas filled
+// with a yellow haze that read as full-screen strobing. Cap on the
+// concurrent effects count is enforced at the push sites in
+// weapons_runtime.js (see pushChainEffect).
 export function drawChainEffects(ctx, chainEffects) {
   for (const ce of chainEffects) {
     // Two-phase: first 60% of life is the full jagged bolt; last 40%
@@ -519,8 +527,8 @@ export function drawChainEffects(ctx, chainEffects) {
       for (let pass = 0; pass < 2; pass++) {
         ctx.lineWidth = pass === 0 ? 6 : 2;
         ctx.strokeStyle = pass === 0 ? ce.color : '#ffffff';
-        ctx.shadowBlur = pass === 0 ? 14 : 6;
-        ctx.globalAlpha = pass === 0 ? t * 0.45 : t;
+        ctx.shadowBlur = pass === 0 ? 5 : 0;
+        ctx.globalAlpha = pass === 0 ? t * 0.22 : t;
         for (let i = 0; i < ce.points.length - 1; i++) {
           const a = ce.points[i];
           const b = ce.points[i + 1];
