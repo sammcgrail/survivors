@@ -30,6 +30,7 @@ import { createBaseGameState } from './shared/gameState.js';
 import { renderDeathFeed } from './shared/deathFeed.js';
 import { RELICS } from './shared/relics.js';
 import { createWeaponPicker } from './shared/weaponPicker.js';
+import { powerupIconHTML } from './shared/sprites.js';
 
 // Server validates + caps so we just send what we have. Cosmetics fall
 // back to null for never-played users with empty localStorage.
@@ -535,7 +536,7 @@ function showLevelUpChoices(choices) {
     const div = document.createElement('div');
     div.className = 'choice' + (isEvo ? ' choice--evo' : '');
     div.innerHTML = `
-      <div class="name"><span style="color:#555;font-size:0.6rem">[${i+1}]</span> ${escapeHTML(c.icon)} ${escapeHTML(c.name)}</div>
+      <div class="name"><span style="color:#555;font-size:0.6rem">[${i+1}]</span> ${powerupIconHTML(c.id, escapeHTML(c.icon))} ${escapeHTML(c.name)}</div>
       <div class="desc">${escapeHTML(c.desc)}</div>
     `;
     if (isEvo) {
