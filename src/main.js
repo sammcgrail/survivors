@@ -6,21 +6,19 @@
 import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET_RANGE, XP_MAGNET_SPEED } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
-import { makeBgmPlayer } from './shared/bgm.js';
+import { initMusic } from './shared/musicDirector.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
 import { renderWeaponHistogram } from './shared/weaponPickHistogram.js';
 import { bindResize } from './shared/viewport.js';
 import { bindTouchJoystick } from './shared/joystick.js';
-import {
-  clampSliderVol, readPersistedBgmVol, readPersistedMute,
-  persistBgmVol, persistMute, updateMuteBtn, initVolSliders, toggleVolPanel,
-} from './shared/volPanel.js';
+import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
 import { createRng } from './shared/sim/rng.js';
 import { EVT } from './shared/sim/events.js';
 import { spawnEnemy } from './shared/sim/enemies.js';
 import { POWERUPS } from './shared/sim/powerups.js';
+import { RELICS } from './shared/relics.js';
 import { buildLevelUpChoices } from './shared/levelUp.js';
 import { tickSim } from './shared/sim/tick.js';
 import { escapeHTML } from './shared/htmlEscape.js';
@@ -87,74 +85,18 @@ window.addEventListener('beforeunload', () => {
   track({ type: 'session_end', duration_ms: Date.now() - sessionStart });
 });
 
-// --- music system (menu + battle, map-aware + mute toggle) ---
-const MAP_TRACKS = {
-  arena: 'arena_theme.ogg',
-  neon: 'neon_grid.ogg',
-  forest: 'forest_theme.ogg',
-  graveyard: 'graveyard_theme.ogg',
-  ruins: 'ruins_theme.ogg',
-  // Wilderness + catacombs both have dedicated tracks now (barn, Apr 18).
-  // Wilderness: D dorian, pizz strings + french horn.
-  // Catacombs: G phrygian, contrabass drone + low horn + timpani.
-  wilderness: 'wilderness_theme.ogg',
-  catacombs: 'catacombs_theme.ogg',
-};
-const MENU_TRACK = 'menu_theme.ogg';
-const DEFAULT_TRACK_OGG = 'survivors_battle.ogg';
-// BGM volume — persisted per-slider via shared/volPanel. SFX volume
-// lives in shared/sfx.js (since the gain node is created there).
-let bgmVol = readPersistedBgmVol();
-const MENU_VOL_RATIO = 0.92; // menu music plays at 92% of bgm slider — was 0.67 but menu was too quiet (default bgmVol 0.45 × 0.67 = 0.30, barely audible). Slight duck keeps it from overpowering selection-click sfx.
-
-let menuMusicStarted = false;
-let musicMuted = readPersistedMute();
-updateMuteBtn(musicMuted);
-initVolSliders(bgmVol, getSfxVol());
-
-function setBgmVol(v) {
-  bgmVol = clampSliderVol(v);
-  persistBgmVol(bgmVol);
-  if (!musicMuted) {
-    battlePlayer.setVol(bgmVol);
-    menuPlayer.setVol(bgmVol * MENU_VOL_RATIO);
-  }
+// --- music system (shared music director, menu + battle) ---
+const music = initMusic({ hasMenu: true });
+const { startMenuMusic, fadeOutMenuMusic, fadeInMenuMusic,
+        toggleMute: toggleMuteMusic, setBgmVol } = music;
+function startMusic() {
+  const mapId = (game && game.mapId) || selectedMapId || 'arena';
+  music.startBattleMusic(mapId);
 }
+function fadeOutMusic() { music.fadeOutBattleMusic(); }
 function setSfxVol(v) {
   // Slider is 0..100; shared module owns persistence + gain wiring.
   _setSfxVol(clampSliderVol(v));
-}
-
-// Menu music — plays on the start/death screen. Fades out when game
-// starts, fades back in on return. Barn's E dorian 78 BPM ambient.
-// fadeIn keeps the audio element loaded so the track resumes from
-// where it was paused instead of restarting from 0:00.
-const battlePlayer = makeBgmPlayer();
-const menuPlayer = makeBgmPlayer();
-
-function startMenuMusic() {
-  if (menuMusicStarted) return;
-  menuPlayer.play(MENU_TRACK, musicMuted ? 0 : bgmVol * MENU_VOL_RATIO);
-  menuMusicStarted = true;
-}
-function fadeOutMenuMusic() { menuPlayer.fadeOut(); }
-function fadeInMenuMusic() {
-  menuPlayer.play(MENU_TRACK, musicMuted ? 0 : bgmVol * MENU_VOL_RATIO);
-}
-
-function startMusic() {
-  const mapId = (game && game.mapId) || selectedMapId || 'arena';
-  const src = MAP_TRACKS[mapId] || DEFAULT_TRACK_OGG;
-  battlePlayer.play(src, musicMuted ? 0 : bgmVol);
-}
-function fadeOutMusic() { battlePlayer.fadeOut(); }
-
-function toggleMuteMusic() {
-  musicMuted = !musicMuted;
-  persistMute(musicMuted);
-  updateMuteBtn(musicMuted);
-  battlePlayer.setVol(musicMuted ? 0 : bgmVol, 0.3);
-  menuPlayer.setVol(musicMuted ? 0 : bgmVol * MENU_VOL_RATIO, 0.3);
 }
 
 bindResize(canvas);
@@ -264,6 +206,8 @@ function initGame() {
     // Per-player powerup stack counts. Starting weapon = stack 1 so its
     // upgrade powerups (e.g. spit_up) unlock immediately.
     powerupStacks: { ['weapon_' + selectedWeapon]: 1 },
+    // Relic stack counts — keyed by relic id, value = stack count.
+    relics: {},
   };
 
   applyPrestigeUnlocks(p);
@@ -283,6 +227,7 @@ function initGame() {
     gems: [],
     heartDrops: [],
     consumables: [],
+    chests: [],
     enemyProjectiles: [],
     ...createBaseGameState(),
     time: 0,
@@ -654,6 +599,17 @@ function showDeathScreen(g) {
   } else {
     loadoutEl.innerHTML = '<div class="loadout-item" style="color:#555">no powerups</div>';
   }
+  // Relic summary on death screen — show collected relics below loadout.
+  const relics = g.player.relics || {};
+  const ownedRelics = RELICS.filter(r => (relics[r.id] || 0) > 0);
+  if (ownedRelics.length > 0) {
+    const relicHtml = ownedRelics.map(r => {
+      const n = relics[r.id];
+      const stackStr = n > 1 ? ` x${n}` : '';
+      return `<div class="loadout-item" style="color:#f1c40f"><span class="li-icon">${r.icon}</span>${r.name}${stackStr}</div>`;
+    }).join('');
+    loadoutEl.innerHTML += `<div style="margin-top:6px;font-size:0.6rem;color:#b8860b;text-align:center;">Relics</div>${relicHtml}`;
+  }
   // submit to leaderboard + fetch top 10
   const lbEl = document.getElementById('death-leaderboard');
   const lbPlaceEl = document.getElementById('death-lb-placement');
@@ -942,6 +898,14 @@ function render() {
   setHud('kills',   `${g.kills} kills`);
   setHud('wave',    `Wave ${g.wave}`);
   setHud('weapons', p.weapons.map(w => WEAPON_ICONS[w.type] || '?').join(' '));
+
+  // Relic HUD — show collected relic icons below weapons.
+  const relicStr = RELICS
+    .filter(r => (p.relics[r.id] || 0) > 0)
+    .map(r => p.relics[r.id] > 1 ? `${r.icon}x${p.relics[r.id]}` : r.icon)
+    .join(' ');
+  const relicEl = document.getElementById('hud-relics');
+  if (relicEl && relicEl.textContent !== relicStr) relicEl.textContent = relicStr;
 
   // --- level-up flash ---
   if (g.levelFlash > 0) {

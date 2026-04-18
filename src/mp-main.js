@@ -12,7 +12,8 @@ import { bindTouchJoystick } from './shared/joystick.js';
 import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, setSfxVol as _setSfxVol, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
-import { makeBgmPlayer } from './shared/bgm.js';
+import { initMusic } from './shared/musicDirector.js';
+import { clampSliderVol, toggleVolPanel } from './shared/volPanel.js';
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
 import { loadObstacleSprites, drawObstacle } from './shared/obstacleSprites.js';
@@ -279,42 +280,13 @@ spriteSheet.onload = () => { spritesReady = true; };
 
 const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
-// sfx() + audio context + master gain live in shared/sfx.js. MP
-// gains the sfx types it was previously missing (charge, hive_burst,
-// shield_hum, zap, heal, boss_step, boss_telegraph) since the
-// switch is now one source of truth.
-//
-// --- battle music (map-aware + mute toggle) ---
-// All 7 maps now have dedicated tracks. Parity with SP (main.js).
-const MP_MAP_TRACKS = { arena: 'arena_theme.ogg', neon: 'neon_grid.ogg', forest: 'forest_theme.ogg', graveyard: 'graveyard_theme.ogg', ruins: 'ruins_theme.ogg', wilderness: 'wilderness_theme.ogg', catacombs: 'catacombs_theme.ogg' };
-const MP_DEFAULT_TRACK = 'survivors_battle.ogg';
-// SFX vol lives in the shared module now — only BGM stays local.
-let mpBgmVol = readPersistedBgmVol();
-const mpBattlePlayer = makeBgmPlayer();
-let mpMusicMuted = readPersistedMute();
-updateMuteBtn(mpMusicMuted);
-initVolSliders(mpBgmVol, getSfxVol());
-
-function setBgmVol(v) {
-  mpBgmVol = clampSliderVol(v);
-  persistBgmVol(mpBgmVol);
-  if (!mpMusicMuted) mpBattlePlayer.setVol(mpBgmVol);
-}
+// --- battle music (shared music director, battle only) ---
+const music = initMusic({ hasMenu: false });
+const { startBattleMusic: startMpMusic, toggleMute: toggleMpMute,
+        setBgmVol } = music;
 function setSfxVol(v) {
   // Slider is 0..100; shared module owns persistence + gain wiring.
   _setSfxVol(clampSliderVol(v));
-}
-
-function startMpMusic(mapId) {
-  const src = MP_MAP_TRACKS[mapId] || MP_DEFAULT_TRACK;
-  mpBattlePlayer.play(src, mpMusicMuted ? 0 : mpBgmVol);
-}
-
-function toggleMpMute() {
-  mpMusicMuted = !mpMusicMuted;
-  persistMute(mpMusicMuted);
-  updateMuteBtn(mpMusicMuted);
-  mpBattlePlayer.setVol(mpMusicMuted ? 0 : mpBgmVol, 0.3);
 }
 
 bindResize(canvas);
