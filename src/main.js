@@ -94,9 +94,9 @@ const MAP_TRACKS = {
   forest: 'forest_theme.ogg',
   graveyard: 'graveyard_theme.ogg',
   ruins: 'ruins_theme.ogg',
-  // Procedural maps reuse their thematic parent's track — wilderness is
-  // a forest variant, catacombs a ruins variant.
-  wilderness: 'forest_theme.ogg',
+  // Wilderness now has its own dedicated track (barn, Apr 18) — D dorian,
+  // pizz strings + french horn. Catacombs still aliases ruins.
+  wilderness: 'wilderness_theme.ogg',
   catacombs: 'ruins_theme.ogg',
 };
 const MENU_TRACK = 'menu_theme.ogg';
