@@ -56,14 +56,30 @@ export const SP = {
   evo_inferno_wheel:      [5, 5],
   evo_void_anchor:        [6, 5],
   evo_tesla_aegis:        [7, 5],
+  // Row 6 — stat powerup icons for the 9 non-weapon powerups (barn,
+  // Apr 18 tier 4). Keys are `powerup_${id}` so the `magnet` stat
+  // powerup doesn't collide with the `magnet` consumable sprite on
+  // row 3. powerupIconHTML() checks the prefixed key first then
+  // falls back to the raw id (weapon_/evo_ keys match directly).
+  powerup_speed:        [0, 6],
+  powerup_damage:       [1, 6],
+  powerup_hp_regen:     [2, 6],
+  powerup_attack_speed: [3, 6],
+  powerup_magnet:       [4, 6],
+  powerup_max_hp:       [5, 6],
+  powerup_projectiles:  [6, 6],
+  powerup_size:         [7, 6],
+  powerup_armor:        [8, 6],
 };
 
 // Level-up card icon HTML — returns a sprite-backed <span> if `id`
-// matches a key in SP, else the fallback emoji glyph. Keeps emoji
-// parity on keys we haven't sprited yet (stat powerups, relics).
-// Sheet dimensions: 128×96, scaled 2x to 256×192 for display.
+// matches a key in SP, else the fallback emoji glyph. Checks the
+// `powerup_${id}` prefixed key first (stat powerups like `magnet`
+// would collide with the consumable sprite otherwise), then falls
+// back to the raw id (weapon_/evo_ keys match directly).
+// Sheet dimensions: 144×112, scaled 2x to 288×224 for display.
 export function powerupIconHTML(id, fallback) {
-  const sp = SP[id];
+  const sp = SP[`powerup_${id}`] || SP[id];
   if (!sp) return fallback;
   return `<span class="sprite-icon" style="background-position:${-sp[0] * 32}px ${-sp[1] * 32}px"></span>`;
 }
