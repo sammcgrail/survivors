@@ -7,6 +7,7 @@ import { WORLD_W, WORLD_H, PLAYER_SPEED, PLAYER_RADIUS, PLAYER_MAX_HP, XP_MAGNET
 import { sfx, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
+import { bootSharedServices } from './shared/boot.js';
 import { WEAPON_ICONS, createWeapon } from './shared/weapons.js';
 import { decorateWeaponCard } from './shared/levelUpCard.js';
 import { renderDeathHighlights } from './shared/deathHighlights.js';
@@ -86,7 +87,10 @@ window.addEventListener('beforeunload', () => {
   track({ type: 'session_end', duration_ms: Date.now() - sessionStart });
 });
 
-// --- music system (singleton — created by boot.js, retrieved here) ---
+// --- shared bootstrap (wires toggleVolPanel, bestiary, mute, bgm, sfx) ---
+bootSharedServices({ isMP: false });
+
+// --- music system (singleton — created by bootSharedServices, retrieved here) ---
 const music = initMusic({ hasMenu: true });
 const { startMenuMusic, fadeOutMenuMusic, fadeInMenuMusic } = music;
 function startMusic() {

@@ -13,6 +13,7 @@ import { PLAYER_RADIUS } from './shared/constants.js';
 import { sfx, getSfxVol, getAudioCtx as getAudio } from './shared/sfx.js';
 import { installKeyboardInput } from './shared/input.js';
 import { initMusic } from './shared/musicDirector.js';
+import { bootSharedServices } from './shared/boot.js';
 // clampSliderVol import removed — setSfxVol now lives in boot.js (step 3b)
 import { escapeHTML } from './shared/htmlEscape.js';
 import { buildBackgroundCanvas } from './shared/tileBackground.js';
@@ -282,7 +283,10 @@ spriteSheet.onload = () => { spritesReady = true; };
 
 const drawSprite = makeDrawSprite(ctx, spriteSheet, () => spritesReady);
 
-// --- battle music (singleton — created by boot.js, retrieved here) ---
+// --- shared bootstrap (wires toggleVolPanel, bestiary, mute, bgm, sfx) ---
+bootSharedServices({ isMP: true });
+
+// --- battle music (singleton — created by bootSharedServices, retrieved here) ---
 const music = initMusic({ hasMenu: false });
 const { startBattleMusic: startMpMusic } = music;
 
